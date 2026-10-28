@@ -68,7 +68,7 @@ object Parameters {
   }
 }
 
-class Parameters(var m: Seq[MemoryRegion] = Seq(), val hartId: Int = 0, var xlen: Int = 32) {
+class Parameters(var m: Seq[MemoryRegion] = Seq(), val hartId: Int = 0, var xlen: Int = 32, val vlen: Int = 128) {
   require(xlen == 32 || xlen == 64, s"Invalid xlen: $xlen. Only 32 or 64 are supported.")
 
   // Machine.
@@ -97,7 +97,11 @@ class Parameters(var m: Seq[MemoryRegion] = Seq(), val hartId: Int = 0, var xlen
 
   // Enable RVV. This conforms to the RVV1.0 specification.
   var enableRvv     = false
-  val rvvVlen       = 128
+  require(
+    Seq(128, 256, 512, 1024).contains(vlen),
+    s"Invalid vlen: $vlen. Only 128, 256, 512 or 1024 are supported."
+  )
+  def rvvVlen: Int  = vlen
   def rvvVlenb: Int = { rvvVlen / 8 }
   // indexing a single byte within one vector register
   def rvvByteIndexWidth: Int = log2Ceil(rvvVlenb)
@@ -198,7 +202,7 @@ class Parameters(var m: Seq[MemoryRegion] = Seq(), val hartId: Int = 0, var xlen
   }
 
   def augmentId(extraBits: Int): Parameters = {
-    val newP = new Parameters(m, hartId, xlen)
+    val newP = new Parameters(m, hartId, xlen, vlen)
     newP.enableVerification = this.enableVerification
     newP.rawExposeDebugPorts = this.rawExposeDebugPorts
     newP.enableRvv = this.enableRvv

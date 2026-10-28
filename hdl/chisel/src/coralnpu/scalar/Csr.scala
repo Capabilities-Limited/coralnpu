@@ -555,7 +555,7 @@ class Csr(p: Parameters) extends Module {
             vtypeEn.get  -> io.rvv.get.vtype,
             vxrmEn.get   -> vxrmWord(io.rvv.get.vxrm),
             vxsatEn.get  -> vxsatWord(io.rvv.get.vxsat),
-            vlenbEn.get  -> 16.U(32.W) // Vector length in Bytes
+            vlenbEn.get  -> p.rvvVlenb.U(32.W) // Vector length in Bytes
           )
         }
         .getOrElse(Seq())
