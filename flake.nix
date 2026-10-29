@@ -67,6 +67,11 @@
             verilator
             python3
             z3
+            lz4
+            zlib
+            pkg-config
+            re2
+            abseil-cpp
           ];
           env = {
             UVM_HOME=pkgs.fetchFromGitHub {
