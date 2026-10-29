@@ -6,7 +6,14 @@
 `include "rvv_backend_sva.svh"
 `endif
 
-module rvv_backend_div
+module rvv_backend_div#(
+  parameter int unsigned VLEN = `VLEN,
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  parameter type RegDataT=logic [31:0],
+  localparam int unsigned XLEN = $bits(RegDataT),
+  localparam type DIV_RS_t = `DIV_RS_t(VLEN, PC_WIDTH),
+  localparam type PU2ROB_t = `PU2ROB_t(VLEN, PC_WIDTH)
+)
 ( 
   clk,
   rst_n,
@@ -72,7 +79,11 @@ module rvv_backend_div
     for (i=0;i<`NUM_DIV;i++) begin: DIV_UNIT
       assign x_uop_vld[i] = uop_valid[i] & uop[i].is_div; 
 
-      rvv_backend_div_unit u_div_unit
+      rvv_backend_div_unit#(
+        .VLEN(VLEN),
+        .PC_WIDTH(PC_WIDTH),
+        .RegDataT(RegDataT)
+      ) u_div_unit
         (
           .clk            (clk),
           .rst_n          (rst_n),
@@ -88,7 +99,10 @@ module rvv_backend_div
     `ifdef ZVE32F_ON
       assign fp_uop_vld[i] = uop_valid[i] & !uop[i].is_div; 
 
-      rvv_backend_fdiv_unit u_fdiv_unit
+      rvv_backend_fdiv_unit#(
+        .VLEN(VLEN),
+        .PC_WIDTH(PC_WIDTH)
+      ) u_fdiv_unit
         (
           .clk            (clk),
           .rst_n          (rst_n),

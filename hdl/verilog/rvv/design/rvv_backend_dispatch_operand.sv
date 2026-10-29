@@ -5,7 +5,15 @@
 `include "rvv_backend_dispatch.svh"
 `endif
 
-module rvv_backend_dispatch_operand
+module rvv_backend_dispatch_operand#(
+  parameter int unsigned VLEN = `VLEN,
+  // Scalar Register Data
+  parameter type RegDataT = logic [31:0],
+  localparam int unsigned XLEN = $bits(RegDataT),
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type UOP_QUEUE_t = `UOP_QUEUE_t(VLEN, XLEN, PC_WIDTH),
+  localparam type UOP_OPN_t = `UOP_OPN_t(VLEN)
+)
 (
   vrf_byp,
   uop_uop2dp,
@@ -15,8 +23,8 @@ module rvv_backend_dispatch_operand
 // ---port definition-------------------------------------------------
   output  UOP_OPN_t   [`NUM_DP_UOP-1:0]             vrf_byp;
   input   UOP_QUEUE_t [`NUM_DP_UOP-1:0]             uop_uop2dp;
-  input   logic       [`NUM_DP_VRF-1:0][`VLEN-1:0]  rd_data_vrf2dp;
-  input   logic       [`VLEN-1:0]                   v0_mask_vrf2dp;
+  input   logic       [`NUM_DP_VRF-1:0][VLEN-1:0]   rd_data_vrf2dp;
+  input   logic       [VLEN-1:0]                    v0_mask_vrf2dp;
 
 // get the operand from VRF
 `ifdef DISPATCH3

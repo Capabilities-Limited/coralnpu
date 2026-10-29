@@ -9,7 +9,14 @@
 `include "rvv_backend.svh"
 `endif
 
-module rvv_backend_decode_ctrl
+module rvv_backend_decode_ctrl#(
+  parameter int unsigned VLEN = `VLEN,
+  // Scalar Register Data
+  parameter type RegDataT=logic [31:0],
+  localparam int unsigned XLEN = $bits(RegDataT),
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type UOP_QUEUE_t = `UOP_QUEUE_t(VLEN, XLEN, PC_WIDTH)
+)
 (
   clk,
   rst_n,

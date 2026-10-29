@@ -6,7 +6,11 @@
 `include "rvv_backend_dispatch.svh"
 `endif
 
-module rvv_backend_dispatch_bypass
+module rvv_backend_dispatch_bypass#(
+  parameter int unsigned VLEN = `VLEN,
+  localparam type ROB_BYP_t = `ROB_BYP_t(VLEN),
+  localparam type UOP_OPN_t = `UOP_OPN_t(VLEN)
+)
 (
     uop_operand,
     rob_byp,
@@ -20,17 +24,17 @@ module rvv_backend_dispatch_bypass
     input  RAW_UOP_ROB_t              raw_uop_rob;
 
 // ---internal signal definition--------------------------------------
-    logic [`ROB_DEPTH-1:0][`VLENB-1:0] vs1_sel; // one-hot code
-    logic [`ROB_DEPTH-1:0][`VLENB-1:0] vs2_sel; // one-hot code
-    logic [`ROB_DEPTH-1:0][`VLENB-1:0] vd_sel;  // one-hot code
-    logic [`ROB_DEPTH-1:0][`VLENB-1:0] v0_sel;  // one-hot code
-    logic [`ROB_DEPTH-1:0][`VLENB-1:0] agnostic; // one-hot code
+    logic [`ROB_DEPTH-1:0][`VLENB(VLEN)-1:0] vs1_sel; // one-hot code
+    logic [`ROB_DEPTH-1:0][`VLENB(VLEN)-1:0] vs2_sel; // one-hot code
+    logic [`ROB_DEPTH-1:0][`VLENB(VLEN)-1:0] vd_sel;  // one-hot code
+    logic [`ROB_DEPTH-1:0][`VLENB(VLEN)-1:0] v0_sel;  // one-hot code
+    logic [`ROB_DEPTH-1:0][`VLENB(VLEN)-1:0] agnostic; // one-hot code
 
 // ---code start------------------------------------------------------
     genvar i,j;
     generate
         for (i=0; i<`ROB_DEPTH; i++) begin : gen_data_sel
-            for (j=0; j<`VLENB; j++) begin
+            for (j=0; j<`VLENB(VLEN); j++) begin
                 assign vs1_sel[i][j]  = (raw_uop_rob.vs1_hit[i] == 1'b1) & 
                                         (rob_byp[i].byte_type[j] == BODY_ACTIVE |
                                          rob_byp[i].byte_type[j] == BODY_INACTIVE & rob_byp[i].inactive_one |
@@ -56,7 +60,7 @@ module rvv_backend_dispatch_bypass
             end
         end
 
-        for (j=0; j<`VLENB; j++) begin: bypass
+        for (j=0; j<`VLENB(VLEN); j++) begin: bypass
             always_comb begin
                 uop_operand.vs1[`BYTE_WIDTH*j+:`BYTE_WIDTH] = vrf_byp.vs1[`BYTE_WIDTH*j+:`BYTE_WIDTH];
                 uop_operand.vs2[`BYTE_WIDTH*j+:`BYTE_WIDTH] = vrf_byp.vs2[`BYTE_WIDTH*j+:`BYTE_WIDTH];
