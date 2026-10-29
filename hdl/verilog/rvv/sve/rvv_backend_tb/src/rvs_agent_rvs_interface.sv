@@ -4,7 +4,11 @@
 `include "rvv_backend_define.svh"
 `include "rvv_backend.svh"
 
-interface rvs_interface (input bit clk, ref logic rst_n);
+// rst_n is an `input` like the other interfaces. It was a `ref` port (so
+// rvv_reset_test could write it), but Verilator does not track `ref` ports on
+// interface instances: reads saw the t=0 value forever. That test now drives the
+// top-level rst_n directly.
+interface rvs_interface (input bit clk, input bit rst_n);
 
 // vector instruction and scalar operand . 
   logic         [`ISSUE_LANE-1:0] insts_valid_rvs2cq;

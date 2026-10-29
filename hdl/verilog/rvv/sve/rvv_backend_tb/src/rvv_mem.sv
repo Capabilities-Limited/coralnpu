@@ -44,7 +44,7 @@ class rvv_mem extends uvm_component;
   int pc;
 
 // TLM -------------------------------------------------------------------------
-  uvm_analysis_port #(mem_transaction, rvv_mem) mem_ap;
+  uvm_analysis_port #(mem_transaction) mem_ap;
 
 // Phases ----------------------------------------------------------------------
   function new(string name = "rvv_mem", uvm_component parent = null, bit wrap_mode_en = 1);
@@ -72,7 +72,7 @@ class rvv_mem extends uvm_component;
     return mem[addr];
   endfunction: get_mem
 
-  task load_byte(
+  function void load_byte(
     output logic [7:0] data, 
     input int unsigned addr 
     ); 
@@ -104,9 +104,9 @@ class rvv_mem extends uvm_component;
       mem_tr.data = data;
       mem_ap.write(mem_tr);
     end
-  endtask: load_byte
+  endfunction: load_byte
   
-  task store_byte(
+  function void store_byte(
     input logic [7:0] data, 
     input int unsigned addr
     ); 
@@ -137,9 +137,9 @@ class rvv_mem extends uvm_component;
       mem_tr.data = data;
       mem_ap.write(mem_tr);
     end
-  endtask: store_byte
+  endfunction: store_byte
 
-  task load_from_mem(
+  function void load_from_mem(
     output mem_max_t load_data, 
     input int unsigned address, 
     input int unsigned byte_size
@@ -155,9 +155,9 @@ class rvv_mem extends uvm_component;
       load_data[byte_cnt*8 +: 8] = data_temp;
     end
     `uvm_info($sformatf("%s/MEM",this.get_name()),$sformatf("Load %0d bytes 0x%x from @0x%8x", byte_size, load_data, addr_temp), UVM_LOW)
-  endtask: load_from_mem
+  endfunction: load_from_mem
 
-  task store_to_mem(
+  function void store_to_mem(
     input mem_max_t store_data,
     input int unsigned address, 
     input int unsigned byte_size
@@ -172,6 +172,6 @@ class rvv_mem extends uvm_component;
       store_byte(data_temp, addr_temp);
     end
     `uvm_info($sformatf("%s/MEM",this.get_name()),$sformatf("Store %0d bytes 0x%x to @0x%8x", byte_size, store_data, addr_temp), UVM_LOW)
-  endtask: store_to_mem
+  endfunction: store_to_mem
 endclass
 `endif

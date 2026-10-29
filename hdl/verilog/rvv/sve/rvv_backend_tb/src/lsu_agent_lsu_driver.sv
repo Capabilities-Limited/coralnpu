@@ -13,8 +13,8 @@ class lsu_driver extends uvm_driver # (lsu_transaction);
   v_if lsu_if;
   
   uvm_analysis_imp_lsu_inst #(rvs_transaction,lsu_driver) inst_imp; 
-  uvm_analysis_port #(lsu_transaction, lsu_driver) lsu_ap;
-  uvm_analysis_port #(trap_info_transaction, lsu_driver) trap_ap;
+  uvm_analysis_port #(lsu_transaction) lsu_ap;
+  uvm_analysis_port #(trap_info_transaction) trap_ap;
 
   rvs_transaction inst_queue[$];
   lsu_transaction uops_rx_queue[$];

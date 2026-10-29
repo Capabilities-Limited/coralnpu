@@ -337,7 +337,6 @@ class rvs_transaction extends uvm_sequence_item;
       } else {
         vstart < vl;
       }
-    } else {
     }
   }
 
@@ -999,7 +998,6 @@ class rvs_transaction extends uvm_sequence_item;
           -> (lsu_width inside {LSU_8BIT, LSU_16BIT, LSU_32BIT});
         }
       } // LD/ST
-    } else {
     }// if(!reserve_vtype_en)
   }
 
@@ -1196,7 +1194,7 @@ class rvs_transaction extends uvm_sequence_item;
 
 endclass: rvs_transaction
 
-static function void rvs_transaction::set_mem_range(int unsigned mem_base, int unsigned mem_size);
+function void rvs_transaction::set_mem_range(int unsigned mem_base, int unsigned mem_size);
   mem_addr_lo = mem_base;
   mem_addr_hi = mem_base + mem_size -1;
 endfunction: set_mem_range

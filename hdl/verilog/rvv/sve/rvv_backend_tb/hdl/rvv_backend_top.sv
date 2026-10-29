@@ -258,6 +258,13 @@ module rvv_backend_top();
     .rvs_if(rvs_if)
   );
 
+`ifdef TRACE_ON
+  // Opt-in waveform of the DUT only (build with `make TRACE=1`).
+  initial begin
+    $dumpfile("waves.fst");
+    $dumpvars(0, DUT);
+  end
+`endif
 
 
 endmodule: rvv_backend_top

@@ -129,7 +129,7 @@ class rvv_behavior_model extends uvm_component;
   extern virtual task vrf_mdl();
 
   extern function logic [31:0] elm_fetch(operand_type_e reg_type, int reg_idx, int elm_idx, int eew);
-  extern task elm_writeback(logic [31:0] result, operand_type_e reg_type, int reg_idx, int elm_idx, int eew, bit strobe=1);
+  extern function void elm_writeback(logic [31:0] result, operand_type_e reg_type, int reg_idx, int elm_idx, int eew, bit strobe=1);
 
 endclass: rvv_behavior_model
 
@@ -829,7 +829,7 @@ endclass: rvv_behavior_model
     // `uvm_info("MDL", $sformatf("result=%0h", result), UVM_HIGH)
   endfunction: elm_fetch
 
-  task rvv_behavior_model::elm_writeback(logic [31:0] result, operand_type_e reg_type, int reg_idx, int elm_idx, int eew, bit strobe = 1);
+  function void rvv_behavior_model::elm_writeback(logic [31:0] result, operand_type_e reg_type, int reg_idx, int elm_idx, int eew, bit strobe = 1);
     int bit_count;
     bit_count = eew;
     case(reg_type)
@@ -854,7 +854,7 @@ endclass: rvv_behavior_model
         end
       end
     endcase
-  endtask: elm_writeback
+  endfunction: elm_writeback
 
   task rvv_behavior_model::vrf_mdl();
     vrf_transaction tr;
@@ -888,7 +888,7 @@ endclass: rvv_behavior_model
           vrf_ap.write(tr);
         end
       end
-      vrf_delay <= vrf;
+      vrf_delay = vrf;
     end
   endtask
 
