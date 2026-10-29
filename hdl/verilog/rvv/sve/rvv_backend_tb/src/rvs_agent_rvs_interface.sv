@@ -8,20 +8,20 @@ interface rvs_interface (input bit clk, ref logic rst_n);
 
 // vector instruction and scalar operand . 
   logic         [`ISSUE_LANE-1:0] insts_valid_rvs2cq;
-  RVVCmd        [`ISSUE_LANE-1:0] insts_rvs2cq      ;
+  `CMD_t(`VLEN, `XLEN, `PC_WIDTH) [`ISSUE_LANE-1:0] insts_rvs2cq      ;
   logic         [`ISSUE_LANE-1:0] insts_ready_cq2rvs;  
 
 // ROB dataout
   logic        [`NUM_RT_UOP-1:0]  rd_valid_rob2rt ;
-  ROB2RT_t     [`NUM_RT_UOP-1:0]  rd_rob2rt       ;
+  `ROB2RT_t(`VLEN, `PC_WIDTH) [`NUM_RT_UOP-1:0]  rd_rob2rt       ;
   logic        [`NUM_RT_UOP-1:0]  rd_ready_rt2rob ;
 
 // write back to VRF. These are internal signals after WAW-merge of RVV.
-  RT2VRF_t      [`NUM_RT_UOP-1:0] rt_vrf_data_rob2rt ;
+  `RT2VRF_t(VLEN, PC_WIDTH) [`NUM_RT_UOP-1:0] rt_vrf_data_rob2rt ;
   logic         [`NUM_RT_UOP-1:0] rt_vrf_valid_rob2rt;
 
 // write back to XRF. RVS arbitrates write ports of XRF by itself.
-  RT2XRF_t      [`NUM_RT_UOP-1:0] rt_xrf_rvv2rvs      ;
+  `RT2RVS_t(XLEN, PC_WIDTH)      [`NUM_RT_UOP-1:0] rt_xrf_rvv2rvs      ;
   logic         [`NUM_RT_UOP-1:0] rt_xrf_valid_rvv2rvs;
   logic         [`NUM_RT_UOP-1:0] rt_xrf_ready_rvs2rvv;
 
@@ -33,7 +33,7 @@ interface rvs_interface (input bit clk, ref logic rst_n);
 // exception handler
   // the vcsr of last retired uop in last cycle
   logic                           vcsr_valid;
-  RVVConfigState                  vector_csr;
+  `CONFIG_STATE_t(`VLEN)          vector_csr;
   logic                           vcsr_ready;
 
 // write back event (for each instruction)
@@ -43,7 +43,7 @@ interface rvs_interface (input bit clk, ref logic rst_n);
 // decode result of inst
   logic         [`NUM_DE_INST-1:0] inst_correct;
   logic         [`NUM_DE_INST-1:0] inst_discard;
-  RVVCmd        [`NUM_DE_INST-1:0] inst_pkg_cq2de;
+  `CMD_t(`VLEN, `XLEN, `PC_WIDTH) [`NUM_DE_INST-1:0] inst_pkg_cq2de;
 
 // rvv idle
   logic         rvv_idle;

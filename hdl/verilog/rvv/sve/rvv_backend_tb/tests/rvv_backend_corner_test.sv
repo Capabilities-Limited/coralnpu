@@ -108,9 +108,9 @@ class alu_large_vstart_seq extends base_sequence;
         alu_inst inside {VMAND, VMOR, VMXOR, VMORN, VMNAND, VMNOR, VMANDN, VMXNOR};
         
         if(vlmul[2]) // fraction_lmul
-          vlmax == ((`VLENB >> (~vlmul +3'b1)) >> vsew);
+          vlmax == ((`VLENB(VLEN) >> (~vlmul +3'b1)) >> vsew);
         else  
-          vlmax == ((`VLENB << vlmul) >> vsew);
+          vlmax == ((`VLENB(VLEN) << vlmul) >> vsew);
 
         vl == vlmax_max;
         vstart <= vlmax_max-1;
@@ -554,7 +554,7 @@ class alu_cont_div_test extends rvv_backend_test;
     // Unsigned test - sew8
     // vs2
     temp = $urandom_range(0, 8'hFF);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*8+:8] = temp;
     end
     for(int i=12; i<22; i++) begin
@@ -562,7 +562,7 @@ class alu_cont_div_test extends rvv_backend_test;
     end
     // vs1
     temp = $urandom_range(0, 8'hFF);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*8+:8] = temp;
     end
     for(int i=22; i<32; i++) begin
@@ -584,7 +584,7 @@ class alu_cont_div_test extends rvv_backend_test;
     // Unsigned test - sew16
     // vs2
     temp = $urandom_range(0, 16'hFFFF);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*16+:16] = temp;
     end
     for(int i=12; i<22; i++) begin
@@ -592,7 +592,7 @@ class alu_cont_div_test extends rvv_backend_test;
     end
     // vs1
     temp = $urandom_range(0, 16'hFFFF);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*16+:16] = temp;
     end
     for(int i=22; i<32; i++) begin
@@ -614,7 +614,7 @@ class alu_cont_div_test extends rvv_backend_test;
     // Unsigned test - sew32
     // vs2
     temp = $urandom_range(0, 32'hFFFFFFFF);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*32+:32] = temp;
     end
     for(int i=12; i<22; i++) begin
@@ -622,7 +622,7 @@ class alu_cont_div_test extends rvv_backend_test;
     end
     // vs1
     temp = $urandom_range(0, 32'hFFFFFFFF);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*32+:32] = temp;
     end
     for(int i=22; i<32; i++) begin
@@ -644,7 +644,7 @@ class alu_cont_div_test extends rvv_backend_test;
     // Signed test - sew8
     // vs2
     temp = $urandom_range(0, 8'hFF);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*8+:8] = temp;
     end
     for(int i=12; i<22; i++) begin
@@ -652,7 +652,7 @@ class alu_cont_div_test extends rvv_backend_test;
     end
     // vs1
     temp = $urandom_range(0, 8'hFF);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*8+:8] = temp;
     end
     for(int i=22; i<32; i++) begin
@@ -674,7 +674,7 @@ class alu_cont_div_test extends rvv_backend_test;
     // Signed test - sew16
     // vs2
     temp = $urandom_range(0, 16'hFFFF);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*16+:16] = temp;
     end
     for(int i=12; i<22; i++) begin
@@ -682,7 +682,7 @@ class alu_cont_div_test extends rvv_backend_test;
     end
     // vs1
     temp = $urandom_range(0, 16'hFFFF);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*16+:16] = temp;
     end
     for(int i=22; i<32; i++) begin
@@ -704,7 +704,7 @@ class alu_cont_div_test extends rvv_backend_test;
     // Signed test - sew32
     // vs2
     temp = $urandom_range(0, 32'hFFFFFFFF);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*32+:32] = temp;
     end
     for(int i=12; i<22; i++) begin
@@ -712,7 +712,7 @@ class alu_cont_div_test extends rvv_backend_test;
     end
     // vs1
     temp = $urandom_range(0, 32'hFFFFFFFF);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*32+:32] = temp;
     end
     for(int i=22; i<32; i++) begin
@@ -734,7 +734,7 @@ class alu_cont_div_test extends rvv_backend_test;
     // Signed & unsigned mix test - sew8
     // vs2
     temp = $urandom_range(0, 8'h7F);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*8+:8] = temp;
     end
     for(int i=12; i<22; i++) begin
@@ -742,7 +742,7 @@ class alu_cont_div_test extends rvv_backend_test;
     end
     // vs1
     temp = $urandom_range(0, 8'h7F);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*8+:8] = temp;
     end
     for(int i=22; i<32; i++) begin
@@ -764,7 +764,7 @@ class alu_cont_div_test extends rvv_backend_test;
     // Signed & unsigned mix test - sew16
     // vs2
     temp = $urandom_range(0, 16'h7FFF);
-    for(int j=0; j<`VLENB/2; j++) begin
+    for(int j=0; j<`VLENB(VLEN)/2; j++) begin
       value[j*16+:16] = temp;
     end
     for(int i=12; i<22; i++) begin
@@ -772,7 +772,7 @@ class alu_cont_div_test extends rvv_backend_test;
     end
     // vs1
     temp = $urandom_range(0, 16'h7FFF);
-    for(int j=0; j<`VLENB/2; j++) begin
+    for(int j=0; j<`VLENB(VLEN)/2; j++) begin
       value[j*16+:16] = temp;
     end
     for(int i=22; i<32; i++) begin
@@ -794,7 +794,7 @@ class alu_cont_div_test extends rvv_backend_test;
     // Signed & unsigned mix test - sew32
     // vs2
     temp = $urandom_range(0, 32'h7FFF_FFFF);
-    for(int j=0; j<`VLENB/4; j++) begin
+    for(int j=0; j<`VLENB(VLEN)/4; j++) begin
       value[j*32+:32] = temp;
     end
     for(int i=12; i<22; i++) begin
@@ -802,7 +802,7 @@ class alu_cont_div_test extends rvv_backend_test;
     end
     // vs1
     temp = $urandom_range(0, 32'h7FFF_FFFF);
-    for(int j=0; j<`VLENB/4; j++) begin
+    for(int j=0; j<`VLENB(VLEN)/4; j++) begin
       value[j*32+:32] = temp;
     end
     for(int i=22; i<32; i++) begin

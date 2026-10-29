@@ -265,14 +265,14 @@ class rvs_transaction extends uvm_sequence_item;
     } else if(inst_type == ALU && alu_inst inside {VMSEQ, VMSNE, VMSLTU, VMSLT, VMSLEU, VMSLE, VMSGTU, VMSGT, VMADC, VMSBC}) {
       // Special case: For mask compare & carry produce inst, DUT will use vlmax==`VLEN/sew will vlmax, and calculate the result.
       if(vlmul[2]) // fraction_lmul
-        vlmax == (`VLENB >> vsew);
+        vlmax == (`VLENB(VLEN) >> vsew);
       else  
-        vlmax == ((`VLENB << vlmul) >> vsew);
+        vlmax == ((`VLENB(VLEN) << vlmul) >> vsew);
     } else {
       if(vlmul[2]) // fraction_lmul
-        vlmax == ((`VLENB >> (~vlmul +3'b1)) >> vsew);
+        vlmax == ((`VLENB(VLEN) >> (~vlmul +3'b1)) >> vsew);
       else  
-        vlmax == ((`VLENB << vlmul) >> vsew);
+        vlmax == ((`VLENB(VLEN) << vlmul) >> vsew);
     }
 
     vl <= vlmax_max;
@@ -285,7 +285,7 @@ class rvs_transaction extends uvm_sequence_item;
     // evl
     if(inst_type == ALU && alu_inst == VSMUL_VMVNRR && alu_type == OPIVI) {
       // vmv<nr>r
-      evl == ((alu_nreg + 1) * `VLENB) >> vsew;
+      evl == ((alu_nreg + 1) * `VLENB(VLEN)) >> vsew;
     } else if(inst_type inside {LD, ST} && lsu_mop == LSU_US && src2_type == FUNC && src2_idx == MASK) {
       // vlm/vsm
       if(vl%8 > 0) evl == int'(vl/8) + 1;
@@ -1249,7 +1249,7 @@ function void rvs_transaction::post_randomize();
     if(inst_type == ALU && alu_inst == VSMUL_VMVNRR && alu_type == OPIVI) begin
       // NO CHANGE
       // vmv<nr>r
-      // evl = ((alu_nreg + 1) * `VLENB) >> vsew;
+      // evl = ((alu_nreg + 1) * `VLENB(VLEN)) >> vsew;
     end else if(inst_type inside {LD, ST} && lsu_mop == LSU_US && src2_type == FUNC && src2_idx == MASK) begin
       // vlm/vsm
       if(vl%8 > 0) evl = int'(vl/8) + 1;
@@ -1825,14 +1825,14 @@ function void rvs_transaction::decode_vtype(bit dec_evl, bit dec_vlmax);
       vlmax = vlmax_max;  
     end else if(inst_type == ALU && alu_inst inside {VMSEQ, VMSNE, VMSLTU, VMSLT, VMSLEU, VMSLE, VMSGTU, VMSGT, VMADC, VMSBC}) begin
       if(vlmul[2]) // fraction_lmul
-        vlmax = (`VLENB >> vsew);
+        vlmax = (`VLENB(VLEN) >> vsew);
       else  
-        vlmax = ((`VLENB << vlmul) >> vsew);
+        vlmax = ((`VLENB(VLEN) << vlmul) >> vsew);
     end else begin
       if(vlmul[2]) // fraction_lmul
-        vlmax = ((`VLENB >> (~vlmul +3'b1)) >> vsew);
+        vlmax = ((`VLENB(VLEN) >> (~vlmul +3'b1)) >> vsew);
       else  
-        vlmax = ((`VLENB << vlmul) >> vsew);
+        vlmax = ((`VLENB(VLEN) << vlmul) >> vsew);
     end
   end
 

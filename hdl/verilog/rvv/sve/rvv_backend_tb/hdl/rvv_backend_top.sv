@@ -1,6 +1,12 @@
 `ifndef RVV_TOP__SV
 `define RVV_TOP__SV
 
+// Testbench-wide design parameters, visible to the DUT instance and to the
+// interfaces/classes pulled in below (their macros take VLEN/XLEN/PC_WIDTH).
+localparam int unsigned VLEN     = `VLEN;
+localparam int unsigned XLEN     = `XLEN;
+localparam int unsigned PC_WIDTH = `PC_WIDTH;
+
 `include "rvv_backend_poke.svh"
 `include "rvv_backend_tb_mod.sv"
 module rvv_backend_top();
@@ -38,7 +44,12 @@ module rvv_backend_top();
   
   rvv_backend_tb_mod test(); 
   
-  rvv_backend DUT (
+  rvv_backend#(
+    .N(`ISSUE_LANE),
+    .VLEN(`VLEN),
+    .RegDataT(logic [31:0]),
+    .PC_WIDTH(PC_WIDTH)
+  ) DUT (
     .clk(clk),
     .rst_n(rst_n),
     
@@ -158,7 +169,7 @@ module rvv_backend_top();
       vrf_if.vreg[i] = `VRF_PATH.vrf_rd_data_full[i];
     end
     for(int i=0; i<32; i++) begin
-      for(int j=0; j<`VLENB; j++) begin
+      for(int j=0; j<`VLENB(VLEN); j++) begin
         vrf_if.vrf_wr_wenb_full[i][j*`BYTE_WIDTH +: `BYTE_WIDTH] = {`BYTE_WIDTH{`VRF_PATH.vrf_wr_wen_full[i][j]}};
       end
     end
@@ -226,7 +237,7 @@ module rvv_backend_top();
   /* vrf */
   always_comb begin
     for(int i=0; i<32; i++) begin
-      for(int j=0; j<`VLENB; j++) begin
+      for(int j=0; j<`VLENB(VLEN); j++) begin
         rvv_intern_if.vrf_wr_wenb_full[i][j*`BYTE_WIDTH +: `BYTE_WIDTH] = {`BYTE_WIDTH{`VRF_PATH.vrf_wr_wen_full[i][j]}};
       end
     end

@@ -8,7 +8,7 @@ interface rvv_intern_interface (input bit clk, input bit rst_n);
 
 // ROB to Retire
   logic    [`NUM_RT_UOP-1:0]  rob2rt_write_valid;
-  ROB2RT_t [`NUM_RT_UOP-1:0]  rob2rt_write_data;
+  `ROB2RT_t(VLEN, PC_WIDTH) [`NUM_RT_UOP-1:0]  rob2rt_write_data;
   logic    [`NUM_RT_UOP-1:0]  rt2rob_write_ready;
 
 // Decode to UOPs queue

@@ -443,7 +443,7 @@ endclass: rvv_behavior_model
             // Writeback whole vrf
             vrf = vrf_temp;
             for(int i=0; i<32; i++) begin
-              for(int j=0; j<`VLENB; j++) begin
+              for(int j=0; j<`VLENB(VLEN); j++) begin
                 vrf_byte_strobe_temp[i][j] = |vrf_bit_strobe_temp[i][j*8 +: 8];
               end
             end
@@ -666,7 +666,7 @@ endclass: rvv_behavior_model
             // Writeback whole vrf
             vrf = vrf_temp;
             for(int i=0; i<32; i++) begin
-              for(int j=0; j<`VLENB; j++) begin
+              for(int j=0; j<`VLENB(VLEN); j++) begin
                 vrf_byte_strobe_temp[i][j] = |vrf_bit_strobe_temp[i][j*8 +: 8];
               end
             end
@@ -683,7 +683,7 @@ endclass: rvv_behavior_model
             rt_tr.is_rt = 1;
 
             for(int i=0; i<32; i++) begin
-              for(int j=0; j<`VLENB; j++) begin
+              for(int j=0; j<`VLENB(VLEN); j++) begin
                 vrf_byte_strobe_temp[i][j] = |vrf_bit_strobe_temp[i][j*8 +: 8];
               end
             end
@@ -1833,9 +1833,9 @@ class lsu_processor extends uvm_component;
     `uvm_info("MDL/LSU", $sformatf("\n%s", inst_tr.sprint()), UVM_HIGH);
 
     if(data_emul < 1) begin
-      seg_switch_gap = data_emul * `VLENB;
+      seg_switch_gap = data_emul * `VLENB(VLEN);
     end else begin
-      seg_switch_gap = `VLENB;
+      seg_switch_gap = `VLENB(VLEN);
     end
 
     for(int seg_idx=0; seg_idx<seg_num; seg_idx++) begin
@@ -1925,8 +1925,8 @@ class lsu_processor extends uvm_component;
         
       switch_seg = data_byte_idx[seg_idx] >= seg_switch_gap;
     
-      data_byte_idx[seg_idx] = (data_byte_idx[seg_idx] % `VLENB);
-      vidx_byte_idx[seg_idx] = (vidx_byte_idx[seg_idx] % `VLENB);
+      data_byte_idx[seg_idx] = (data_byte_idx[seg_idx] % `VLENB(VLEN));
+      vidx_byte_idx[seg_idx] = (vidx_byte_idx[seg_idx] % `VLENB(VLEN));
 
       elm_idx_head[seg_idx] += elm_per_uop;
       elm_idx_tail[seg_idx] += elm_per_uop;

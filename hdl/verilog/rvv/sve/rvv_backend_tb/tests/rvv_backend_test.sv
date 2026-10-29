@@ -122,7 +122,7 @@ class rvv_backend_test extends uvm_test;
   virtual task rand_vrf();
     logic [`VLEN-1:0] value;
     for(int reg_idx=0; reg_idx<32; reg_idx++) begin
-      for(int j=0; j<`VLENB; j++) begin
+      for(int j=0; j<`VLENB(VLEN); j++) begin
         value[j*8+:8] = $urandom_range(0, 8'hFF);
       end
       set_mdl_vrf(reg_idx, value);

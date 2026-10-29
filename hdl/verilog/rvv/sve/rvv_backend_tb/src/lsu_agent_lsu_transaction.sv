@@ -39,10 +39,10 @@ class lsu_transaction extends uvm_sequence_item;
 
   /* info about load/store address/data */
   bit  lsu_slot_addr_valid;
-  int  lsu_slot_addr [`VLENB-1:0]; // byte addr for each byte data
+  int  lsu_slot_addr [`VLENB(VLEN)-1:0]; // byte addr for each byte data
   bit                      lsu_slot_data_valid;
-  logic [`VLENB-1:0] [7:0] lsu_slot_data;
-  logic [`VLENB-1:0]       lsu_slot_strobe; // byte strobe
+  logic [`VLENB(VLEN)-1:0] [7:0] lsu_slot_data;
+  logic [`VLENB(VLEN)-1:0]       lsu_slot_strobe; // byte strobe
 
   /* uop status */
   bit uop_rx_sent;

@@ -197,7 +197,7 @@ task rvv_scoreboard::rt_checker();
           // Since RTL use byte_strobe for retire, 
           //   MDL should generate byte_strobe, 
           //   and SCB also need to expand byte_strobe to bit_strobe to compare data.
-          for(int bit_idx=0; bit_idx<`VLENB; bit_idx++) begin
+          for(int bit_idx=0; bit_idx<`VLENB(VLEN); bit_idx++) begin
             rvs_rt_vrf_bit_strobe[bit_idx*8 +: 8] = {8{rvs_rt_vrf_byte_strobe[bit_idx]}}; 
             mdl_rt_vrf_bit_strobe[bit_idx*8 +: 8] = {8{mdl_rt_vrf_byte_strobe[bit_idx]}}; 
           end 

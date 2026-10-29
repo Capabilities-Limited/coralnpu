@@ -215,8 +215,8 @@ task lsu_driver::rx_driver();
                 for(int byte_idx=uop_tr.data_vreg_byte_head; byte_idx<uop_tr.data_vreg_byte_tail; byte_idx++) begin
                   uop_tr_temp.lsu_slot_data[byte_idx] = lsu_if.uop_lsu_rvv2lsu[i].vregfile_read_data[byte_idx*8 +: 8];
                 end
-                if(uop_tr.data_vreg_emul <  1 && uop_tr.data_vreg_byte_tail >= int'(`VLENB*uop_tr.data_vreg_emul) || 
-                   uop_tr.data_vreg_emul >= 1 && uop_tr.data_vreg_byte_tail >= `VLENB) begin
+                if(uop_tr.data_vreg_emul <  1 && uop_tr.data_vreg_byte_tail >= int'(`VLENB(VLEN)*uop_tr.data_vreg_emul) || 
+                   uop_tr.data_vreg_emul >= 1 && uop_tr.data_vreg_byte_tail >= `VLENB(VLEN)) begin
                   uop_tr_temp.lsu_slot_data_valid = 1;
                 end
               end
@@ -243,8 +243,8 @@ task lsu_driver::rx_driver();
               end
             end
 
-            if(uop_tr.data_vreg_emul <  1 && uop_tr.data_vreg_byte_tail >= int'(`VLENB*uop_tr.data_vreg_emul) || 
-               uop_tr.data_vreg_emul >= 1 && uop_tr.data_vreg_byte_tail >= `VLENB) begin
+            if(uop_tr.data_vreg_emul <  1 && uop_tr.data_vreg_byte_tail >= int'(`VLENB(VLEN)*uop_tr.data_vreg_emul) || 
+               uop_tr.data_vreg_emul >= 1 && uop_tr.data_vreg_byte_tail >= `VLENB(VLEN)) begin
               `uvm_info("LSU_DRV",$sformatf("uop addr ready:\n%s",uop_tr.sprint()),UVM_HIGH)
               uop_tr_temp.lsu_slot_addr_valid = 1;
             end
@@ -311,7 +311,7 @@ task lsu_driver::lsu_process();
                 `uvm_fatal("TB_ISSUE", "LSU decode err.")
                 break;
               end else if(uops_tx_queue[uop_idx].uop_done == 0) begin
-                for(int byte_idx=0; byte_idx<`VLENB; byte_idx++) begin
+                for(int byte_idx=0; byte_idx<`VLENB(VLEN); byte_idx++) begin
                   if(uops_tx_queue[uop_idx].lsu_slot_strobe[byte_idx] === 1'b1) begin
                     mem.pc = uops_tx_queue[uop_idx].uop_pc;
                     mem.load_byte(data_temp, uops_tx_queue[uop_idx].lsu_slot_addr[byte_idx]);
@@ -332,7 +332,7 @@ task lsu_driver::lsu_process();
                 `uvm_fatal("TB_ISSUE", "LSU decode err.")
                 break;
               end else if(uops_tx_queue[uop_idx].uop_done == 0) begin
-                for(int byte_idx=0; byte_idx<`VLENB; byte_idx++) begin
+                for(int byte_idx=0; byte_idx<`VLENB(VLEN); byte_idx++) begin
                   if(uops_tx_queue[uop_idx].lsu_slot_strobe[byte_idx] === 1'b1) begin
                     data_temp = uops_tx_queue[uop_idx].lsu_slot_data[byte_idx];
                     mem.pc = uops_tx_queue[uop_idx].uop_pc;
@@ -563,9 +563,9 @@ function int lsu_driver::lsu_uop_decode(ref rvs_transaction inst_tr);
 // Uops Gen --------------------------------------------------------------------
   `uvm_info("LSU_DRV","Start gen uops",UVM_HIGH)  
   if(data_emul < 1) begin
-    seg_switch_gap = data_emul * `VLENB;
+    seg_switch_gap = data_emul * `VLENB(VLEN);
   end else begin
-    seg_switch_gap = `VLENB;
+    seg_switch_gap = `VLENB(VLEN);
   end
 
   for(int seg_idx=0; seg_idx<seg_num; seg_idx++) begin
@@ -608,13 +608,13 @@ function int lsu_driver::lsu_uop_decode(ref rvs_transaction inst_tr);
     uop_tr.lsu_slot_strobe      = '0;
     
     uop_tr.data_vreg_valid      = 1;
-    uop_tr.data_vreg_idx        = data_vreg_idx_base + elm_idx_head[seg_idx] * (data_eew/8) / `VLENB + seg_idx * int'($ceil(data_emul));
+    uop_tr.data_vreg_idx        = data_vreg_idx_base + elm_idx_head[seg_idx] * (data_eew/8) / `VLENB(VLEN) + seg_idx * int'($ceil(data_emul));
     uop_tr.data_vreg_eew        = data_eew; 
     uop_tr.data_vreg_emul       = data_emul; 
     uop_tr.data_vreg_byte_head  = data_byte_idx[seg_idx];
 
     uop_tr.vidx_vreg_valid      = (inst_tr.lsu_mop inside {LSU_UI, LSU_OI}) ? 1 : 0;
-    uop_tr.vidx_vreg_idx        = vidx_vreg_idx_base + elm_idx_head[seg_idx] * (vidx_eew/8) / `VLENB; 
+    uop_tr.vidx_vreg_idx        = vidx_vreg_idx_base + elm_idx_head[seg_idx] * (vidx_eew/8) / `VLENB(VLEN); 
     uop_tr.vidx_vreg_emul       = vidx_emul; 
     uop_tr.vidx_vreg_eew        = vidx_eew; 
     uop_tr.vidx_vreg_byte_head  = vidx_byte_idx[seg_idx];
@@ -650,8 +650,8 @@ function int lsu_driver::lsu_uop_decode(ref rvs_transaction inst_tr);
 
     switch_seg = data_byte_idx[seg_idx] >= seg_switch_gap;
     
-    data_byte_idx[seg_idx] = (data_byte_idx[seg_idx] % `VLENB);
-    vidx_byte_idx[seg_idx] = (vidx_byte_idx[seg_idx] % `VLENB);
+    data_byte_idx[seg_idx] = (data_byte_idx[seg_idx] % `VLENB(VLEN));
+    vidx_byte_idx[seg_idx] = (vidx_byte_idx[seg_idx] % `VLENB(VLEN));
 
     elm_idx_head[seg_idx] += elm_per_uop;
     elm_idx_tail[seg_idx] += elm_per_uop;
