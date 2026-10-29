@@ -47,9 +47,9 @@ module rvv_backend_top();
     .insts_ready_cq2rvs       (rvs_if.insts_ready_cq2rvs    ),
     .remaining_count_cq2rvs   (),
     
-    .rt_xrf_rvv2rvs           (rvs_if.rt_xrf_rvv2rvs        ),
+    .rt_rvs_rvv2rvs           (rvs_if.rt_xrf_rvv2rvs        ),
     .rt_xrf_valid_rvv2rvs     (rvs_if.rt_xrf_valid_rvv2rvs  ),
-    .rt_xrf_ready_rvs2rvv     (rvs_if.rt_xrf_ready_rvs2rvv  ),
+    .rt_rvs_ready_rvs2rvv     (rvs_if.rt_xrf_ready_rvs2rvv  ),
 
     .uop_lsu_valid_rvv2lsu    (lsu_if.uop_lsu_valid_rvv2lsu ),
     .uop_lsu_rvv2lsu          (lsu_if.uop_lsu_rvv2lsu       ),
@@ -89,11 +89,13 @@ module rvv_backend_top();
   generate 
     genvar gv_i;
     for(gv_i=0; gv_i<`NUM_DE_INST; gv_i++) begin
-      assign rvs_if.inst_correct[gv_i] = `DECODE_PATH.pop_de2cq[gv_i] &&  (|`DECODE_PATH.uop_valid_de2uq[gv_i]);
-      assign rvs_if.inst_discard[gv_i] = `DECODE_PATH.pop_de2cq[gv_i] && !(|`DECODE_PATH.uop_valid_de2uq[gv_i]);
+      // DE1 pops the CQ; a legal command goes to the LCQ, a reserved/nop
+      // instruction (lcmd_valid==0) is retired directly (de2rt).
+      assign rvs_if.inst_correct[gv_i] = `DECODE_PATH.pop_de2cq[gv_i] &&  `DECODE_PATH.lcmd_valid_de2lcq[gv_i];
+      assign rvs_if.inst_discard[gv_i] = `DECODE_PATH.pop_de2cq[gv_i] && !`DECODE_PATH.lcmd_valid_de2lcq[gv_i];
     end
   endgenerate
-  assign rvs_if.inst_pkg_cq2de = `DECODE_PATH.inst_pkg_cq2de;
+  assign rvs_if.inst_pkg_cq2de = `DECODE_PATH.inst_cq2de;
   
   // ROB dataout 
   assign rvs_if.rd_valid_rob2rt = DUT.rd_valid_rob2rt;
@@ -112,20 +114,20 @@ module rvv_backend_top();
       rvs_if.rt_vrf_data_rob2rt[i].rt_index = `RT_VRF_PATH.rt2vrf_write_data[i].rt_index;
     end
   end
-  assign rvs_if.rt_vrf_data_rob2rt[0].rt_strobe  = `RT_VRF_PATH.w_enB0;
-  assign rvs_if.rt_vrf_data_rob2rt[1].rt_strobe  = `RT_VRF_PATH.w_enB1;
-  assign rvs_if.rt_vrf_data_rob2rt[2].rt_strobe  = `RT_VRF_PATH.w_enB2;
-  assign rvs_if.rt_vrf_data_rob2rt[3].rt_strobe  = `RT_VRF_PATH.w_enB3;
+  assign rvs_if.rt_vrf_data_rob2rt[0].rt_strobe  = `RT_VRF_PATH.w_strobe[0];
+  assign rvs_if.rt_vrf_data_rob2rt[1].rt_strobe  = `RT_VRF_PATH.w_strobe[1];
+  assign rvs_if.rt_vrf_data_rob2rt[2].rt_strobe  = `RT_VRF_PATH.w_strobe[2];
+  assign rvs_if.rt_vrf_data_rob2rt[3].rt_strobe  = `RT_VRF_PATH.w_strobe[3];
 
-  assign rvs_if.wr_vxsat_valid[0] = `RT_VXSAT_PATH.w_valid0_chkTrap & `RT_VXSAT_PATH.w_vxsat0;
-  assign rvs_if.wr_vxsat_valid[1] = `RT_VXSAT_PATH.w_valid1_chkTrap & `RT_VXSAT_PATH.w_vxsat1;
-  assign rvs_if.wr_vxsat_valid[2] = `RT_VXSAT_PATH.w_valid2_chkTrap & `RT_VXSAT_PATH.w_vxsat2;
-  assign rvs_if.wr_vxsat_valid[3] = `RT_VXSAT_PATH.w_valid3_chkTrap & `RT_VXSAT_PATH.w_vxsat3;
+  assign rvs_if.wr_vxsat_valid[0] = `RT_VXSAT_PATH.w_valid_chkTrap[0] & `RT_VXSAT_PATH.w_vxsat[0];
+  assign rvs_if.wr_vxsat_valid[1] = `RT_VXSAT_PATH.w_valid_chkTrap[1] & `RT_VXSAT_PATH.w_vxsat[1];
+  assign rvs_if.wr_vxsat_valid[2] = `RT_VXSAT_PATH.w_valid_chkTrap[2] & `RT_VXSAT_PATH.w_vxsat[2];
+  assign rvs_if.wr_vxsat_valid[3] = `RT_VXSAT_PATH.w_valid_chkTrap[3] & `RT_VXSAT_PATH.w_vxsat[3];
 
-  assign rvs_if.wr_vxsat[0] = `RT_VXSAT_PATH.w_vxsat0;
-  assign rvs_if.wr_vxsat[1] = `RT_VXSAT_PATH.w_vxsat1;
-  assign rvs_if.wr_vxsat[2] = `RT_VXSAT_PATH.w_vxsat2;
-  assign rvs_if.wr_vxsat[3] = `RT_VXSAT_PATH.w_vxsat3;
+  assign rvs_if.wr_vxsat[0] = `RT_VXSAT_PATH.w_vxsat[0];
+  assign rvs_if.wr_vxsat[1] = `RT_VXSAT_PATH.w_vxsat[1];
+  assign rvs_if.wr_vxsat[2] = `RT_VXSAT_PATH.w_vxsat[2];
+  assign rvs_if.wr_vxsat[3] = `RT_VXSAT_PATH.w_vxsat[3];
     
 // lsu interface -----------------------------------------------------
   // trap pc tracer
@@ -170,7 +172,7 @@ module rvv_backend_top();
   assign rvv_intern_if.rt2rob_write_ready = DUT.u_retire.rt2rob_write_ready;
 
   // Decode to UOPs queue
-  assign rvv_intern_if.uop_valid_de2uq  = DUT.u_decode.uop_valid_de2uq;
+  assign rvv_intern_if.uop_valid_de2uq  = DUT.u_decode_de2.de_uop_valid;
   
   // Disptach to each rs
   /* Dispatch unit to ALU reservation station */

@@ -188,6 +188,8 @@ task rvs_driver::inst_manage();
       inst[i].arch_state.ta         = inst_tx_queue[i].vta;
       assert($cast(inst[i].arch_state.sew,  inst_tx_queue[i].vsew));
       assert($cast(inst[i].arch_state.lmul, inst_tx_queue[i].vlmul));
+      // The LSU/ARI decode units read lmul_orig (the architectural vtype LMUL).
+      assert($cast(inst[i].arch_state.lmul_orig, inst_tx_queue[i].vlmul));
       inst_vld[i] = 1'b1;
     end else begin
       inst[i] = inst[i];
