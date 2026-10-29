@@ -66,7 +66,7 @@ parameter real EMUL4     = 4.00;
 parameter real EMUL8     = 8.00;
 
 typedef struct packed {
-  logic [31] vill;
+  logic vill;
   logic [30:8] rsv;
   agnostic_e vma;
   agnostic_e vta;
