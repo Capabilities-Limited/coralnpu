@@ -103,15 +103,19 @@ module rvv_backend_top();
   assign rvs_if.rd_ready_rt2rob = DUT.rd_ready_rt2rob;
 
 
-  // VRF retire
+  // VRF retire, observed per instruction (before the retire stage's WAW merge).
+  // When two instructions retiring in the same cycle write the same register,
+  // the DUT masks the earlier lane in rt2vrf_write_valid/data (~hit_waw) and
+  // carries the merged result on the later lane. The reference model, and so the
+  // scoreboard, counts one write per instruction, so use the pre-merge signals.
   always_comb begin
     for(int i=0; i<`NUM_RT_UOP; i++) begin
-      rvs_if.rt_vrf_valid_rob2rt[i] = `RT_VRF_PATH.rt2vrf_write_valid[i];
+      rvs_if.rt_vrf_valid_rob2rt[i] = `RT_VRF_PATH.w_vrf_valid[i] & `RT_VRF_PATH.rt2rob_write_ready[i];
 `ifdef TB_SUPPORT
-      rvs_if.rt_vrf_data_rob2rt[i].uop_pc   = `RT_VRF_PATH.rt2vrf_write_data[i].uop_pc;
+      rvs_if.rt_vrf_data_rob2rt[i].uop_pc   = `RT_VRF_PATH.rob2rt_write_data[i].uop_pc;
 `endif
-      rvs_if.rt_vrf_data_rob2rt[i].rt_data  = `RT_VRF_PATH.rt2vrf_write_data[i].rt_data;
-      rvs_if.rt_vrf_data_rob2rt[i].rt_index = `RT_VRF_PATH.rt2vrf_write_data[i].rt_index;
+      rvs_if.rt_vrf_data_rob2rt[i].rt_data  = `RT_VRF_PATH.w_data[i];
+      rvs_if.rt_vrf_data_rob2rt[i].rt_index = `RT_VRF_PATH.w_addr[i];
     end
   end
   assign rvs_if.rt_vrf_data_rob2rt[0].rt_strobe  = `RT_VRF_PATH.w_strobe[0];
