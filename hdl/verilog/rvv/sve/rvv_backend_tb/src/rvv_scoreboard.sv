@@ -208,7 +208,8 @@ task rvv_scoreboard::rt_checker();
           end else if(rvs_rt_vrf_byte_strobe !== mdl_rt_vrf_byte_strobe) begin
             vreg_dut_val = "0x";
             vreg_mdl_val = "0x";
-            for(int i=`VLEN-1;i>=0;i-=16) begin
+            // byte strobe has one bit per byte (VLENB bits), not VLEN bits
+            for(int i=`VLENB(VLEN)-1;i>=0;i-=16) begin
               vreg_dut_val = $sformatf("%s%4h_",vreg_dut_val,rvs_rt_vrf_byte_strobe[i-:16]);
               vreg_mdl_val = $sformatf("%s%4h_",vreg_mdl_val,mdl_rt_vrf_byte_strobe[i-:16]);
             end
