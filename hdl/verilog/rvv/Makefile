@@ -179,7 +179,7 @@ lint: $(BUILD_PATH)/lint.f
 UVM_DPI_SRCS  := $(UVM_HOME)/src/dpi/uvm_dpi.cc
 UVM_DPI_FLAGS := --vpi -CFLAGS -I$(UVM_HOME)/src/dpi
 
-$(BUILD_PATH)/obj_dir/V$(TB_TOP): $(BUILD_PATH)/rtl.f $(BUILD_PATH)/tb.f
+$(BUILD_PATH)/obj_dir/V$(TB_TOP): $(BUILD_PATH)/rtl.f $(BUILD_PATH)/tb.f $(wildcard $(RTL_FILES)/%) $(foreach incdir,$(RTL_INCDIRS),$(wildcard $(incdir)/%)) $(wildcard $(TB_FILES)/%) $(foreach incdir,$(TB_INCDIRS),$(wildcard $(incdir)/%))
 	@test -n "$(UVM_HOME)" || { echo "error: set UVM_HOME to a UVM tree containing src/uvm_pkg.sv"; exit 1; }
 	@# uvm_pkg.sv must come first so the UVM macros are defined for the testbench
 	@# (VCS gets this implicitly from -ntb_opts uvm).
