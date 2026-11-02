@@ -214,6 +214,7 @@ module rvv_backend_top();
   /* CMD queue */
   assign rvv_intern_if.cmd_q_full  = DUT.u_command_queue.full;
   assign rvv_intern_if.cmd_q_empty = DUT.u_command_queue.empty;
+  assign rvv_intern_if.lcmd_q_empty = DUT.fifo_empty_lcq2de;
 
   /* UOPs queue */
   assign rvv_intern_if.uop_q_full  = DUT.u_uop_queue.full;
