@@ -20,25 +20,34 @@
 `define HDL_VERILOG_RVV_DESIGN_RVV_BACKEND_ALU_SHIFT_DATAPATH_SV
 
 (* keep_hierarchy = "yes" *)
-module rvv_backend_alu_shift_datapath (
+module rvv_backend_alu_shift_datapath#(
+  parameter int unsigned VLEN = `VLEN,
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  parameter type RegDataT=logic [31:0],
+  localparam int unsigned XLEN = $bits(RegDataT),
+  localparam type ALU_RS_t = `ALU_RS_t(VLEN, PC_WIDTH),
+  localparam type PU2ROB_t = `PU2ROB_t(VLEN, PC_WIDTH),
+  localparam type RVVXRM = RVVXRM_e,
+
+  localparam logic [1:0] ShiftSll = 2'b00,
+  localparam logic [1:0] ShiftSrl = 2'b01,
+  localparam logic [1:0] ShiftSra = 2'b10
+) (
   input  logic                   alu_uop_valid,
   input  ALU_RS_t                alu_uop,
   output logic                   result_valid,
   output PU2ROB_t                result
 );
-  localparam logic [1:0] ShiftSll = 2'b00;
-  localparam logic [1:0] ShiftSrl = 2'b01;
-  localparam logic [1:0] ShiftSra = 2'b10;
 
   // Unpack ALU_RS_t
   logic [`ROB_DEPTH_WIDTH-1:0]   rob_entry;
   FUNCT6_u                       uop_funct6;
   logic [`FUNCT3_WIDTH-1:0]      uop_funct3;
   RVVXRM                         vxrm;
-  logic [`VLEN-1:0]              vs1_data;
-  logic [`VLEN-1:0]              vs2_data;
+  logic [VLEN-1:0]              vs1_data;
+  logic [VLEN-1:0]              vs2_data;
   EEW_e                          vs2_eew;
-  logic [`XLEN-1:0]              rs1_data;
+  logic [XLEN-1:0]              rs1_data;
   logic [$clog2(`EMUL_MAX)-1:0]  uop_index;
 
   assign rob_entry   = alu_uop.rob_entry;
@@ -46,7 +55,7 @@ module rvv_backend_alu_shift_datapath (
   assign uop_funct3  = alu_uop.uop_funct3;
   assign vxrm        = alu_uop.vxrm;
   assign vs1_data    = alu_uop.vs1_data;
-  assign rs1_data    = alu_uop.vs1_data[`XLEN-1:0];
+  assign rs1_data    = alu_uop.vs1_data[XLEN-1:0];
   assign vs2_data    = alu_uop.vs2_data;
   assign vs2_eew     = alu_uop.vs2_eew;
   assign uop_index   = alu_uop.uop_index;
@@ -517,12 +526,12 @@ module rvv_backend_alu_shift_datapath (
   assign nar16_eew32 = {product32_raw[3][15:0], product32_raw[2][15:0],
                         product32_raw[1][15:0], product32_raw[0][15:0]};
 
-  logic [`VLEN-1:0]  raw_vec;
-  logic [`VLEN-1:0]  scaling_vec;
-  logic [`VLEN-1:0]  narrow_raw_vec;
-  logic [`VLEN-1:0]  clamped_vec;
-  logic [`VLEN-1:0]  result_data;
-  logic [`VLENB-1:0] vsaturate_data;
+  logic [VLEN-1:0]  raw_vec;
+  logic [VLEN-1:0]  scaling_vec;
+  logic [VLEN-1:0]  narrow_raw_vec;
+  logic [VLEN-1:0]  clamped_vec;
+  logic [VLEN-1:0]  result_data;
+  logic [`VLENB(VLEN)-1:0] vsaturate_data;
 
   always_comb begin
     case (vs2_eew)
@@ -550,11 +559,11 @@ module rvv_backend_alu_shift_datapath (
   assign clamped_vec = (vs2_eew == EEW16) ? clamped_byte16 : clamped_hword32;
 
   // Factored 3-Term One-Hot Output Multiplexer
-  logic [`VLEN-1:0] round_or_clamp_vec;
+  logic [VLEN-1:0] round_or_clamp_vec;
   assign round_or_clamp_vec = is_clip_inst ? clamped_vec : scaling_vec;
 
   generate
-    for (k = 0; k < `VLEN; k = k + 1) begin : gen_out_mux
+    for (k = 0; k < VLEN; k = k + 1) begin : gen_out_mux
       assign result_data[k] = (is_raw_shift  & raw_vec[k]) |
                               (is_narrow_raw & narrow_raw_vec[k]) |
                               ((is_scaling_shift | is_clip_inst) & round_or_clamp_vec[k]);
@@ -571,7 +580,7 @@ module rvv_backend_alu_shift_datapath (
   assign sat_mask32_s = {(up_s32[3]|un_s32[3]), 1'b0, (up_s32[2]|un_s32[2]), 1'b0,
                          (up_s32[1]|un_s32[1]), 1'b0, (up_s32[0]|un_s32[0]), 1'b0};
 
-  logic [`VLENB-1:0] sat_u_vec, sat_s_vec;
+  logic [`VLENB(VLEN)-1:0] sat_u_vec, sat_s_vec;
   always_comb begin
     case (vs2_eew)
       EEW16:   sat_u_vec = uop_index[0] ? {up_u16, 8'b0} : {8'b0, up_u16};

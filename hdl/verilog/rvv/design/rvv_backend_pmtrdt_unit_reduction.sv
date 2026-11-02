@@ -534,13 +534,13 @@ module rvv_backend_pmtrdt_unit_reduction#(
 `ifdef CORALNPU_STRUCTURAL_DATAPATH
   // Structural Brent-Kung 16-element Parallel-Prefix Mask Adder
   // Replaces the 62 cascaded half-adders with balanced depth <= 7 gates
-  logic [M_SUM_NUM/4-1:0][`VSTART_WIDTH-1:0] blk_total_sum;
+  logic [M_SUM_NUM/4-1:0][`VSTART_WIDTH(VLEN)-1:0] blk_total_sum;
 
   for (genvar blk = 0; blk < M_SUM_NUM/4; blk = blk + 1) begin : gen_bk_blk
-    logic [3:0][`VSTART_WIDTH-1:0] blk_sum;
+    logic [3:0][`VSTART_WIDTH(VLEN)-1:0] blk_sum;
 
     brent_kung_prefix_sum_16 #(
-      .WIDTH (`VSTART_WIDTH)
+      .WIDTH (`VSTART_WIDTH(VLEN))
     ) u_mask_bk16 (
       .mask_in          (vs2_m_t0[blk*16 +: 16]),
       .block_prefix_sum (blk_sum),

@@ -38,7 +38,11 @@ module rvv_backend_alu_unit_shift#(
   output  PU2ROB_t                result;
 
 `ifdef CORALNPU_STRUCTURAL_DATAPATH
-  rvv_backend_alu_shift_datapath u_shift_structural_dp (
+  rvv_backend_alu_shift_datapath#(
+    .VLEN(VLEN),
+    .PC_WIDTH(PC_WIDTH),
+    .RegDataT(RegDataT)
+  ) u_shift_structural_dp (
     .alu_uop_valid (alu_uop_valid),
     .alu_uop       (alu_uop),
     .result_valid  (result_valid),

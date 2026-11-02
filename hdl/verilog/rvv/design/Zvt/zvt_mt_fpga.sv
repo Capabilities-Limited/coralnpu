@@ -76,7 +76,9 @@ endmodule
  * invertible XOR-folding bijection. Eliminates 332k CLB LUTs and resolves
  * SLR0-SLR1 SLL routing congestion (Route 35-3424).
  */
-module zvt_mt_fpga (
+module zvt_mt_fpga #(
+  parameter int unsigned VLEN = `VLEN
+) (
   clk,
   rst_n,
   readMtIdx,
@@ -97,26 +99,26 @@ module zvt_mt_fpga (
   input  logic rst_n;
 
   // 16 read ports (4 blocks x 4 ports/block)
-  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][$clog2(`NUM_MT)-1:0]      readMtIdx;
-  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][$clog2(`NUM_SUBTILE)-1:0] readSubIdx;
-  output logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][`SUBTILE_SIZE*8-1:0]      readData;
+  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0]      readMtIdx;
+  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] readSubIdx;
+  output logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0]      readData;
 
 `ifdef RVVI_ON
   // RVVI verification read ports
   input  logic [`NUM_BLK-1:0][3:0][$clog2(`NUM_MT)-1:0]                          rvviMtIdx;
-  input  logic [`NUM_BLK-1:0][3:0][`NUM_SUBTILE/2-1:0][$clog2(`NUM_SUBTILE)-1:0] rvviSubIdx;
-  output logic [`NUM_BLK-1:0][3:0][`NUM_SUBTILE/2-1:0][`SUBTILE_SIZE*8-1:0]      rvviReadData;
+  input  logic [`NUM_BLK-1:0][3:0][`NUM_SUBTILE(VLEN)/2-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] rvviSubIdx;
+  output logic [`NUM_BLK-1:0][3:0][`NUM_SUBTILE(VLEN)/2-1:0][`SUBTILE_SIZE*8-1:0]      rvviReadData;
 `endif
 
   // 16 write ports (4 blocks x 4 ports/block)
-  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][`SUBTILE_SIZE-1:0]        writeEn;
-  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][$clog2(`NUM_MT)-1:0]      writeMtIdx;
-  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][$clog2(`NUM_SUBTILE)-1:0] writeSubIdx;
-  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][`SUBTILE_SIZE*8-1:0]      writeData;
+  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE-1:0]        writeEn;
+  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0]      writeMtIdx;
+  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] writeSubIdx;
+  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0]      writeData;
 
   localparam int MT_WIDTH        = $clog2(`NUM_MT);
-  localparam int SUB_WIDTH       = $clog2(`NUM_SUBTILE);
-  localparam int TOTAL_ENTRIES   = `NUM_MT * `NUM_SUBTILE;
+  localparam int SUB_WIDTH       = $clog2(`NUM_SUBTILE(VLEN));
+  localparam int TOTAL_ENTRIES   = `NUM_MT * `NUM_SUBTILE(VLEN);
   localparam int BANK_DEPTH      = TOTAL_ENTRIES / 16;
   localparam int BANK_ADDR_WIDTH = $clog2(BANK_DEPTH);
 
@@ -126,8 +128,8 @@ module zvt_mt_fpga (
   if (`NUM_MT < 4 || ((`NUM_MT & (`NUM_MT - 1)) != 0)) begin : chk_num_mt
     $fatal(1, "ZVT_MT CONFIGURATION ERROR: NUM_MT (%0d) must be a power of 2 >= 4 for 16-bank UltraRAM.", `NUM_MT);
   end
-  if (`NUM_SUBTILE < 16 || ((`NUM_SUBTILE & (`NUM_SUBTILE - 1)) != 0)) begin : chk_num_subtile
-    $fatal(1, "ZVT_MT CONFIGURATION ERROR: NUM_SUBTILE (%0d) must be a power of 2 >= 16 for 16-bank UltraRAM.", `NUM_SUBTILE);
+  if (`NUM_SUBTILE(VLEN) < 16 || ((`NUM_SUBTILE(VLEN) & (`NUM_SUBTILE(VLEN) - 1)) != 0)) begin : chk_num_subtile
+    $fatal(1, "ZVT_MT CONFIGURATION ERROR: NUM_SUBTILE (%0d) must be a power of 2 >= 16 for 16-bank UltraRAM.", `NUM_SUBTILE(VLEN));
   end
 
   // -------------------------------------------------------------------------
@@ -156,11 +158,11 @@ module zvt_mt_fpga (
   // Ports j in {1, 2, 3} never address (mt=0, sub=0) when active; Port j == 0
   // is always paired with Port j == 1 across all PE and LSU/Move read modes.
   // -------------------------------------------------------------------------
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0] port_ren;
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0] port_ren;
 
   always_comb begin
     for (int i = 0; i < `NUM_BLK; i++) begin
-      for (int j = 0; j < `NUM_BLKPORT; j++) begin
+      for (int j = 0; j < `NUM_BLKPORT(VLEN); j++) begin
         if (j == 0) begin
           port_ren[i][j] = (readMtIdx[i][1] != '0) || (readSubIdx[i][1] != '0);
         end else begin
@@ -179,7 +181,7 @@ module zvt_mt_fpga (
   logic [15:0]                             bank_ren;
   logic [15:0][BANK_ADDR_WIDTH-1:0]        bank_raddr;
   logic [15:0][`SUBTILE_SIZE*8-1:0]        bank_rdata;
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][3:0] read_bank_sel;
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][3:0] read_bank_sel;
 
   // Write Steering: Direct bank routing with zero port contention
   always_comb begin
@@ -188,7 +190,7 @@ module zvt_mt_fpga (
       bank_waddr[k] = '0;
       bank_wdata[k] = '0;
       for (int i = 0; i < `NUM_BLK; i++) begin
-        for (int j = 0; j < `NUM_BLKPORT; j++) begin
+        for (int j = 0; j < `NUM_BLKPORT(VLEN); j++) begin
           if (|writeEn[i][j] && (get_bank_id(writeMtIdx[i][j], writeSubIdx[i][j]) == 4'(k))) begin
             bank_wen[k]   = writeEn[i][j];
             bank_waddr[k] = get_bank_addr(writeMtIdx[i][j], writeSubIdx[i][j]);
@@ -205,7 +207,7 @@ module zvt_mt_fpga (
       bank_ren[k]   = 1'b0;
       bank_raddr[k] = '0;
       for (int i = 0; i < `NUM_BLK; i++) begin
-        for (int j = 0; j < `NUM_BLKPORT; j++) begin
+        for (int j = 0; j < `NUM_BLKPORT(VLEN); j++) begin
           if (port_ren[i][j] && (get_bank_id(readMtIdx[i][j], readSubIdx[i][j]) == 4'(k))) begin
             bank_ren[k]   = 1'b1;
             bank_raddr[k] = get_bank_addr(readMtIdx[i][j], readSubIdx[i][j]);
@@ -221,7 +223,7 @@ module zvt_mt_fpga (
       read_bank_sel <= '0;
     end else begin
       for (int i = 0; i < `NUM_BLK; i++) begin
-        for (int j = 0; j < `NUM_BLKPORT; j++) begin
+        for (int j = 0; j < `NUM_BLKPORT(VLEN); j++) begin
           if (port_ren[i][j]) begin
             read_bank_sel[i][j] <= get_bank_id(readMtIdx[i][j], readSubIdx[i][j]);
           end
@@ -233,7 +235,7 @@ module zvt_mt_fpga (
   // Read Output Demultiplexing (Bank selection driven by 1-cycle pipelined tag)
   always_comb begin
     for (int i = 0; i < `NUM_BLK; i++) begin
-      for (int j = 0; j < `NUM_BLKPORT; j++) begin
+      for (int j = 0; j < `NUM_BLKPORT(VLEN); j++) begin
         readData[i][j] = bank_rdata[read_bank_sel[i][j]];
       end
     end
@@ -264,18 +266,18 @@ module zvt_mt_fpga (
   // RVVI Simulation Support & Shadow Array
   // -------------------------------------------------------------------------
 `ifdef RVVI_ON
-  logic [`NUM_MT-1:0][`NUM_SUBTILE-1:0][`SUBTILE_SIZE*8-1:0] shadow_mt;
+  logic [`NUM_MT-1:0][`NUM_SUBTILE(VLEN)-1:0][`SUBTILE_SIZE*8-1:0] shadow_mt;
 
   always_ff @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
       for (int m = 0; m < `NUM_MT; m++) begin
-        for (int s = 0; s < `NUM_SUBTILE; s++) begin
+        for (int s = 0; s < `NUM_SUBTILE(VLEN); s++) begin
           shadow_mt[m][s] <= '0;
         end
       end
     end else begin
       for (int i = 0; i < `NUM_BLK; i++) begin
-        for (int j = 0; j < `NUM_BLKPORT; j++) begin
+        for (int j = 0; j < `NUM_BLKPORT(VLEN); j++) begin
           if (|writeEn[i][j]) begin
             for (int h = 0; h < `SUBTILE_SIZE; h++) begin
               if (writeEn[i][j][h]) begin
@@ -291,7 +293,7 @@ module zvt_mt_fpga (
   always_comb begin
     for (int i = 0; i < `NUM_BLK; i++) begin
       for (int j = 0; j < 4; j++) begin
-        for (int k = 0; k < `NUM_SUBTILE/2; k++) begin
+        for (int k = 0; k < `NUM_SUBTILE(VLEN)/2; k++) begin
           rvviReadData[i][j][k] = shadow_mt[rvviMtIdx[i][j]][rvviSubIdx[i][j][k]];
         end
       end
@@ -303,16 +305,16 @@ module zvt_mt_fpga (
   // SystemVerilog Formal Assertions (SVA)
   // -------------------------------------------------------------------------
 `ifdef ASSERT_ON
-  logic [15:0][`NUM_BLK*`NUM_BLKPORT-1:0] bank_write_req;
-  logic [15:0][`NUM_BLK*`NUM_BLKPORT-1:0] bank_read_req;
+  logic [15:0][`NUM_BLK*`NUM_BLKPORT(VLEN)-1:0] bank_write_req;
+  logic [15:0][`NUM_BLK*`NUM_BLKPORT(VLEN)-1:0] bank_read_req;
 
   always_comb begin
     for (int a = 0; a < 16; a++) begin
       for (int i = 0; i < `NUM_BLK; i++) begin
-        for (int j = 0; j < `NUM_BLKPORT; j++) begin
-          bank_write_req[a][i*`NUM_BLKPORT + j] =
+        for (int j = 0; j < `NUM_BLKPORT(VLEN); j++) begin
+          bank_write_req[a][i*`NUM_BLKPORT(VLEN) + j] =
               |writeEn[i][j] && (get_bank_id(writeMtIdx[i][j], writeSubIdx[i][j]) == 4'(a));
-          bank_read_req[a][i*`NUM_BLKPORT + j] =
+          bank_read_req[a][i*`NUM_BLKPORT(VLEN) + j] =
               port_ren[i][j] && (get_bank_id(readMtIdx[i][j], readSubIdx[i][j]) == 4'(a));
         end
       end
@@ -337,7 +339,7 @@ module zvt_mt_fpga (
     end
 
     for (genvar bi = 0; bi < `NUM_BLK; bi++) begin : assert_stall_hold
-      for (genvar pj = 0; pj < `NUM_BLKPORT; pj++) begin : assert_stall_hold_p
+      for (genvar pj = 0; pj < `NUM_BLKPORT(VLEN); pj++) begin : assert_stall_hold_p
         property p_hold_sel_on_stall;
           @(posedge clk) disable iff (!rst_n)
           (!port_ren[bi][pj]) |=> ($stable(read_bank_sel[bi][pj]));
@@ -358,7 +360,9 @@ endmodule
  * vtmv.v.t (isMv2Rvv) and matrix tile store (isStore) wait 1 clock cycle
  * for synchronous UltraRAM readData to arrive before asserting valid/ready.
  */
-module zvt_ctrl_fpga (
+module zvt_ctrl_fpga #(
+  parameter int unsigned VLEN = `VLEN
+) (
   input  logic                 clk,
   input  logic                 rst_n,
   input  logic                 isStore,
@@ -368,10 +372,10 @@ module zvt_ctrl_fpga (
   input  logic                 isZero,
   input  logic                 resVme2rvvRdy,
   input  logic                 cntCr,
-  input  logic [`ZVT_LMUL-1:0] peCmdRdy,
+  input  logic [`ZVT_LMUL(VLEN)-1:0] peCmdRdy,
   output logic                 vmelsuVld,
   output logic                 resVme2rvvVld,
-  output logic [`ZVT_LMUL-1:0] uopRdy,
+  output logic [`ZVT_LMUL(VLEN)-1:0] uopRdy,
   output logic                 vmelsuresRdy
 );
 
@@ -428,11 +432,15 @@ endmodule
  * mulbulkTagOut[3:1] bus so zvt_pe_array.sv requires zero modifications.
  */
 module zvt_pe_block_fpga #(
+  parameter int unsigned VLEN = `VLEN,
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type MULBULKTAG_t = `MULBULKTAG_t(VLEN, PC_WIDTH),
+  localparam type MULBULKRES_t = `MULBULKRES_t(VLEN, PC_WIDTH),
   parameter int         MULBULKPIPENUM = 3,
   parameter int         ADDERPIPENUM   = 3,
   parameter logic [1:0] BLKID          = 2'b00
 ) (
-  input  logic [`TE/2*`COMPRATIO-1:0][`TE/2-1:0][MULBULKPIPENUM:1] mulbulkOutVld,
+  input  logic [`TE(VLEN)/2*`COMPRATIO(VLEN)-1:0][`TE(VLEN)/2-1:0][MULBULKPIPENUM:1] mulbulkOutVld,
   input  MULBULKTAG_t                                              mulbulkTagIn,
   input  MULBULKTAG_t [MULBULKPIPENUM:1]                           mulbulkTagPipe,
   input  logic                                                     mulbulkResVld,
@@ -443,10 +451,10 @@ module zvt_pe_block_fpga #(
   output logic        [ADDERPIPENUM:1]                             mulbulkTagOutVld,
   output MULBULKTAG_t [ADDERPIPENUM:1]                             mulbulkTagOut,
 `ifdef TB_SUPPORT
-  output logic [`PC_WIDTH-1:0]                                     readPc,
+  output logic [PC_WIDTH-1:0]                                      readPc,
 `endif
-  output logic [`NUM_BLKPORT-1:0][$clog2(`NUM_MT)-1:0]             readMtIdx,
-  output logic [`NUM_BLKPORT-1:0][$clog2(`NUM_SUBTILE)-1:0]        readSubIdx
+  output logic [`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0]             readMtIdx,
+  output logic [`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0]        readSubIdx
 );
 
   wire stage4_raw_vld = mulbulkCmdVld && (mulbulkCmd.tag.readMtId == '0);
@@ -469,12 +477,12 @@ module zvt_pe_block_fpga #(
 
   always_comb begin
     if (mulbulkResVld && mulbulkResRdy) begin
-      for (int i = 0; i < `TE/4*`COMPRATIO; i++) begin : SubtileRow
-        for (int j = 0; j < `TE/8; j++) begin : SubtileCol
-          readMtIdx[(`TE/4*i)+(2*j)  ] = {mulbulkRes.tag.readMtIdx[3:2], BLKID[1], 1'b0};
-          readMtIdx[(`TE/4*i)+(2*j+1)] = {mulbulkRes.tag.readMtIdx[3:2], BLKID[1], 1'b1};
-          readSubIdx[(`TE/4*i)+(2*j)  ] = ($clog2(`NUM_SUBTILE))'((`TE/8)*BLKID[0]+(`TE/4*`COMPRATIO*mulbulkRes.tag.readMtId+i)*(`TE/4)+j);
-          readSubIdx[(`TE/4*i)+(2*j+1)] = ($clog2(`NUM_SUBTILE))'((`TE/8)*BLKID[0]+(`TE/4*`COMPRATIO*mulbulkRes.tag.readMtId+i)*(`TE/4)+j);
+      for (int i = 0; i < `TE(VLEN)/4*`COMPRATIO(VLEN); i++) begin : SubtileRow
+        for (int j = 0; j < `TE(VLEN)/8; j++) begin : SubtileCol
+          readMtIdx[(`TE(VLEN)/4*i)+(2*j)  ] = {mulbulkRes.tag.readMtIdx[3:2], BLKID[1], 1'b0};
+          readMtIdx[(`TE(VLEN)/4*i)+(2*j+1)] = {mulbulkRes.tag.readMtIdx[3:2], BLKID[1], 1'b1};
+          readSubIdx[(`TE(VLEN)/4*i)+(2*j)  ] = ($clog2(`NUM_SUBTILE(VLEN)))'((`TE(VLEN)/8)*BLKID[0]+(`TE(VLEN)/4*`COMPRATIO(VLEN)*mulbulkRes.tag.readMtId+i)*(`TE(VLEN)/4)+j);
+          readSubIdx[(`TE(VLEN)/4*i)+(2*j+1)] = ($clog2(`NUM_SUBTILE(VLEN)))'((`TE(VLEN)/8)*BLKID[0]+(`TE(VLEN)/4*`COMPRATIO(VLEN)*mulbulkRes.tag.readMtId+i)*(`TE(VLEN)/4)+j);
         end
       end
     end else begin

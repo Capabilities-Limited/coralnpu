@@ -261,7 +261,7 @@ module zvt_pe_block#(
 
   // read the operands from MT
 `ifdef FPGA_XILINX
-  zvt_pe_block_fpga #(.BLKID(BLKID)) u_pe_blk_fpga (.*);
+  zvt_pe_block_fpga #(.VLEN(VLEN), .PC_WIDTH(PC_WIDTH), .BLKID(BLKID)) u_pe_blk_fpga (.*);
 `else
 `ifdef TB_SUPPORT
   assign readPc = mulbulkCmd.tag.uop_pc;

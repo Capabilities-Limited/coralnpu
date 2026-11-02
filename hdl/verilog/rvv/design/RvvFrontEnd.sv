@@ -378,7 +378,7 @@ module RvvFrontEnd#(
                 unique case (inst_q[i].bits[12:8])
                   0: unique case (inst_q[i].bits[4:0])
                     0:  avl[i] = inst_config_state[i].vl;  // rd = x0, rs1 = x0
-                    default: avl[i] = 32'hFFFFFFFF;        // rd != x0, rs1 = x0
+                    default: avl[i] = {XLEN{1'b1}};        // rd != x0, rs1 = x0
                   endcase
                   default: avl[i] = reg_read_data_i[2*i];  // rs1 != x0
                 endcase
@@ -403,7 +403,7 @@ module RvvFrontEnd#(
                 inst_config_state[i+1].tm = msettm_new_tm;
                 mset_writes_rd[i] = 1;
                 mset_writes_mtype[i] = 1;
-                mset_rd_data[i] = {18'd0, msettm_new_tm};
+                mset_rd_data[i] = RegDataT'(msettm_new_tm);
               end
             end
             2'b10: begin  // msettk rd, rs1 - mtype.tk <- min(rs1, KMAX).

@@ -193,7 +193,7 @@ module rvv_backend_alu_unit_execution_p1#(
 //
 `ifdef CORALNPU_STRUCTURAL_DATAPATH
   generate
-    for (j = 0; j < `VLENW; j = j + 1) begin : gen_alu_p1_lane
+    for (j = 0; j < `VLENW(VLEN); j = j + 1) begin : gen_alu_p1_lane
       rvv_backend_alu_addsub_p1_datapath u_alu_p1_dp (
         .is_sub             (opcode == ADDSUB_VSUB),
         .vs2_eew            (vs2_eew),

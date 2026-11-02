@@ -1534,7 +1534,7 @@ module rvv_backend_alu_unit_addsub#(
 //
 `ifdef CORALNPU_STRUCTURAL_DATAPATH
   generate
-    for (j = 0; j < `VLENW; j = j + 1) begin : gen_alu_p0_lane
+    for (j = 0; j < `VLENW(VLEN); j = j + 1) begin : gen_alu_p0_lane
       rvv_backend_alu_addsub_p0_datapath u_alu_p0_dp (
         .is_sub       (opcode == ADDSUB_VSUB),
         .src2_data    ({src2_data[4*j+3], src2_data[4*j+2], src2_data[4*j+1], src2_data[4*j]}),

@@ -281,12 +281,12 @@ module rvv_backend_pmtrdt_unit_permutation#(
     // Structural 7-level Binary Tree Priority Encoder & Isolate-LSB
     // Replaces 128-bit ripple subtractor and 128-iteration linear loop.
     // Combinational depth <= 8 gates (vs 102 gates originally).
-    logic [`VLEN-1:0]              compress_vmsof_tree;
-    logic [$clog2(`VLEN)-1:0]      compress_vfirst_raw;
+    logic [VLEN-1:0]              compress_vmsof_tree;
+    logic [$clog2(VLEN)-1:0]      compress_vfirst_raw;
     logic                          compress_valid;
 
     priority_encoder_tree #(
-      .WIDTH (`VLEN)
+      .WIDTH (VLEN)
     ) u_compress_pe (
       .in_data    (compress_vs1),
       .out_onehot (compress_vmsof_tree),
@@ -296,8 +296,8 @@ module rvv_backend_pmtrdt_unit_permutation#(
 
     assign compress_vmsof    = compress_vmsof_tree;
     assign compress_vfirst   = compress_valid ?
-                               {{(`VL_WIDTH-$clog2(`VLEN)){1'b0}}, compress_vfirst_raw} :
-                               `VLMAX_MAX;
+                               {{(`VL_WIDTH(VLEN)-$clog2(VLEN)){1'b0}}, compress_vfirst_raw} :
+                               `VLMAX_MAX(VLEN);
     assign compress_overflow = compress_vfirst >= pmt_uop.vl;
     assign compress_vs1_d    = compress_vs1 & ~compress_vmsof;
 `else

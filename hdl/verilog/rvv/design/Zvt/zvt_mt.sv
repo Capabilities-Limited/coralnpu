@@ -42,7 +42,7 @@ module zvt_mt#(
 
 // -------------- code start --------------------
 `ifdef FPGA_XILINX
-  zvt_mt_fpga u_zvt_mt_fpga (.*);
+  zvt_mt_fpga #(.VLEN(VLEN)) u_zvt_mt_fpga (.*);
 `else
   // write data
   logic [`NUM_MT-1:0][`NUM_SUBTILE(VLEN)-1:0][`SUBTILE_SIZE-1:0]   wen;    // byte enable

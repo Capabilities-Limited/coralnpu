@@ -522,7 +522,7 @@ generate
     );
   end
 endgenerate
-assign mul_rslt_eew32_d1 = mul_is_widen_d1 ? mul_rslt_eew32_widen_d1[`VLEN-1:0] :
+assign mul_rslt_eew32_d1 = mul_is_widen_d1 ? mul_rslt_eew32_widen_d1[VLEN-1:0] :
                                              mul_rslt_eew32_no_widen_d1;
 `else
 //full rslt is 64bit

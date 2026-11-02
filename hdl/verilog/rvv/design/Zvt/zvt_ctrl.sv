@@ -593,7 +593,7 @@ module zvt_ctrl#(
 
   // uopRdy
 `ifdef FPGA_XILINX
-  zvt_ctrl_fpga u_ctrl_fpga (.*);
+  zvt_ctrl_fpga #(.VLEN(VLEN)) u_ctrl_fpga (.*);
 `else
   always_comb begin
     vmelsuVld     = 'b0;
