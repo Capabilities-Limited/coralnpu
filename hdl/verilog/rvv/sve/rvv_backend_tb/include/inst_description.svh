@@ -15,6 +15,39 @@ package delay_mode_pkg;
 typedef enum {FAST, NORMAL, SLOW} delay_mode_e;
 endpackage: delay_mode_pkg
 
+// Mask-result tail policy ----------------------------------
+// RVV spec 3.4.3: any tail element of a mask result may be written with the old value
+// (undisturbed), with 1 (agnostic), or with the value calculated with vl=VLMAX. For mask-logical
+// instructions and vmsbf/vmsif/vmsof it may also be calculated with vl=VLEN, SEW=8, LMUL=8 (the
+// whole register). The model follows one policy per instruction class so that architectural
+// state stays identical to the DUT's, which does not use the same policy for every class.
+// Select each at compile time with +define+RVV_TB_MASK_TAIL_<CLASS>=<0|1|2>
+// (0: undisturbed, 1: all_ones, 2: calculated). The Makefile does this from
+// MASK_TAIL_LOGIC / _SET / _CMP / _CARRY, or all at once from MASK_TAIL.
+//   LOGIC: vmand, vmor, vmxor, vmorn, vmnand, vmnor, vmandn, vmxnor  (default: calculated)
+//   SET:   vmsbf, vmsif, vmsof                                       (default: undisturbed)
+//   CMP:   vmseq, vmsne, vmsltu, vmslt, vmsleu, vmsle, vmsgtu, vmsgt (default: undisturbed)
+//   CARRY: vmadc, vmsbc                                              (default: undisturbed)
+`ifndef RVV_TB_MASK_TAIL_LOGIC
+  `define RVV_TB_MASK_TAIL_LOGIC 2
+`endif
+`ifndef RVV_TB_MASK_TAIL_SET
+  `define RVV_TB_MASK_TAIL_SET 0
+`endif
+`ifndef RVV_TB_MASK_TAIL_CMP
+  `define RVV_TB_MASK_TAIL_CMP 0
+`endif
+`ifndef RVV_TB_MASK_TAIL_CARRY
+  `define RVV_TB_MASK_TAIL_CARRY 0
+`endif
+package mask_tail_pkg;
+  typedef enum {MASK_TAIL_UNDISTURBED, MASK_TAIL_ALL_ONES, MASK_TAIL_CALCULATED} mask_tail_policy_e;
+  localparam mask_tail_policy_e MASK_TAIL_POLICY_LOGIC = mask_tail_policy_e'(`RVV_TB_MASK_TAIL_LOGIC);
+  localparam mask_tail_policy_e MASK_TAIL_POLICY_SET   = mask_tail_policy_e'(`RVV_TB_MASK_TAIL_SET);
+  localparam mask_tail_policy_e MASK_TAIL_POLICY_CMP   = mask_tail_policy_e'(`RVV_TB_MASK_TAIL_CMP);
+  localparam mask_tail_policy_e MASK_TAIL_POLICY_CARRY = mask_tail_policy_e'(`RVV_TB_MASK_TAIL_CARRY);
+endpackage: mask_tail_pkg
+
 package rvv_tb_pkg;
 import vrf_mon_pkg::*;
 import rvv_state_pkg::*;

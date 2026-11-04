@@ -295,6 +295,10 @@ endclass: rvv_behavior_model
     int src3_reg_idx_base, src3_reg_idx, src3_reg_elm_idx;
 
     logic [31:0] dest;
+    logic [31:0] tail_calc;        // value calculated with vl=VLMAX, for mask-result tail bits
+    logic [`XLEN-1:0] vlmax_arch;  // spec VLMAX used for the calculated tail alternative
+    logic [2:0] lmul_bits, lmul_frac_sh;
+    mask_tail_pkg::mask_tail_policy_e tail_policy; // mask-result tail policy for this instruction
     logic [31:0] src0;
     logic [31:0] src1;
     logic [31:0] src2;
@@ -362,6 +366,28 @@ endclass: rvv_behavior_model
           eew         = inst_tr.eew;
           emul        = inst_tr.emul;
           vlmax       = inst_tr.vlmax;
+          // Spec VLMAX for the "calculated with vl=VLMAX" tail alternative of mask results.
+          // Mask-logical and vmsbf/vmsif/vmsof may calculate the whole register
+          // (vl=VLEN, SEW=8, LMUL=8). Compare and carry ops use LMUL*VLEN/SEW, which can be smaller
+          // than inst_tr.vlmax for fractional LMUL.
+          // The tail policy is chosen per instruction class (see mask_tail_pkg).
+          lmul_bits    = inst_tr.vlmul;
+          lmul_frac_sh = ~lmul_bits + 3'b1;
+          if(inst_tr.alu_inst inside {VMAND, VMOR, VMXOR, VMORN, VMNAND, VMNOR, VMANDN, VMXNOR}) begin
+            vlmax_arch  = `VLEN;
+            tail_policy = mask_tail_pkg::MASK_TAIL_POLICY_LOGIC;
+          end else if(inst_tr.alu_inst inside {VMUNARY0} && inst_tr.src1_idx inside {VMSBF, VMSOF, VMSIF}) begin
+            vlmax_arch  = `VLEN;
+            tail_policy = mask_tail_pkg::MASK_TAIL_POLICY_SET;
+          end else begin
+            if(lmul_bits[2]) begin // fractional LMUL
+              vlmax_arch = (`VLENB(VLEN) >> lmul_frac_sh) >> int'(inst_tr.vsew);
+            end else begin
+              vlmax_arch = (`VLENB(VLEN) << lmul_bits) >> int'(inst_tr.vsew);
+            end
+            tail_policy = (inst_tr.alu_inst inside {VMADC, VMSBC}) ? mask_tail_pkg::MASK_TAIL_POLICY_CARRY
+                                                                     : mask_tail_pkg::MASK_TAIL_POLICY_CMP;
+          end
           elm_idx_max = inst_tr.elm_idx_max;
           evl         = inst_tr.evl;
           // --------------------------------------------------
@@ -587,20 +613,22 @@ endclass: rvv_behavior_model
               end else if(elm_idx >= vl) begin
                 // tail
                 if(is_mask_producing_inst) begin
-                  if(elm_idx < vlmax) begin
-                    // tail-1
-                    // Special case: If is mask producing operation, it will write with calculation results.
-                    `uvm_info("MDL", $sformatf("element[%2d]: tail, mask producing operation", elm_idx), UVM_LOW)
-                    if((!vm && this.vrf[0][elm_idx]) || vm || use_vm_to_cal ) begin
-                      dest = alu_handler.exe(inst_tr, dest, src2, src1, src0);
-                    end
-                    elm_writeback(dest, inst_tr.dest_type, dest_reg_idx_base, elm_idx, dest_eew);
-                  end else begin
-                    // tail-2
-                    // Special case: If is mask producing operation,
-                    //               it will keep original values, but write strobe should be 1.
-                    elm_writeback(dest, inst_tr.dest_type, dest_reg_idx_base, elm_idx, dest_eew);
+                  // RVV spec 3.4.3: a tail bit of a mask result may be the old value, 1, or the value
+                  // calculated with vl=VLMAX. The policy is chosen at compile time
+                  // (mask_tail_pkg, Makefile MASK_TAIL_LOGIC/_SET/_CMP/_CARRY) per instruction class, to match the DUT.
+                  `uvm_info("MDL", $sformatf("element[%2d]: tail, mask producing operation (policy %0d)", elm_idx, int'(tail_policy)), UVM_LOW)
+                  tail_calc = dest; // old value, unless there is a value calculated with vl=VLMAX
+                  if((tail_policy == mask_tail_pkg::MASK_TAIL_CALCULATED) &&
+                     elm_idx < vlmax_arch && ((!vm && this.vrf[0][elm_idx]) || vm || use_vm_to_cal)) begin
+                    tail_calc = alu_handler.exe(inst_tr, dest, src2, src1, src0);
                   end
+                  case(tail_policy)
+                    mask_tail_pkg::MASK_TAIL_ALL_ONES:   dest = '1;
+                    mask_tail_pkg::MASK_TAIL_CALCULATED: dest = tail_calc;
+                    default: ; // UNDISTURBED: keep the old value
+                  endcase
+                  // Write strobe is always 1 for the whole mask register.
+                  elm_writeback(dest, inst_tr.dest_type, dest_reg_idx_base, elm_idx, dest_eew);
                 end else begin
                   `uvm_info("MDL", $sformatf("element[%2d]: tail", elm_idx), UVM_LOW)
                   if(vta == AGNOSTIC) begin

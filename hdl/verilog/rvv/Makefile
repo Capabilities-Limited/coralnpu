@@ -43,6 +43,17 @@ VERILATOR ?= verilator
 scfg      ?= rvv_backend
 test      ?= tb_debug_test
 VLEN_DEFINE ?= VLEN_128
+# Mask-result tail policy the model follows (RVV spec 3.4.3), per instruction class:
+#   undisturbed | all_ones | calculated
+# MASK_TAIL sets every class at once; MASK_TAIL_LOGIC (vmand...), MASK_TAIL_SET (vmsbf/vmsif/vmsof),
+# MASK_TAIL_CMP (vms* compares) and MASK_TAIL_CARRY (vmadc/vmsbc) override one class.
+# Defaults match the DUT: mask-logical calculates its tail, the other classes leave it undisturbed.
+MASK_TAIL       ?=
+MASK_TAIL_LOGIC ?= $(or $(MASK_TAIL),calculated)
+MASK_TAIL_SET   ?= $(or $(MASK_TAIL),undisturbed)
+MASK_TAIL_CMP   ?= $(or $(MASK_TAIL),undisturbed)
+MASK_TAIL_CARRY ?= $(or $(MASK_TAIL),undisturbed)
+MASK_TAIL_TAG   := $(MASK_TAIL_LOGIC)-$(MASK_TAIL_SET)-$(MASK_TAIL_CMP)-$(MASK_TAIL_CARRY)
 UVM_HOME  ?=
 UVM_VERBOSITY ?= UVM_LOW
 timeout   ?= 1000000000ns
@@ -70,7 +81,7 @@ DESIGN_PATH := $(RVV_ROOT)/design
 STD_PATH    := $(RVV_ROOT)/common
 RTL_INC_DIR := $(RVV_ROOT)/inc
 TB_PATH     := $(RVV_ROOT)/sve/rvv_backend_tb
-BUILD_PATH  := $(RVV_ROOT)/build/$(scfg)$(if $(filter 1,$(TRACE)),_trace)
+BUILD_PATH  := $(RVV_ROOT)/build/$(scfg)$(if $(filter-out VLEN_128,$(VLEN_DEFINE)),_vlen$(VLEN_DEFINE:VLEN_%=%))$(if $(filter 1,$(TRACE)),_trace)$(if $(filter-out calculated-undisturbed-undisturbed-undisturbed,$(MASK_TAIL_TAG)),_tail_$(MASK_TAIL_TAG))
 TB_TOP      := rvv_backend_top
 
 # ------------------------------------------------------------------
@@ -113,7 +124,14 @@ else ifeq ($(scfg),rvv_backend_bringup)
 else
   $(error Unknown scfg '$(scfg)')
 endif
-DEFINES := $(RTL_DEFINES) $(VLEN_DEFINE)
+$(foreach v,MASK_TAIL_LOGIC MASK_TAIL_SET MASK_TAIL_CMP MASK_TAIL_CARRY,$(if $(filter $($(v)),undisturbed all_ones calculated),,$(error $(v) must be one of undisturbed, all_ones or calculated, got '$($(v))')))
+# Policy names map to the mask_tail_policy_e values used by the testbench: 0, 1, 2.
+mask_tail_num = $(if $(filter $(1),undisturbed),0,$(if $(filter $(1),all_ones),1,2))
+MASK_TAIL_DEFINES := RVV_TB_MASK_TAIL_LOGIC=$(call mask_tail_num,$(MASK_TAIL_LOGIC)) \
+                     RVV_TB_MASK_TAIL_SET=$(call mask_tail_num,$(MASK_TAIL_SET)) \
+                     RVV_TB_MASK_TAIL_CMP=$(call mask_tail_num,$(MASK_TAIL_CMP)) \
+                     RVV_TB_MASK_TAIL_CARRY=$(call mask_tail_num,$(MASK_TAIL_CARRY))
+DEFINES := $(RTL_DEFINES) $(VLEN_DEFINE) $(MASK_TAIL_DEFINES)
 
 # ------------------------------------------------------------------
 # Verilator invocation
