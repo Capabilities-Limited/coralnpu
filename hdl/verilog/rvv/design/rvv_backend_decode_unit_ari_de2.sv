@@ -717,7 +717,8 @@ module rvv_backend_decode_unit_ari_de2#(
                 VMSBF,
                 VMSIF,
                 VMSOF: begin
-                  uop_class[i] = inst_vm ? XVX: VVX;
+                  // vd is always read (vs3_valid), so the dispatch read-port mapping must include it
+                  uop_class[i] = VVX;
                 end
                 VIOTA: begin
                   uop_class[i] = first_uop_valid[i] ? XVX : XXX;
@@ -1466,7 +1467,9 @@ module rvv_backend_decode_unit_ari_de2#(
                     VMSBF,
                     VMSIF,
                     VMSOF: begin
-                      vs3_valid[i] = (inst_vm==1'b0);
+                      // Always read the old vd: the tail (and, if masked, the inactive elements)
+                      // is written back undisturbed from vd_data in rvv_backend_alu_unit_mask.sv.
+                      vs3_valid[i] = 1'b1;
                     end
                   endcase
                 end
