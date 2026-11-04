@@ -1631,8 +1631,9 @@ class alu_processor#(
     shift_amount = $unsigned(src1);
     dest_widen = _roundoff_signed($signed(src2), shift_amount);
     `uvm_info("MDL",$sformatf("dest_widen(%0dbits) = 0x%x",$bits(dest_widen),dest_widen),UVM_HIGH)
-    underflow =  dest_widen[$bits(TD)*2] && (~(&dest_widen[$bits(_vnclip)*2-1:$bits(TD)]));
-    overflow  = ~dest_widen[$bits(TD)*2] && |dest_widen[$bits(_vnclip)*2-1:$bits(TD)];
+    // A signed result fits in TD only if bits [2*TD-1:TD-1] all equal the sign, so TD-1 is included.
+    underflow =  dest_widen[$bits(TD)*2] && (~(&dest_widen[$bits(TD)*2-1:$bits(TD)-1]));
+    overflow  = ~dest_widen[$bits(TD)*2] && |dest_widen[$bits(TD)*2-1:$bits(TD)-1];
     if(overflow)  begin _vnclip = '1; _vnclip[$bits(TD)-1] = 1'b0; end
     else if(underflow) begin _vnclip = '0; _vnclip[$bits(TD)-1] = 1'b1; end
     else begin _vnclip = dest_widen; end
