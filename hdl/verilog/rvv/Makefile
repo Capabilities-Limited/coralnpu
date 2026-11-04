@@ -171,13 +171,13 @@ $(BUILD_PATH):
 	@mkdir -p $@
 
 # Regenerate whenever the Makefile, scfg or source set changes.
-$(BUILD_PATH)/rtl.f: Makefile | $(BUILD_PATH)
+$(BUILD_PATH)/rtl.f: Makefile | $(BUILD_PATH) $(wildcard $(RTL_FILES)/%) $(foreach incdir,$(RTL_INCDIRS),$(wildcard $(incdir)/%))
 	@echo "generating $@"
 	@{ for i in $(RTL_INCDIRS); do echo "+incdir+$$i"; done; \
 	   for d in $(DEFINES); do echo "+define+$$d"; done; \
 	   for f in $(RTL_FILES); do echo "$$f"; done; } > $@
 
-$(BUILD_PATH)/tb.f: Makefile | $(BUILD_PATH)
+$(BUILD_PATH)/tb.f: Makefile | $(BUILD_PATH) $(wildcard $(TB_FILES)/%) $(foreach incdir,$(TB_INCDIRS),$(wildcard $(incdir)/%))
 	@echo "generating $@"
 	@{ for i in $(TB_INCDIRS); do echo "+incdir+$$i"; done; \
 	   for f in $(TB_FILES); do echo "$$f"; done; } > $@
@@ -197,7 +197,7 @@ lint: $(BUILD_PATH)/lint.f
 UVM_DPI_SRCS  := $(UVM_HOME)/src/dpi/uvm_dpi.cc
 UVM_DPI_FLAGS := --vpi -CFLAGS -I$(UVM_HOME)/src/dpi
 
-$(BUILD_PATH)/obj_dir/V$(TB_TOP): $(BUILD_PATH)/rtl.f $(BUILD_PATH)/tb.f $(wildcard $(RTL_FILES)/%) $(foreach incdir,$(RTL_INCDIRS),$(wildcard $(incdir)/%)) $(wildcard $(TB_FILES)/%) $(foreach incdir,$(TB_INCDIRS),$(wildcard $(incdir)/%))
+$(BUILD_PATH)/obj_dir/V$(TB_TOP): $(BUILD_PATH)/rtl.f $(BUILD_PATH)/tb.f
 	@test -n "$(UVM_HOME)" || { echo "error: set UVM_HOME to a UVM tree containing src/uvm_pkg.sv"; exit 1; }
 	@# uvm_pkg.sv must come first so the UVM macros are defined for the testbench
 	@# (VCS gets this implicitly from -ntb_opts uvm).
