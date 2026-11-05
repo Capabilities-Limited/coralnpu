@@ -47,6 +47,7 @@ class rvv_behavior_model extends uvm_component;
   vrf_t [31:0] vrf;
   vrf_t [31:0] vrf_delay;
   vrf_t [31:0] vrf_temp;
+  vrf_t [31:0] vrf_old_temp; // register file before the instruction, for the retire check
   vrf_t [31:0] vrf_bit_strobe_temp;
   vrf_byte_t [31:0] vrf_byte_strobe_temp;
   vrf_t [31:0] vrf_writeback_temp;
@@ -455,6 +456,7 @@ endclass: rvv_behavior_model
             trap_occured = 0;
           end
 
+          vrf_old_temp = vrf;
           vrf_temp = vrf;
           vrf_bit_strobe_temp = '0;
           vrf_byte_strobe_temp = '0;
@@ -723,12 +725,14 @@ endclass: rvv_behavior_model
                   rt_tr.rt_vrf_index.push_back(reg_idx);
                   rt_tr.rt_vrf_strobe.push_back(vrf_byte_strobe_temp[reg_idx]);
                   rt_tr.rt_vrf_data.push_back(vrf[reg_idx]);
+                  rt_tr.rt_vrf_old.push_back(vrf_old_temp[reg_idx]);
                 end else begin
                   // All pre-start vreg will not be retired
                   if(((reg_idx - dest_reg_idx_base) >= (vstart / (`VLEN / dest_eew)))   ) begin
                     rt_tr.rt_vrf_index.push_back(reg_idx);
                     rt_tr.rt_vrf_strobe.push_back(vrf_byte_strobe_temp[reg_idx]);
                     rt_tr.rt_vrf_data.push_back(vrf[reg_idx]);
+                    rt_tr.rt_vrf_old.push_back(vrf_old_temp[reg_idx]);
                   end
                 end
               end
@@ -753,6 +757,7 @@ endclass: rvv_behavior_model
                   rt_tr.rt_vrf_index.push_back(reg_idx);
                   rt_tr.rt_vrf_strobe.push_back(vrf_byte_strobe_temp[reg_idx]);
                   rt_tr.rt_vrf_data.push_back(vrf_temp[reg_idx]);
+                  rt_tr.rt_vrf_old.push_back(vrf_old_temp[reg_idx]);
                 end
               end
             end
@@ -782,6 +787,7 @@ endclass: rvv_behavior_model
                   rt_tr.rt_vrf_index.push_back(reg_idx);
                   rt_tr.rt_vrf_strobe.push_back(vrf_byte_strobe_temp[reg_idx]);
                   rt_tr.rt_vrf_data.push_back(vrf_temp[reg_idx]);
+                  rt_tr.rt_vrf_old.push_back(vrf_old_temp[reg_idx]);
                 end
               end
             end
@@ -792,6 +798,7 @@ endclass: rvv_behavior_model
                   rt_tr.rt_vrf_index.push_back(reg_idx);
                   rt_tr.rt_vrf_strobe.push_back(vrf_byte_strobe_temp[reg_idx]);
                   rt_tr.rt_vrf_data.push_back(vrf_temp[reg_idx]);
+                  rt_tr.rt_vrf_old.push_back(vrf_old_temp[reg_idx]);
                 end
               end
             end
@@ -2231,7 +2238,7 @@ endclass: pmt_processor
                         end
                     end
                 end
-                for (int i=rvm.vstart;i<rvm.vl;i++) begin
+                for (int i=slide_start;i<rvm.vl;i++) begin
                     if(rvm.vrf[0][i] & (~vm)) begin
                             vrf_bit_strobe_temp_sew8[dest_reg_idx*ELM8+i] = 8'hff;
                         end
@@ -2255,7 +2262,7 @@ endclass: pmt_processor
                         end
                     end
                 end
-                for (int i=rvm.vstart;i<rvm.vl;i++) begin
+                for (int i=slide_start;i<rvm.vl;i++) begin
                     if(rvm.vrf[0][i] & (~vm)) begin
                             vrf_bit_strobe_temp_sew16[dest_reg_idx*ELM16+i] = 16'hffff;
                         end
@@ -2279,7 +2286,7 @@ endclass: pmt_processor
                         end
                     end
                 end
-                for (int i=rvm.vstart;i<rvm.vl;i++) begin
+                for (int i=slide_start;i<rvm.vl;i++) begin
                         if(rvm.vrf[0][i] & (~vm)) begin
                         vrf_bit_strobe_temp_sew32[dest_reg_idx*ELM32+i] = 32'hffffffff;
                         end

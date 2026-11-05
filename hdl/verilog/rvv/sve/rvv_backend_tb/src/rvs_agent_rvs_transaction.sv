@@ -127,6 +127,8 @@ class rvs_transaction extends uvm_sequence_item;
        reg_idx_t  rt_vrf_index  [$];
        vrf_byte_t rt_vrf_strobe [$];
        vrf_t      rt_vrf_data   [$];
+       // Register value before the instruction, filled by the model only (one entry per rt_vrf_* entry).
+       vrf_t      rt_vrf_old    [$];
 
        reg_idx_t  rt_xrf_index [$];
        xrf_t      rt_xrf_data  [$];
@@ -1154,6 +1156,10 @@ class rvs_transaction extends uvm_sequence_item;
         `uvm_field_int(rt_vrf_index[idx] ,UVM_ALL_ON)
         `uvm_field_int(rt_vrf_strobe[idx],UVM_ALL_ON)
         `uvm_field_int(rt_vrf_data[idx]  ,UVM_ALL_ON)
+      end
+      // Separate loop: only the model fills this, so its size can differ from rt_vrf_index.
+      foreach(rt_vrf_old[idx]) begin
+        `uvm_field_int(rt_vrf_old[idx]   ,UVM_ALL_ON)
       end
       foreach(rt_xrf_index[idx]) begin
         `uvm_field_int(rt_xrf_index[idx],UVM_ALL_ON)

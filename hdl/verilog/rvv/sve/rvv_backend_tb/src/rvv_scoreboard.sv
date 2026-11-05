@@ -152,6 +152,9 @@ task rvv_scoreboard::rt_checker();
   vrf_byte_t rvs_rt_vrf_byte_strobe, mdl_rt_vrf_byte_strobe;
   vrf_t      rvs_rt_vrf_bit_strobe,  mdl_rt_vrf_bit_strobe;
   vrf_t      rvs_rt_vrf_data  , mdl_rt_vrf_data  ;
+  vrf_t      mdl_rt_vrf_old;               // register value before the instruction (from MDL)
+  vrf_t      rvs_cmp_data, mdl_cmp_data;   // data compared exactly: bytes both sides write
+  bit        strobe_ok;
 
   string vreg_dut_val;
   string vreg_mdl_val;
@@ -201,11 +204,21 @@ task rvv_scoreboard::rt_checker();
             rvs_rt_vrf_bit_strobe[bit_idx*8 +: 8] = {8{rvs_rt_vrf_byte_strobe[bit_idx]}};
             mdl_rt_vrf_bit_strobe[bit_idx*8 +: 8] = {8{mdl_rt_vrf_byte_strobe[bit_idx]}};
           end
+          // The RVV spec defines results by value ("unchanged" elements are not written), not by
+          // write strobe. A byte that only one side writes is therefore acceptable if the data
+          // written equals the register's previous value. Bytes both sides write must match.
+          mdl_rt_vrf_old = 'x;
+          if(mdl_tr.rt_vrf_old.size() > 0) mdl_rt_vrf_old = mdl_tr.rt_vrf_old.pop_front();
+          strobe_ok = (rvs_rt_vrf_byte_strobe === mdl_rt_vrf_byte_strobe) ||
+                      ((((rvs_rt_vrf_data ^ mdl_rt_vrf_old) & rvs_rt_vrf_bit_strobe & ~mdl_rt_vrf_bit_strobe) === '0) &&
+                       (((mdl_rt_vrf_data ^ mdl_rt_vrf_old) & mdl_rt_vrf_bit_strobe & ~rvs_rt_vrf_bit_strobe) === '0));
+          rvs_cmp_data = rvs_rt_vrf_data & rvs_rt_vrf_bit_strobe & mdl_rt_vrf_bit_strobe;
+          mdl_cmp_data = mdl_rt_vrf_data & rvs_rt_vrf_bit_strobe & mdl_rt_vrf_bit_strobe;
           if(rvs_rt_vrf_index !== mdl_rt_vrf_index) begin
             `uvm_error("RT_CHECKER", $sformatf("Retire VRF index mismatch:\nDUT retired vrf[%0d],\nMDL retired vrf[%0d].",
                                                 rvs_rt_vrf_index,
                                                 mdl_rt_vrf_index));
-          end else if(rvs_rt_vrf_byte_strobe !== mdl_rt_vrf_byte_strobe) begin
+          end else if(!strobe_ok) begin
             vreg_dut_val = "0x";
             vreg_mdl_val = "0x";
             // byte strobe has one bit per byte (VLENB bits), not VLEN bits
@@ -218,14 +231,14 @@ task rvv_scoreboard::rt_checker();
             `uvm_error("RT_CHECKER", $sformatf("Retire VRF strobe(bit) mismatch:\nDUT retired vrf_strobe[%0d] = %s,\nMDL retired vrf_strobe[%0d] = %s.",
                                                rvs_rt_vrf_index, vreg_dut_val,
                                                mdl_rt_vrf_index, vreg_mdl_val));
-          end else if((rvs_rt_vrf_bit_strobe & rvs_rt_vrf_data) !== (mdl_rt_vrf_bit_strobe & mdl_rt_vrf_data)) begin
+          end else if(rvs_cmp_data !== mdl_cmp_data) begin
             vreg_dut_val = "0x";
             vreg_mdl_val = "0x";
             mismatch_mark= "  ";
             for(int i=`VLEN-1;i>=0;i-=8) begin
-              vreg_dut_val = $sformatf("%s%2h",vreg_dut_val,{rvs_rt_vrf_bit_strobe & rvs_rt_vrf_data}[i-:8]);
-              vreg_mdl_val = $sformatf("%s%2h",vreg_mdl_val,{mdl_rt_vrf_bit_strobe & mdl_rt_vrf_data}[i-:8]);
-              if({rvs_rt_vrf_bit_strobe & rvs_rt_vrf_data}[i-:8] !== {mdl_rt_vrf_bit_strobe & mdl_rt_vrf_data}[i-:8]) begin
+              vreg_dut_val = $sformatf("%s%2h",vreg_dut_val,{rvs_cmp_data}[i-:8]);
+              vreg_mdl_val = $sformatf("%s%2h",vreg_mdl_val,{mdl_cmp_data}[i-:8]);
+              if({rvs_cmp_data}[i-:8] !== {mdl_cmp_data}[i-:8]) begin
                 mismatch_mark = $sformatf("%s^^", mismatch_mark);
               end else begin
                 mismatch_mark = $sformatf("%s  ", mismatch_mark);
@@ -246,6 +259,10 @@ task rvv_scoreboard::rt_checker();
                                       $sformatf("MDL retired vrf[%2d] = %s\n",mdl_rt_vrf_index, vreg_mdl_val),
                                       $sformatf("mismatch_mark       = %s\n",mismatch_mark)});
           end else begin
+            if(rvs_rt_vrf_byte_strobe !== mdl_rt_vrf_byte_strobe) begin
+              `uvm_info("RT_CHECKER", $sformatf("Retire vrf[%0d]: write strobes differ (DUT 0x%0h, MDL 0x%0h), but the extra bytes carry the register's previous value.",
+                                                rvs_rt_vrf_index, rvs_rt_vrf_byte_strobe, mdl_rt_vrf_byte_strobe), UVM_MEDIUM)
+            end
             `uvm_info("RT_CHECKER", $sformatf("Retire vrf[%0d] check pass.",rvs_rt_vrf_index), UVM_LOW)
           end
         end
