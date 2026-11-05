@@ -207,7 +207,7 @@ $(BUILD_PATH)/obj_dir/V$(TB_TOP): $(BUILD_PATH)/rtl.f $(BUILD_PATH)/tb.f
 
 build: $(BUILD_PATH)/obj_dir/V$(TB_TOP)
 
-SIM_PATH = $(RVV_ROOT)/outfiles/$(scfg)/$(test)$(if $(seed),.$(seed))
+SIM_PATH = $(subst build,outfiles,$(BUILD_PATH))/$(test)$(if $(seed),.$(seed))
 
 sim: build
 	@mkdir -p $(SIM_PATH)
