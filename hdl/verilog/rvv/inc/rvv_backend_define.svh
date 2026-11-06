@@ -19,9 +19,9 @@
 `define HWORD_WIDTH             16
 `define WORD_WIDTH              32
 
-`define VLENB                   (`VLEN/`BYTE_WIDTH)
-`define VLENH                   (`VLEN/`HWORD_WIDTH)
-`define VLENW                   (`VLEN/`WORD_WIDTH)
+`define VLENB(VLEN)             (VLEN/`BYTE_WIDTH)
+`define VLENH(VLEN)             (VLEN/`HWORD_WIDTH)
+`define VLENW(VLEN)             (VLEN/`WORD_WIDTH)
 
 `ifdef TB_SUPPORT
   `ifndef RVVI_ON
@@ -89,7 +89,7 @@
 `define NUM_VRF                 32
 
 // Uops Queue data width
-`define UQ_WIDTH                $bits(UOP_QUEUE_t)
+`define UQ_WIDTH(VLEN, XLEN, PC_WIDTH) $bits(`UOP_QUEUE_t(VLEN, XLEN, PC_WIDTH))
 
 // the max number of processor unit in EX stage
 `define NUM_LSU                 2
@@ -147,15 +147,15 @@
 `ifdef ZVE32F_ON
   `define LAST_UOP_VLD        1
   `ifdef TB_SUPPORT
-    `define FP_RDT_TAG_WIDTH  (`LAST_UOP_VLD+`PC_WIDTH+`ROB_DEPTH_WIDTH)
+    `define FP_RDT_TAG_WIDTH(PC_WIDTH)  (`LAST_UOP_VLD+PC_WIDTH+`ROB_DEPTH_WIDTH)
   `else
-    `define FP_RDT_TAG_WIDTH  (`LAST_UOP_VLD+`ROB_DEPTH_WIDTH)
+    `define FP_RDT_TAG_WIDTH(PC_WIDTH)  (`LAST_UOP_VLD+`ROB_DEPTH_WIDTH)
   `endif
 `else
   // Define FP variables even if not used
   // TODO(derekjchow): Remove FP modules from chisel build once float is
   // configurable.
-  `define FP_RDT_TAG_WIDTH    0
+  `define FP_RDT_TAG_WIDTH(PC_WIDTH)    0
 `endif
 
 // ALU instruction will be split 8 uops at most
@@ -171,9 +171,9 @@
 
 // VLMAX = VLEN*LMUL/SEW
 // vstart < VLMAX_max and vl <= VLMAX_max, VLMAX_max=VLEN*LMUL_max(8)/SEW_min(8)=VLEN
-`define VLMAX_MAX               `VLEN
-`define VSTART_WIDTH            $clog2(`VLEN)
-`define VL_WIDTH                ($clog2(`VLEN)+1)
+`define VLMAX_MAX(VLEN)         VLEN
+`define VSTART_WIDTH(VLEN)      $clog2(VLEN)
+`define VL_WIDTH(VLEN)          ($clog2(VLEN)+1)
 `define VTYPE_VILL_WIDTH        1
 `define VTYPE_VMA_WIDTH         1
 `define VTYPE_VTA_WIDTH         1
@@ -198,30 +198,30 @@
 
 // ZVT
 `ifdef ZVT_ON
-  `define ZVT_RS_DEPTH        (`ZVT_LMUL*2)
-  
+  `define ZVT_RS_DEPTH(VLEN)        (`ZVT_LMUL(VLEN)*2)
+
   `define NUM_MT              16
   // 16 byte each subtile
   `define SUBTILE_SIZE        16
   `define NUM_BLK             4
-  
-  `define TE                  (`VLEN/8)
 
-// PROCESS_DELAY = (1/`COMPRATIO)
+  `define TE(VLEN)            (VLEN/8)
+
+// PROCESS_DELAY = (1/`COMPRATIO(VLEN))
   `ifdef ZVT_MAXCOMPUTING
-    `define COMPRATIO         1/4
-    `define PROCESS_DELAY     4
-  `else       
-    `define COMPRATIO         4/`TE
-    `define PROCESS_DELAY     `TE/4
-  `endif 
+    `define COMPRATIO(VLEN)     1/4
+    `define PROCESS_DELAY(VLEN) 4
+  `else
+    `define COMPRATIO(VLEN)     4/`TE(VLEN)
+    `define PROCESS_DELAY(VLEN) `TE(VLEN)/4
+  `endif
 
-  `define ZVT_LMUL            (`WORD_WIDTH*`TE/`VLEN)
-  `define NUM_PE              (`TE*`TE*`COMPRATIO)
+  `define ZVT_LMUL(VLEN)      (`WORD_WIDTH*`TE(VLEN)/VLEN)
+  `define NUM_PE(VLEN)        (`TE(VLEN)*`TE(VLEN)*`COMPRATIO(VLEN))
   // The quantity of subtile for each mt
-  `define NUM_SUBTILE         (`TE*`TE/`SUBTILE_SIZE)
+  `define NUM_SUBTILE(VLEN)   (`TE(VLEN)*`TE(VLEN)/`SUBTILE_SIZE)
   // The quantity of subtile ports for each block
-  `define NUM_BLKPORT         (int'($ceil(`TE/4*`COMPRATIO)*`TE/4))
+  `define NUM_BLKPORT(VLEN)   (int'($ceil(`TE(VLEN)/4*`COMPRATIO(VLEN))*`TE(VLEN)/4))
 `endif // ZVT_ON
 
 // FALU Pipeline stages (default 4; 5 for ultra-high-frequency/1GHz targets)

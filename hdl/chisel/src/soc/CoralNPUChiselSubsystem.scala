@@ -17,6 +17,7 @@ class CoralNPUChiselSubsystemIO(
   val dtcmSize: MemorySize,
   val xlen: Int = 32,
   val enableVme: Boolean = false
+  val vlen: Int = 128
 ) extends Bundle {
   val socConfig = SoCChiselConfig(itcmSize, dtcmSize, xlen, enableVme)
   val cfg       = socConfig.crossbar
@@ -74,7 +75,7 @@ class CoralNPUChiselSubsystemIO(
     p.name -> (if (p.direction == coralnpu.soc.In) Input(port) else Output(port))
   })
 
-  val p            = new Parameters(xlen = xlen)
+  val p            = new Parameters(xlen = xlen, vlen = vlen)
   val ddrCtrlWidth = cfg.devices.find(_.name == "ddr_ctrl").get.width
   val ddrMemWidth  = cfg.devices.find(_.name == "ddr_mem").get.width
   val ddr_ctrl_axi = new AxiMasterIO(xlen, ddrCtrlWidth, p.axi2IdBits)
@@ -167,7 +168,7 @@ class CoralNPUChiselSubsystem(
       socConfig.modules.find(_.name == "spi2tlul").get
     val spi2tlul = {
       val p          = spi2tlul_config.params.asInstanceOf[Spi2TlulParameters]
-      val spi2tlul_p = new Parameters(xlen = xlen)
+      val spi2tlul_p = new Parameters(xlen = xlen, vlen = vlen)
       spi2tlul_p.lsuDataBits = p.lsuDataBits
       spi2tlul_p.axi2IdBits = 8
       val m = Module(new Spi2TLUL(spi2tlul_p.toTLUL()))
@@ -196,7 +197,7 @@ class CoralNPUChiselSubsystem(
       withClockAndReset(io.clk_i, (!combined_rst_n).asAsyncReset) {
         config.params match {
           case p: CoreTlulParameters =>
-            val core_p = new Parameters(xlen = xlen)
+            val core_p = new Parameters(xlen = xlen, vlen = vlen)
             core_p.m = p.memoryRegions
             core_p.lsuDataBits = p.lsuDataBits
             core_p.enableRvv = p.enableRvv
@@ -213,40 +214,40 @@ class CoralNPUChiselSubsystem(
           case p: Spi2TlulParameters => null
 
           case p: SpiMasterParameters =>
-            val spi_p = new Parameters(xlen = xlen)
+            val spi_p = new Parameters(xlen = xlen, vlen = vlen)
             spi_p.lsuDataBits = p.lsuDataBits
             spi_p.axi2IdBits = 10
             Module(new SpiMaster(spi_p.toTLUL()))
 
           case p: GPIOModuleParameters =>
-            val gpio_p = new Parameters(xlen = xlen)
+            val gpio_p = new Parameters(xlen = xlen, vlen = vlen)
             gpio_p.lsuDataBits = 32
             gpio_p.axi2IdBits = 10
             val gp = bus.GPIOParameters(width = p.width)
             Module(new bus.GPIO(gpio_p.toTLUL(), gp))
 
           case p: DmaParameters =>
-            val host_p = new Parameters(xlen = xlen)
+            val host_p = new Parameters(xlen = xlen, vlen = vlen)
             host_p.lsuDataBits = p.hostDataBits
-            val device_p = new Parameters(xlen = xlen)
+            val device_p = new Parameters(xlen = xlen, vlen = vlen)
             device_p.lsuDataBits = p.deviceDataBits
             device_p.axi2IdBits = 10
             Module(new bus.DmaEngine(host_p.toTLUL(), device_p.toTLUL()))
 
           case ClintParameters =>
-            val clint_p = new Parameters(xlen = xlen)
+            val clint_p = new Parameters(xlen = xlen, vlen = vlen)
             clint_p.lsuDataBits = 32
             clint_p.axi2IdBits = 10
             Module(new bus.Clint(clint_p.toTLUL()))
 
           case p: PlicParameters =>
-            val plic_p = new Parameters(xlen = xlen)
+            val plic_p = new Parameters(xlen = xlen, vlen = vlen)
             plic_p.lsuDataBits = 32
             plic_p.axi2IdBits = 10
             Module(new bus.Plic(plic_p.toTLUL(), p.numInterrupts, p.priorityWidth))
 
           case p: TlulSramParameters =>
-            val sram_p = new Parameters(xlen = xlen)
+            val sram_p = new Parameters(xlen = xlen, vlen = vlen)
             sram_p.lsuDataBits = 128
             sram_p.axi2IdBits = 8
             Module(new TlulSram(sram_p, p.sramSizeBytes, p.globalBaseAddr))
@@ -367,7 +368,7 @@ class CoralNPUChiselSubsystem(
     val ddr_rst       = ddrAsyncPorts.reset
 
     val ddr_ctrl_tlul_p = deviceParams(cfg.devices.indexWhere(_.name == "ddr_ctrl"))
-    val ddr_ctrl_axi_p  = new Parameters(xlen = xlen)
+    val ddr_ctrl_axi_p  = new Parameters(xlen = xlen, vlen = vlen)
     ddr_ctrl_axi_p.lsuDataBits = ddr_ctrl_tlul_p.w * 8
     val ddr_ctrl_buf = Module(
       new TlulFifoSync(
@@ -391,7 +392,9 @@ class CoralNPUChiselSubsystem(
         ddr_ctrl_axi_p.axi2AddrBits,
         ddr_ctrl_axi_p.axi2IdBits,
         () => new OpenTitanTileLink_A_User,
-        () => new OpenTitanTileLink_D_User
+        () => new OpenTitanTileLink_D_User,
+        maxReadTx = ddr_ctrl_axi_p.tlul2AxiMaxReadTx,
+        maxWriteTx = ddr_ctrl_axi_p.tlul2AxiMaxWriteTx
       )
     )
     ddr_ctrl_axi_conv.clock := ddr_clk
@@ -410,7 +413,7 @@ class CoralNPUChiselSubsystem(
 
     // Define parameters for the final 256-bit AXI port.
     val ddr_mem_axi_p = {
-      val p = new Parameters(xlen = xlen)
+      val p = new Parameters(xlen = xlen, vlen = vlen)
       p.lsuDataBits = 256
       p.axi2IdBits = 1
       p
@@ -443,7 +446,9 @@ class CoralNPUChiselSubsystem(
         ddr_mem_axi_p.axi2AddrBits,
         ddr_mem_axi_p.axi2IdBits,
         () => new OpenTitanTileLink_A_User,
-        () => new OpenTitanTileLink_D_User
+        () => new OpenTitanTileLink_D_User,
+        maxReadTx = ddr_mem_axi_p.tlul2AxiMaxReadTx,
+        maxWriteTx = ddr_mem_axi_p.tlul2AxiMaxWriteTx
       )
     )
 
@@ -469,7 +474,7 @@ class CoralNPUChiselSubsystem(
     // Map IO [AXI] -> Bridge -> Xbar Port ["ispyocto_m1"]
     val ispAsyncPorts = io.async_ports_hosts("isp_axi_clk").asInstanceOf[ClockResetBundle]
     val m1HostName    = "ispyocto_m1"
-    val ispAxiParams  = new Parameters(xlen = xlen)
+    val ispAxiParams  = new Parameters(xlen = xlen, vlen = vlen)
     ispAxiParams.lsuDataBits = 64
 
     val axibm1 = withClockAndReset(ispAsyncPorts.clock, ispAsyncPorts.reset) {

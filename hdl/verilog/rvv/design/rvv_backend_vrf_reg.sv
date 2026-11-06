@@ -5,17 +5,20 @@
 `ifndef RVV_ASSERT__SVH
 `include "rvv_backend_sva.svh"
 `endif
-module rvv_backend_vrf_reg (/*AUTOARG*/
+module rvv_backend_vrf_reg#(
+  parameter int unsigned VLEN = `VLEN
+)
+(/*AUTOARG*/
    // Outputs
    vreg,
    // Inputs
    wen, wdata, clk, rst_n
    );
 
-  output logic [`NUM_VRF-1:0][`VLEN-1:0]  vreg;
+  output logic [`NUM_VRF-1:0][VLEN-1:0]  vreg;
 
-  input  logic [`NUM_VRF-1:0][`VLENB-1:0] wen; // byte enable
-  input  logic [`NUM_VRF-1:0][`VLEN-1:0]  wdata;
+  input  logic [`NUM_VRF-1:0][`VLENB(VLEN)-1:0] wen; // byte enable
+  input  logic [`NUM_VRF-1:0][VLEN-1:0]  wdata;
   input  logic                            clk;
   input  logic                            rst_n;
 
@@ -23,7 +26,7 @@ module rvv_backend_vrf_reg (/*AUTOARG*/
 genvar i,j;
 generate
   for (i=0; i<`NUM_VRF; i=i+1) begin
-    for (j=0; j<`VLENB; j=j+1) begin
+    for (j=0; j<`VLENB(VLEN); j=j+1) begin
       edff #(
         .T      (logic [`BYTE_WIDTH-1:0])
       )

@@ -1,5 +1,8 @@
 
-module rvv_backend_sqrt7_rec7(
+module rvv_backend_sqrt7_rec7#(
+  localparam type RVFRM = RVFRM_e
+)
+(
   clk,
   rst_n,
   // Input signals
@@ -86,7 +89,7 @@ module rvv_backend_sqrt7_rec7(
   logic               [22:0] rec7_result_man;
   logic               [31:0] rec7_result;
   RVFEXP_t                   rec7_result_excp;
-  
+
 
   //pipe stage
   //pipe 1, register all input sginal, test if subnormal
@@ -132,7 +135,7 @@ module rvv_backend_sqrt7_rec7(
   logic                  [6:0] pip3_rec7_man;
   TagType                        pip3_tag;
 
-  //pipe 4, get the exponent results and search the table 
+  //pipe 4, get the exponent results and search the table
   logic                        pip4_vld;
   logic                        pip4_sqrt7_vld;
   logic                 [31:0] pip4_sqrt7_result;
@@ -140,7 +143,7 @@ module rvv_backend_sqrt7_rec7(
   RVFEXP_t                     pip4_sqrt7_fexp;
   RVFEXP_t                     pip4_rec7_fexp;
   TagType                        pip4_tag;
-  
+
 
   //signal assignment
   assign rec7_vld        =  vs1_i[0];
@@ -219,7 +222,7 @@ module rvv_backend_sqrt7_rec7(
       pip3_sqrt7_man  <='0;
       pip3_rec7_man   <='0;
       pip3_tag        <='0;
-                          
+
       pip4_vld        <='0;
       pip4_sqrt7_vld  <='0;
       pip4_sqrt7_result<= '0;
@@ -265,7 +268,7 @@ module rvv_backend_sqrt7_rec7(
         pip2_tag          <= pip1_tag;
         pip2_exp_normed   <= pip1_exp_normed;
         pip2_man_index    <= pip1_man_index;
-        
+
         //pip3, get the normalized exponent, expreuslts and significant with registered leading zero cnt
         pip3_vld          <= pip2_vld;
         pip3_sqrt7_vld    <= pip2_sqrt7_vld;
@@ -282,7 +285,7 @@ module rvv_backend_sqrt7_rec7(
         pip3_sqrt7_man    <= pip2_sqrt7_man;
         pip3_rec7_man     <= pip2_rec7_man;
         pip3_tag          <= pip2_tag;
-      
+
       //pip4, get the exponent results and search the table
         pip4_vld          <= pip3_vld;
         pip4_sqrt7_vld    <= pip3_sqrt7_vld;
@@ -713,11 +716,11 @@ module rvv_backend_sqrt7_rec7(
       else
         level4_adder = 2'b10;
 
-      leading_zero_cnt = ({5{level1_add}} & 5'd11)+ 
+      leading_zero_cnt = ({5{level1_add}} & 5'd11)+
                          ({5{level2_add}} & 5'd6) +
                          ({5{level3_add}} & 5'd3) +
                          level4_adder;
     end
-    
+
   endfunction
 endmodule

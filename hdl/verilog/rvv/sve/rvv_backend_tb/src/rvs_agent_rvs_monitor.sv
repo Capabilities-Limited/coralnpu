@@ -9,12 +9,12 @@ typedef class rvs_monitor;
   `uvm_blocking_get_imp_decl(_rvv_state)
 class rvs_monitor extends uvm_monitor;
   uvm_active_passive_enum is_active = UVM_ACTIVE;
-  uvm_analysis_imp_rvs_mon_inst #(rvs_transaction,rvs_monitor) inst_imp; 
+  uvm_analysis_imp_rvs_mon_inst #(rvs_transaction,rvs_monitor) inst_imp;
   uvm_blocking_get_imp_rvv_state #(rvv_state_pkg::rvv_state_e, rvs_monitor) rvv_state_imp;
 
-  uvm_analysis_port #(rvs_transaction) inst_ap; 
-  uvm_analysis_port #(rvs_transaction) rt_ap;   
-  uvm_analysis_port #(rvs_transaction) ctrl_ap; 
+  uvm_analysis_port #(rvs_transaction) inst_ap;
+  uvm_analysis_port #(rvs_transaction) rt_ap;
+  uvm_analysis_port #(rvs_transaction) ctrl_ap;
 
   typedef virtual rvs_interface v_if;
   typedef virtual rvv_intern_interface v_if4;
@@ -110,9 +110,9 @@ function void rvs_monitor::final_phase(uvm_phase phase);
   end
   uvm_config_db#(int)::set(uvm_root::get(), "", "rvv_total_inst", this.total_inst);
   uvm_config_db#(int)::set(uvm_root::get(), "", "rvv_excuted_inst", this.executed_inst);
-  `uvm_info("FINAL_CHECK", $sformatf("RVV total accepted inst: %0d, executed inst: %0d, discarded %.2f%%", 
+  `uvm_info("FINAL_CHECK", $sformatf("RVV total accepted inst: %0d, executed inst: %0d, discarded %.2f%%",
                                       this.total_inst, this.executed_inst, real'(this.total_inst - this.executed_inst)*100.0/real'(this.total_inst)), UVM_NONE)
-endfunction: final_phase 
+endfunction: final_phase
 
 task rvs_monitor::run_phase(uvm_phase phase);
   super.run_phase(phase);
@@ -133,7 +133,7 @@ task rvs_monitor::main_phase(uvm_phase phase);
       @(posedge rvs_if.clk);
       if(ctrl_tr.is_last_inst) begin
         get_rvv_state(rvv_state);
-        if(inst_tx_queue.size()==0 && inst_rx_queue.size()==0 && inst_temp_queue.size()==0 && rvv_state==rvv_state_pkg::IDLE) begin 
+        if(inst_tx_queue.size()==0 && inst_rx_queue.size()==0 && inst_temp_queue.size()==0 && rvv_state==rvv_state_pkg::IDLE) begin
           repeat(10) @(posedge rvs_if.clk);
           ctrl_ap.write(ctrl_tr);
           `uvm_info(get_type_name(), "ready to drop obj", UVM_HIGH)
@@ -201,7 +201,7 @@ task rvs_monitor::tx_monitor();
           if(inst_tr.reserve_inst_check()) begin
             `uvm_info(get_type_name(), $sformatf("Send transaction to mdl:\n%s", inst_tr.sprint()), UVM_HIGH)
             inst_ap.write(inst_tr); // write to mdl/lsu
-          end else begin 
+          end else begin
             `uvm_info(get_type_name(), $sformatf("MON discarded inst:\n%s", inst_tr.sprint()), UVM_HIGH)
           end
           temp_tr.copy(inst_tr);
@@ -229,7 +229,7 @@ endtask: tx_monitor
 
 task rvs_monitor::rx_monitor();
   rvs_transaction tr, inst_tr;
-  logic [`VLENB-1:0] rt_vrf_byte_strobe;
+  logic [`VLENB(VLEN)-1:0] rt_vrf_byte_strobe;
   logic [`VLEN-1:0] rt_vrf_bit_strobe;
   bit vrf_overlap;
   bit ready_to_new_inst;
@@ -301,9 +301,9 @@ task rvs_monitor::rx_monitor();
             int pos = 0;
             vrf_overlap = 0;
             rt_vrf_byte_strobe = rvs_if.rt_vrf_data_rob2rt[rt_idx].rt_strobe;
-            for(int i=0; i<`VLENB; i++) begin
-              rt_vrf_bit_strobe[i*8 +: 8] = {8{rvs_if.rt_vrf_data_rob2rt[rt_idx].rt_strobe[i]}}; 
-            end 
+            for(int i=0; i<`VLENB(VLEN); i++) begin
+              rt_vrf_bit_strobe[i*8 +: 8] = {8{rvs_if.rt_vrf_data_rob2rt[rt_idx].rt_strobe[i]}};
+            end
             foreach(tr.rt_vrf_index[i]) begin
               // merge same vrf
               if(tr.rt_vrf_index[i] == rvs_if.rt_vrf_data_rob2rt[rt_idx].rt_index) begin
@@ -352,7 +352,7 @@ task rvs_monitor::rx_monitor();
             tr.trap_occured = 1;
             tr.trap_vma     = rvs_if.vector_csr.ma;
             tr.trap_vta     = rvs_if.vector_csr.ta;
-            assert($cast(tr.trap_vsew, rvs_if.vector_csr.sew)); 
+            assert($cast(tr.trap_vsew, rvs_if.vector_csr.sew));
             assert($cast(tr.trap_vlmul, rvs_if.vector_csr.lmul));
             tr.trap_vl      = rvs_if.vector_csr.vl;
             tr.trap_vstart  = rvs_if.vector_csr.vstart;
@@ -439,9 +439,9 @@ endfunction
 
 task rvs_monitor::get_rvv_state(output rvv_state_pkg::rvv_state_e rvv_state);
   if(rvv_intern_if.rvv_is_idle() === 1'b1)
-    rvv_state = rvv_state_pkg::IDLE; 
+    rvv_state = rvv_state_pkg::IDLE;
   else if(rvv_intern_if.rvv_is_idle() === 1'b0)
-    rvv_state = rvv_state_pkg::BUSY; 
+    rvv_state = rvv_state_pkg::BUSY;
   else
     rvv_state = rvv_state_pkg::UNKNOW;
 endtask: get_rvv_state

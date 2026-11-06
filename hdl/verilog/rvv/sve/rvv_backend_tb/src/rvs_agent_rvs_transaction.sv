@@ -35,7 +35,7 @@ class rvs_transaction extends uvm_sequence_item;
   rand bit               vill;
   rand agnostic_e        vma;
   rand agnostic_e        vta;
-  rand sew_e             vsew; 
+  rand sew_e             vsew;
   rand lmul_e            vlmul;
   rand logic [`XLEN-1:0] vl;
   rand logic [`XLEN-1:0] vlmax;
@@ -76,13 +76,13 @@ class rvs_transaction extends uvm_sequence_item;
        vwxunary0_e src2_func_vwxunary0;
        vwxunary0_e src1_func_vwxunary0;
        vmunary0_e  src1_func_vmunary0;
-   
+
   rand logic [`XLEN-1:0] rs2_data;
   rand logic [`XLEN-1:0] rs1_data;
 
   /* Real instruction */
   rand logic [31:0] pc;
-       logic [31:0] bin_inst; 
+       logic [31:0] bin_inst;
        string asm_string;
 
 // decode info ---------------------------------------------
@@ -127,18 +127,20 @@ class rvs_transaction extends uvm_sequence_item;
        reg_idx_t  rt_vrf_index  [$];
        vrf_byte_t rt_vrf_strobe [$];
        vrf_t      rt_vrf_data   [$];
+       // Register value before the instruction, filled by the model only (one entry per rt_vrf_* entry).
+       vrf_t      rt_vrf_old    [$];
 
        reg_idx_t  rt_xrf_index [$];
        xrf_t      rt_xrf_data  [$];
 
-       logic [`XLEN-1:0] vxsat;  
-       logic             vxsat_valid;  
+       logic [`XLEN-1:0] vxsat;
+       logic             vxsat_valid;
 
   /* Trap info */
        bit          trap_occured;
        agnostic_e   trap_vma;
        agnostic_e   trap_vta;
-       sew_e        trap_vsew; 
+       sew_e        trap_vsew;
        lmul_e       trap_vlmul;
        int          trap_vl;
        int          trap_vstart;
@@ -152,20 +154,20 @@ class rvs_transaction extends uvm_sequence_item;
     solve inst_type before lsu_inst;
 
     // ALU insts solve order will be:
-    //   inst_type -> alu_inst -> alu_type/alu_nreg -> op_type -> op_idx/vm 
+    //   inst_type -> alu_inst -> alu_type/alu_nreg -> op_type -> op_idx/vm
     //   -> vtypes -> vl -> vstart
-    // vl should be: 
-    //   vlmax -> vl -> evl  
-    
+    // vl should be:
+    //   vlmax -> vl -> evl
+
     solve alu_inst before alu_type;
     solve alu_inst before alu_nreg;
 
     solve alu_type before dest_type;
     solve alu_type before src2_type;
-    solve alu_type before src1_type;    
+    solve alu_type before src1_type;
     solve alu_nreg before dest_type;
     solve alu_nreg before src2_type;
-    solve alu_nreg before src1_type;    
+    solve alu_nreg before src1_type;
 
     solve dest_type before dest_idx;
     solve src2_type before src2_idx;
@@ -199,18 +201,18 @@ class rvs_transaction extends uvm_sequence_item;
     // LSU insts solve order will be:
     //   inst_type -> lsu_mop -> op_idx/vm/lsu_umop -> lsu_nf/lsu_width
     //   -> vtypes -> vl -> vstart
-    // vl should be: 
-    //   vlmax -> vl -> evl  
+    // vl should be:
+    //   vlmax -> vl -> evl
     // vtype should be:
     //   vsew -> vlmul
-    // lsu_inst is only an inst description. 
+    // lsu_inst is only an inst description.
     //   It will be mapped to specific lsu_mop/lsu_eew/lsu_nf.
-    
+
     solve inst_type before lsu_mop;
     solve lsu_mop   before dest_type;
     solve lsu_mop   before src3_type;
     solve lsu_mop   before src2_type;
-    solve lsu_mop   before src1_type; 
+    solve lsu_mop   before src1_type;
 
     solve dest_type before dest_idx;
     solve src3_type before src3_idx;
@@ -258,34 +260,34 @@ class rvs_transaction extends uvm_sequence_item;
   constraint c_vl_vstart {
     if(inst_type == ALU && alu_inst inside {VMAND, VMOR, VMXOR, VMORN, VMNAND, VMNOR, VMANDN, VMXNOR}){
       // Special case: For mask logic inst, DUT will tread any elements > vl as tail and calculate result.
-      vlmax == vlmax_max;  
+      vlmax == vlmax_max;
     } else if(inst_type == ALU && alu_inst inside {VMUNARY0} && src1_idx inside {VMSBF, VMSOF, VMSIF}) {
       // Special case: For mask set inst, DUT will tread any elements > vl as tail and calculate result.
-      vlmax == vlmax_max;  
+      vlmax == vlmax_max;
     } else if(inst_type == ALU && alu_inst inside {VMSEQ, VMSNE, VMSLTU, VMSLT, VMSLEU, VMSLE, VMSGTU, VMSGT, VMADC, VMSBC}) {
       // Special case: For mask compare & carry produce inst, DUT will use vlmax==`VLEN/sew will vlmax, and calculate the result.
       if(vlmul[2]) // fraction_lmul
-        vlmax == (`VLENB >> vsew);
-      else  
-        vlmax == ((`VLENB << vlmul) >> vsew);
+        vlmax == (`VLENB(VLEN) >> vsew);
+      else
+        vlmax == ((`VLENB(VLEN) << vlmul) >> vsew);
     } else {
       if(vlmul[2]) // fraction_lmul
-        vlmax == ((`VLENB >> (~vlmul +3'b1)) >> vsew);
-      else  
-        vlmax == ((`VLENB << vlmul) >> vsew);
+        vlmax == ((`VLENB(VLEN) >> (~vlmul +3'b1)) >> vsew);
+      else
+        vlmax == ((`VLENB(VLEN) << vlmul) >> vsew);
     }
 
     vl <= vlmax_max;
     vstart <= vlmax_max-1;
 
-    // Since vl is set by frontend, vl sent to backend should always be leagal value. 
+    // Since vl is set by frontend, vl sent to backend should always be leagal value.
     // vl
     vl <= vlmax;
 
     // evl
     if(inst_type == ALU && alu_inst == VSMUL_VMVNRR && alu_type == OPIVI) {
       // vmv<nr>r
-      evl == ((alu_nreg + 1) * `VLENB) >> vsew;
+      evl == ((alu_nreg + 1) * `VLENB(VLEN)) >> vsew;
     } else if(inst_type inside {LD, ST} && lsu_mop == LSU_US && src2_type == FUNC && src2_idx == MASK) {
       // vlm/vsm
       if(vl%8 > 0) evl == int'(vl/8) + 1;
@@ -337,7 +339,6 @@ class rvs_transaction extends uvm_sequence_item;
       } else {
         vstart < vl;
       }
-    } else {
     }
   }
 
@@ -356,36 +357,36 @@ class rvs_transaction extends uvm_sequence_item;
     src3_idx inside {[0:31]};
     src2_idx inside {[0:31]};
     src1_idx inside {[0:31]};
-    
+
     if(!reserve_inst_en) {
       // OPI
       if(inst_type == ALU && alu_inst[7:6] == 2'b00) {
         if(!(alu_inst inside {
           VSUB, VRSUB,
-          VADC, VSBC, VMSBC, 
+          VADC, VSBC, VMSBC,
           VMINU, VMIN, VMAXU, VMAX,
-          VMSLTU, VMSLT, VMSGTU, VMSGT, 
-          VMERGE_VMVV, 
+          VMSLTU, VMSLT, VMSGTU, VMSGT,
+          VMERGE_VMVV,
           VSLL, VSRL, VSRA, VNSRL, VNSRA,
           VSSRL, VSSRA, VNCLIPU, VNCLIP,
           VWREDSUMU, VWREDSUM, VRGATHER,
           VSMUL_VMVNRR,
           VSLIDEDOWN,
           VSSUBU, VSSUB
-          })) { 
-          (alu_type == OPIVV && dest_type == VRF && src2_type == VRF && src1_type == VRF) || 
-          (alu_type == OPIVX && dest_type == VRF && src2_type == VRF && src1_type == XRF) || 
+          })) {
+          (alu_type == OPIVV && dest_type == VRF && src2_type == VRF && src1_type == VRF) ||
+          (alu_type == OPIVX && dest_type == VRF && src2_type == VRF && src1_type == XRF) ||
           (alu_type == OPIVI && dest_type == VRF && src2_type == VRF && src1_type == IMM);
         }
 
         if(alu_inst inside {
-          VSUB, 
-          VMSBC, 
+          VSUB,
+          VMSBC,
           VMINU, VMIN, VMAXU, VMAX,
           VMSLTU, VMSLT,
           VSSUBU, VSSUB
           }) {
-          (alu_type == OPIVV && dest_type == VRF && src2_type == VRF && src1_type == VRF) || 
+          (alu_type == OPIVV && dest_type == VRF && src2_type == VRF && src1_type == VRF) ||
           (alu_type == OPIVX && dest_type == VRF && src2_type == VRF && src1_type == XRF);
         }
 
@@ -404,18 +405,18 @@ class rvs_transaction extends uvm_sequence_item;
           VRSUB,
           VMSGTU, VMSGT
           }) {
-          (alu_type == OPIVX && dest_type == VRF && src2_type == VRF && src1_type == XRF) || 
+          (alu_type == OPIVX && dest_type == VRF && src2_type == VRF && src1_type == XRF) ||
           (alu_type == OPIVI && dest_type == VRF && src2_type == VRF && src1_type == IMM);
         }
 
         if(alu_inst inside {VMERGE_VMVV}) {
           // vmerge
-          (alu_type == OPIVV && dest_type == VRF && src2_type == VRF && src1_type == VRF && vm == 0) || 
-          (alu_type == OPIVX && dest_type == VRF && src2_type == VRF && src1_type == XRF && vm == 0) || 
+          (alu_type == OPIVV && dest_type == VRF && src2_type == VRF && src1_type == VRF && vm == 0) ||
+          (alu_type == OPIVX && dest_type == VRF && src2_type == VRF && src1_type == XRF && vm == 0) ||
           (alu_type == OPIVI && dest_type == VRF && src2_type == VRF && src1_type == IMM && vm == 0) ||
           // vmv.v
-          (alu_type == OPIVV && dest_type == VRF && src2_type == UNUSE && src1_type == VRF && vm == 1 && src2_idx == 0) || 
-          (alu_type == OPIVX && dest_type == VRF && src2_type == UNUSE && src1_type == XRF && vm == 1 && src2_idx == 0) || 
+          (alu_type == OPIVV && dest_type == VRF && src2_type == UNUSE && src1_type == VRF && vm == 1 && src2_idx == 0) ||
+          (alu_type == OPIVX && dest_type == VRF && src2_type == UNUSE && src1_type == XRF && vm == 1 && src2_idx == 0) ||
           (alu_type == OPIVI && dest_type == VRF && src2_type == UNUSE && src1_type == IMM && vm == 1 && src2_idx == 0);
         }
 
@@ -423,8 +424,8 @@ class rvs_transaction extends uvm_sequence_item;
           VSLL, VSRL, VSRA, VNSRL, VNSRA,
           VSSRL, VSSRA, VNCLIPU, VNCLIP
           }) {
-          (alu_type == OPIVV && dest_type == VRF && src2_type == VRF && src1_type == VRF) || 
-          (alu_type == OPIVX && dest_type == VRF && src2_type == VRF && src1_type == XRF) || 
+          (alu_type == OPIVV && dest_type == VRF && src2_type == VRF && src1_type == VRF) ||
+          (alu_type == OPIVX && dest_type == VRF && src2_type == VRF && src1_type == XRF) ||
           (alu_type == OPIVI && dest_type == VRF && src2_type == VRF && src1_type == UIMM);
         }
 
@@ -434,13 +435,13 @@ class rvs_transaction extends uvm_sequence_item;
 
         if(alu_inst inside {VSLIDEDOWN}) {
           (alu_type == OPIVX && dest_type == VRF && src2_type == VRF && src1_type == XRF) ||
-          (alu_type == OPIVI && dest_type == VRF && src2_type == VRF && src1_type == IMM); 
+          (alu_type == OPIVI && dest_type == VRF && src2_type == VRF && src1_type == IMM);
         }
 
         if(alu_inst inside {VRGATHER}) {
           (alu_type == OPIVV && dest_type == VRF && src2_type == VRF && src1_type == VRF) ||
           (alu_type == OPIVX && dest_type == VRF && src2_type == VRF && src1_type == XRF) ||
-          (alu_type == OPIVI && dest_type == VRF && src2_type == VRF && src1_type == UIMM); 
+          (alu_type == OPIVI && dest_type == VRF && src2_type == VRF && src1_type == UIMM);
         }
 
         if(alu_inst inside {VSMUL_VMVNRR}) {
@@ -454,14 +455,14 @@ class rvs_transaction extends uvm_sequence_item;
       if(inst_type == ALU && alu_inst[7:6] == 2'b01) {
         if(!(alu_inst inside {
           VMAND, VMOR, VMXOR, VMORN, VMNAND, VMNOR, VMANDN, VMXNOR,
-          VXUNARY0, VMUNARY0, VWXUNARY0, 
+          VXUNARY0, VMUNARY0, VWXUNARY0,
           VWMACCUS,
-          VREDSUM, VREDAND, VREDOR, VREDXOR, 
+          VREDSUM, VREDAND, VREDOR, VREDXOR,
           VREDMINU,VREDMIN,VREDMAXU,VREDMAX,
           VSLIDE1UP, VSLIDE1DOWN,
           VCOMPRESS
           })) {
-          (alu_type == OPMVV && dest_type == VRF && src2_type == VRF && src1_type == VRF) || 
+          (alu_type == OPMVV && dest_type == VRF && src2_type == VRF && src1_type == VRF) ||
           (alu_type == OPMVX && dest_type == VRF && src2_type == VRF && src1_type == XRF) ;
         }
 
@@ -474,7 +475,7 @@ class rvs_transaction extends uvm_sequence_item;
         }
 
         if(alu_inst == VMUNARY0) {
-          (alu_type == OPMVV && dest_type == VRF && src2_type == VRF && src1_type == FUNC && src1_idx inside {VIOTA}) || 
+          (alu_type == OPMVV && dest_type == VRF && src2_type == VRF && src1_type == FUNC && src1_idx inside {VIOTA}) ||
           (alu_type == OPMVV && dest_type == VRF && src2_type == UNUSE && src1_type == FUNC && src2_idx == 0 && src1_idx inside {VID}) ||
           (alu_type == OPMVV && dest_type == VRF && src2_type == VRF && src1_type == FUNC && src1_idx inside {VMSBF, VMSOF, VMSIF});
         }
@@ -488,7 +489,7 @@ class rvs_transaction extends uvm_sequence_item;
         if(alu_inst inside {VWMACCUS}) {
           (alu_type == OPMVX && dest_type == VRF && src2_type == VRF && src1_type == XRF);
         }
-        
+
         if(alu_inst inside {
           VREDSUM, VREDAND, VREDOR, VREDXOR,
           VREDMINU,VREDMIN,VREDMAXU,VREDMAX
@@ -499,7 +500,7 @@ class rvs_transaction extends uvm_sequence_item;
         if(alu_inst inside {VSLIDE1UP, VSLIDE1DOWN}) {
           (alu_type == OPMVX && dest_type == VRF && src2_type == VRF && src1_type == XRF);
         }
-        
+
         if(alu_inst inside {VCOMPRESS}) {
           (alu_type == OPMVV && dest_type == VRF && src2_type == VRF && src1_type == VRF && vm == 1);
         }
@@ -566,30 +567,30 @@ class rvs_transaction extends uvm_sequence_item;
       if(inst_type == ALU && alu_inst[7:6] == 2'b00) {
         if(!(alu_inst inside {
           VSUB, VRSUB,
-          VADC, VSBC, VMSBC, 
+          VADC, VSBC, VMSBC,
           VMINU, VMIN, VMAXU, VMAX,
-          VMSLTU, VMSLT, VMSGTU, VMSGT, 
-          VMERGE_VMVV, 
+          VMSLTU, VMSLT, VMSGTU, VMSGT,
+          VMERGE_VMVV,
           VSLL, VSRL, VSRA, VNSRL, VNSRA,
           VSSRL, VSSRA, VNCLIPU, VNCLIP,
           VWREDSUMU, VWREDSUM, VRGATHER,
           VSMUL_VMVNRR,
           VSLIDEDOWN,
           VSSUBU, VSSUB
-          })) { 
-          (alu_type == OPIVV && dest_type == VRF && src2_type == VRF && src1_type == VRF) || 
-          (alu_type == OPIVX && dest_type == VRF && src2_type == VRF && src1_type == XRF) || 
+          })) {
+          (alu_type == OPIVV && dest_type == VRF && src2_type == VRF && src1_type == VRF) ||
+          (alu_type == OPIVX && dest_type == VRF && src2_type == VRF && src1_type == XRF) ||
           (alu_type == OPIVI && dest_type == VRF && src2_type == VRF && src1_type == IMM);
         }
 
         if(alu_inst inside {
-          VSUB, 
-          VMSBC, 
+          VSUB,
+          VMSBC,
           VMINU, VMIN, VMAXU, VMAX,
           VMSLTU, VMSLT,
           VSSUBU, VSSUB
           }) {
-          (alu_type == OPIVV && dest_type == VRF && src2_type == VRF && src1_type == VRF) || 
+          (alu_type == OPIVV && dest_type == VRF && src2_type == VRF && src1_type == VRF) ||
           (alu_type == OPIVX && dest_type == VRF && src2_type == VRF && src1_type == XRF) ||
           (alu_type == OPIVI && dest_type == VRF && src2_type == VRF && src1_type == IMM); // rsv
         }
@@ -597,7 +598,7 @@ class rvs_transaction extends uvm_sequence_item;
         if(alu_inst inside {VADC}) {
           (alu_type == OPIVV && dest_type == VRF && src2_type == VRF && src1_type == VRF && vm == 0) ||
           (alu_type == OPIVX && dest_type == VRF && src2_type == VRF && src1_type == XRF && vm == 0) ||
-          (alu_type == OPIVI && dest_type == VRF && src2_type == VRF && src1_type == IMM && vm == 0) || 
+          (alu_type == OPIVI && dest_type == VRF && src2_type == VRF && src1_type == IMM && vm == 0) ||
           (alu_type == OPIVV && dest_type == VRF && src2_type == VRF && src1_type == VRF && vm == 1) || // rsv
           (alu_type == OPIVX && dest_type == VRF && src2_type == VRF && src1_type == XRF && vm == 1) || // rsv
           (alu_type == OPIVI && dest_type == VRF && src2_type == VRF && src1_type == IMM && vm == 1);   // rsv
@@ -616,18 +617,18 @@ class rvs_transaction extends uvm_sequence_item;
           VMSGTU, VMSGT
           }) {
           (alu_type == OPIVV && dest_type == VRF && src2_type == VRF && src1_type == VRF) || // rsv
-          (alu_type == OPIVX && dest_type == VRF && src2_type == VRF && src1_type == XRF) || 
+          (alu_type == OPIVX && dest_type == VRF && src2_type == VRF && src1_type == XRF) ||
           (alu_type == OPIVI && dest_type == VRF && src2_type == VRF && src1_type == IMM);
         }
 
         if(alu_inst inside {VMERGE_VMVV}) {
           // vmerge
-          (alu_type == OPIVV && dest_type == VRF && src2_type == VRF && src1_type == VRF && vm == 0) || 
-          (alu_type == OPIVX && dest_type == VRF && src2_type == VRF && src1_type == XRF && vm == 0) || 
+          (alu_type == OPIVV && dest_type == VRF && src2_type == VRF && src1_type == VRF && vm == 0) ||
+          (alu_type == OPIVX && dest_type == VRF && src2_type == VRF && src1_type == XRF && vm == 0) ||
           (alu_type == OPIVI && dest_type == VRF && src2_type == VRF && src1_type == IMM && vm == 0) ||
           // vmv.v
-          (alu_type == OPIVV && dest_type == VRF && src2_type == UNUSE && src1_type == VRF && vm == 1 && src2_idx == 0) || 
-          (alu_type == OPIVX && dest_type == VRF && src2_type == UNUSE && src1_type == XRF && vm == 1 && src2_idx == 0) || 
+          (alu_type == OPIVV && dest_type == VRF && src2_type == UNUSE && src1_type == VRF && vm == 1 && src2_idx == 0) ||
+          (alu_type == OPIVX && dest_type == VRF && src2_type == UNUSE && src1_type == XRF && vm == 1 && src2_idx == 0) ||
           (alu_type == OPIVI && dest_type == VRF && src2_type == UNUSE && src1_type == IMM && vm == 1 && src2_idx == 0) ||
           (alu_type == OPIVV && dest_type == VRF && src2_type == UNUSE && src1_type == VRF && vm == 1 && src2_idx inside {[1:31]}) || // rsv
           (alu_type == OPIVX && dest_type == VRF && src2_type == UNUSE && src1_type == XRF && vm == 1 && src2_idx inside {[1:31]}) || // rsv
@@ -638,13 +639,13 @@ class rvs_transaction extends uvm_sequence_item;
           VSLL, VSRL, VSRA, VNSRL, VNSRA,
           VSSRL, VSSRA, VNCLIPU, VNCLIP
           }) {
-          (alu_type == OPIVV && dest_type == VRF && src2_type == VRF && src1_type == VRF) || 
-          (alu_type == OPIVX && dest_type == VRF && src2_type == VRF && src1_type == XRF) || 
+          (alu_type == OPIVV && dest_type == VRF && src2_type == VRF && src1_type == VRF) ||
+          (alu_type == OPIVX && dest_type == VRF && src2_type == VRF && src1_type == XRF) ||
           (alu_type == OPIVI && dest_type == VRF && src2_type == VRF && src1_type == UIMM);
         }
 
         if(alu_inst inside {VWREDSUMU, VWREDSUM}) {
-          (alu_type == OPIVV && dest_type == SCALAR && src2_type == VRF && src1_type == SCALAR) || 
+          (alu_type == OPIVV && dest_type == SCALAR && src2_type == VRF && src1_type == SCALAR) ||
           (alu_type == OPIVX && dest_type == VRF && src2_type == VRF && src1_type == XRF) || // rsv
           (alu_type == OPIVI && dest_type == VRF && src2_type == VRF && src1_type == IMM);  // rsv
         }
@@ -652,13 +653,13 @@ class rvs_transaction extends uvm_sequence_item;
         if(alu_inst inside {VSLIDEDOWN}) {
           (alu_type == OPIVV && dest_type == VRF && src2_type == VRF && src1_type == VRF) || // rsv
           (alu_type == OPIVX && dest_type == VRF && src2_type == VRF && src1_type == XRF) ||
-          (alu_type == OPIVI && dest_type == VRF && src2_type == VRF && src1_type == IMM); 
+          (alu_type == OPIVI && dest_type == VRF && src2_type == VRF && src1_type == IMM);
         }
 
         if(alu_inst inside {VRGATHER}) {
           (alu_type == OPIVV && dest_type == VRF && src2_type == VRF && src1_type == VRF) ||
           (alu_type == OPIVX && dest_type == VRF && src2_type == VRF && src1_type == XRF) ||
-          (alu_type == OPIVI && dest_type == VRF && src2_type == VRF && src1_type == UIMM); 
+          (alu_type == OPIVI && dest_type == VRF && src2_type == VRF && src1_type == UIMM);
         }
 
         if(alu_inst inside {VSMUL_VMVNRR}) {
@@ -675,14 +676,14 @@ class rvs_transaction extends uvm_sequence_item;
       if(inst_type == ALU && alu_inst[7:6] == 2'b01) {
         if(!(alu_inst inside {
           VMAND, VMOR, VMXOR, VMORN, VMNAND, VMNOR, VMANDN, VMXNOR,
-          VXUNARY0, VMUNARY0, VWXUNARY0, 
+          VXUNARY0, VMUNARY0, VWXUNARY0,
           VWMACCUS,
-          VREDSUM, VREDAND, VREDOR, VREDXOR, 
+          VREDSUM, VREDAND, VREDOR, VREDXOR,
           VREDMINU,VREDMIN,VREDMAXU,VREDMAX,
           VSLIDE1UP, VSLIDE1DOWN,
           VCOMPRESS
           })) {
-          (alu_type == OPMVV && dest_type == VRF && src2_type == VRF && src1_type == VRF) || 
+          (alu_type == OPMVV && dest_type == VRF && src2_type == VRF && src1_type == VRF) ||
           (alu_type == OPMVX && dest_type == VRF && src2_type == VRF && src1_type == XRF) ;
         }
 
@@ -693,13 +694,13 @@ class rvs_transaction extends uvm_sequence_item;
         }
 
         if(alu_inst == VXUNARY0) {
-          (alu_type == OPMVV && dest_type == VRF && src2_type == VRF && src1_type == FUNC && src1_idx inside {VZEXT_VF4, VSEXT_VF4, VZEXT_VF2, VSEXT_VF2}) || 
+          (alu_type == OPMVV && dest_type == VRF && src2_type == VRF && src1_type == FUNC && src1_idx inside {VZEXT_VF4, VSEXT_VF4, VZEXT_VF2, VSEXT_VF2}) ||
           (alu_type == OPMVV && dest_type == VRF && src2_type == VRF && src1_type == FUNC && src1_idx inside {[0:3], [8:31]}) || // rsv
           (alu_type == OPMVX && dest_type == VRF && src2_type == VRF && src1_type == XRF) ; // rsv
         }
 
         if(alu_inst == VMUNARY0) {
-          (alu_type == OPMVV && dest_type == VRF && src2_type == VRF && src1_type == FUNC && src1_idx inside {VIOTA}) || 
+          (alu_type == OPMVV && dest_type == VRF && src2_type == VRF && src1_type == FUNC && src1_idx inside {VIOTA}) ||
           (alu_type == OPMVV && dest_type == VRF && src2_type == UNUSE && src1_type == FUNC && src2_idx == 0 && src1_idx inside {VID}) ||
           (alu_type == OPMVV && dest_type == VRF && src2_type == VRF && src1_type == FUNC && src1_idx inside {VMSBF, VMSOF, VMSIF}) ||
           (alu_type == OPMVV && dest_type == VRF && src2_type == VRF && src1_type == FUNC && src1_idx inside {[0:31]} && !(src1_idx inside {VIOTA, VID})) || // rsv
@@ -720,7 +721,7 @@ class rvs_transaction extends uvm_sequence_item;
           (alu_type == OPMVV && dest_type == VRF && src2_type == VRF && src1_type == VRF) || // rsv
           (alu_type == OPMVX && dest_type == VRF && src2_type == VRF && src1_type == XRF);
         }
-        
+
         if(alu_inst inside {
           VREDSUM, VREDAND, VREDOR, VREDXOR,
           VREDMINU,VREDMIN,VREDMAXU,VREDMAX
@@ -733,9 +734,9 @@ class rvs_transaction extends uvm_sequence_item;
           (alu_type == OPMVV && dest_type == VRF && src2_type == VRF && src1_type == VRF) || // rsv
           (alu_type == OPMVX && dest_type == VRF && src2_type == VRF && src1_type == XRF);
         }
-        
+
         if(alu_inst inside {VCOMPRESS}) {
-          (alu_type == OPMVV && dest_type == VRF && src2_type == VRF && src1_type == VRF && vm == 1) || 
+          (alu_type == OPMVV && dest_type == VRF && src2_type == VRF && src1_type == VRF && vm == 1) ||
           (alu_type == OPMVV && dest_type == VRF && src2_type == VRF && src1_type == VRF && vm == 0) || // rsv
           (alu_type == OPMVX && dest_type == VRF && src2_type == VRF && src1_type == XRF);
         }
@@ -807,10 +808,10 @@ class rvs_transaction extends uvm_sequence_item;
   }
 
   constraint c_sewlmul {
-    lsu_width inside {LSU_8BIT, LSU_16BIT, LSU_32BIT};  
+    lsu_width inside {LSU_8BIT, LSU_16BIT, LSU_32BIT};
     vsew inside {SEW8, SEW16, SEW32};
     vlmul inside {LMUL1_4, LMUL1_2, LMUL1, LMUL2, LMUL4, LMUL8};
-    
+
     (lsu_width == LSU_8BIT)  <-> (lsu_eew == EEW8);
     (lsu_width == LSU_16BIT) <-> (lsu_eew == EEW16);
     (lsu_width == LSU_32BIT) <-> (lsu_eew == EEW32);
@@ -819,7 +820,7 @@ class rvs_transaction extends uvm_sequence_item;
     if(!reserve_vtype_en) {
       if(inst_type == ALU) {
         // widen
-        (alu_inst inside {VWADDU, VWADD, VWADDU_W, VWADD_W, VWSUBU, VWSUB, VWSUBU_W, VWSUB_W, 
+        (alu_inst inside {VWADDU, VWADD, VWADDU_W, VWADD_W, VWSUBU, VWSUB, VWSUBU_W, VWSUB_W,
                           VWMUL, VWMULU, VWMULSU, VWMACCU, VWMACC, VWMACCUS, VWMACCSU})
         ->  (vsew inside {SEW8,SEW16} && vlmul inside {LMUL1_4,LMUL1_2,LMUL1,LMUL2,LMUL4});
 
@@ -842,9 +843,9 @@ class rvs_transaction extends uvm_sequence_item;
         ->  ((vlmul inside {LMUL1_2,LMUL1,LMUL2,LMUL4,LMUL8} && vsew inside {SEW16,SEW32}) ||
              (vlmul inside {LMUL1_4,LMUL1_2,LMUL1,LMUL2,LMUL4} && vsew inside {SEW8,SEW16})
         );
-        
+
       } // ALU
-      
+
       // Ch 32.7.8, Ch 32.32.7.8.3
       // EMUL * NFIELDS <= 8 constriant.
       // NOTE: This constraint, or NFIELDS concept, is only applied to data_emul.
@@ -852,7 +853,7 @@ class rvs_transaction extends uvm_sequence_item;
         if(!(lsu_mop == LSU_US && src2_idx inside {MASK, WHOLE_REG})) {
           // lsu_eew:sew = 1:1
           if(lsu_width == LSU_8BIT  && vsew == SEW8  ||
-             lsu_width == LSU_16BIT && vsew == SEW16 || 
+             lsu_width == LSU_16BIT && vsew == SEW16 ||
              lsu_width == LSU_32BIT && vsew == SEW32) {
             (vlmul inside {LMUL1_4, LMUL1_2, LMUL1, LMUL2, LMUL4, LMUL8});
             //emul inside {LMUL1_4, LMUL1_2, LMUL1, LMUL2, LMUL4, LMUL8};
@@ -906,7 +907,7 @@ class rvs_transaction extends uvm_sequence_item;
             }
           }
           // lsu_eew:sew = 1:4
-          if(lsu_width ==  LSU_8BIT && vsew == SEW32) { 
+          if(lsu_width ==  LSU_8BIT && vsew == SEW32) {
             (vlmul inside {LMUL1,   LMUL2,   LMUL4, LMUL8});
             //emul inside {LMUL1_4, LMUL1_2, LMUL1, LMUL2};
             if(lsu_mop inside {LSU_OI, LSU_UI}) {
@@ -933,7 +934,7 @@ class rvs_transaction extends uvm_sequence_item;
           }
 
           // lsu_eew:sew = 2:1
-          if(lsu_width == LSU_16BIT && vsew == SEW8 || 
+          if(lsu_width == LSU_16BIT && vsew == SEW8 ||
              lsu_width == LSU_32BIT && vsew == SEW16) {
             (vlmul inside {LMUL1_4, LMUL1_2, LMUL1, LMUL2, LMUL4});
             //emul inside {LMUL1_2, LMUL1,   LMUL2, LMUL4, LMUL8};
@@ -961,7 +962,7 @@ class rvs_transaction extends uvm_sequence_item;
           }
 
           // lsu_eew:sew = 4:1
-          if(lsu_width == LSU_32BIT && vsew == SEW8 ) { 
+          if(lsu_width == LSU_32BIT && vsew == SEW8 ) {
             (vlmul inside {LMUL1_4, LMUL1_2, LMUL1, LMUL2});
             //emul inside {LMUL1,   LMUL2,   LMUL4, LMUL8};
             if(lsu_mop inside {LSU_OI, LSU_UI}) {
@@ -985,7 +986,7 @@ class rvs_transaction extends uvm_sequence_item;
               (lsu_nf == NF7) -> (vlmul inside {LMUL1_4                                     });
               (lsu_nf == NF8) -> (vlmul inside {LMUL1_4                                     });
             }
-          } 
+          }
         } else {
           // For special inst
           // vlm/vsm
@@ -999,8 +1000,7 @@ class rvs_transaction extends uvm_sequence_item;
           -> (lsu_width inside {LSU_8BIT, LSU_16BIT, LSU_32BIT});
         }
       } // LD/ST
-    } else {
-    }// if(!reserve_vtype_en)
+    } // if(!reserve_vtype_en)
   }
 
   constraint c_rs_data {
@@ -1029,7 +1029,7 @@ class rvs_transaction extends uvm_sequence_item;
   string __t_ret_info  = "-- RETIRE_INFO -----";
   string __t_trap_info = "-- TRAP_INFO -------";
   string __t_misc      = "-- MISC ------------";
-  `uvm_object_utils_begin(rvs_transaction) 
+  `uvm_object_utils_begin(rvs_transaction)
     `uvm_field_string(__t_config, UVM_ALL_ON)
     `uvm_field_int(reserve_vl_vstart_en,UVM_ALL_ON)
     `uvm_field_int(reserve_inst_en     ,UVM_ALL_ON)
@@ -1120,7 +1120,7 @@ class rvs_transaction extends uvm_sequence_item;
     if(src1_type == XRF) begin
       `uvm_field_int(rs1_data,UVM_ALL_ON)
     end
-    
+
     // decode info
     `uvm_field_string(__t_dec_info, UVM_ALL_ON)
     `uvm_field_int(eew, UVM_ALL_ON)
@@ -1157,6 +1157,10 @@ class rvs_transaction extends uvm_sequence_item;
         `uvm_field_int(rt_vrf_strobe[idx],UVM_ALL_ON)
         `uvm_field_int(rt_vrf_data[idx]  ,UVM_ALL_ON)
       end
+      // Separate loop: only the model fills this, so its size can differ from rt_vrf_index.
+      foreach(rt_vrf_old[idx]) begin
+        `uvm_field_int(rt_vrf_old[idx]   ,UVM_ALL_ON)
+      end
       foreach(rt_xrf_index[idx]) begin
         `uvm_field_int(rt_xrf_index[idx],UVM_ALL_ON)
         `uvm_field_int(rt_xrf_data[idx] ,UVM_ALL_ON)
@@ -1169,7 +1173,7 @@ class rvs_transaction extends uvm_sequence_item;
       `uvm_field_int(trap_occured, UVM_ALL_ON)
       `uvm_field_enum(agnostic_e, trap_vma, UVM_ALL_ON)
       `uvm_field_enum(agnostic_e,trap_vta, UVM_ALL_ON)
-      `uvm_field_enum(sew_e, trap_vsew, UVM_ALL_ON) 
+      `uvm_field_enum(sew_e, trap_vsew, UVM_ALL_ON)
       `uvm_field_enum(lmul_e, trap_vlmul, UVM_ALL_ON)
       `uvm_field_int(trap_vl, UVM_ALL_ON)
       `uvm_field_int(trap_vstart, UVM_ALL_ON)
@@ -1196,7 +1200,7 @@ class rvs_transaction extends uvm_sequence_item;
 
 endclass: rvs_transaction
 
-static function void rvs_transaction::set_mem_range(int unsigned mem_base, int unsigned mem_size);
+function void rvs_transaction::set_mem_range(int unsigned mem_base, int unsigned mem_size);
   mem_addr_lo = mem_base;
   mem_addr_hi = mem_base + mem_size -1;
 endfunction: set_mem_range
@@ -1234,7 +1238,7 @@ function void rvs_transaction::post_randomize();
     if(!$cast(lsu_umop,src2_idx))
       lsu_umop = LSU_UMOP_NONE;
   end
-    
+
   // rs random data
   if(src2_type != XRF) rs2_data = 'x;
   if(src1_type != XRF) rs1_data = 'x;
@@ -1249,7 +1253,7 @@ function void rvs_transaction::post_randomize();
     if(inst_type == ALU && alu_inst == VSMUL_VMVNRR && alu_type == OPIVI) begin
       // NO CHANGE
       // vmv<nr>r
-      // evl = ((alu_nreg + 1) * `VLENB) >> vsew;
+      // evl = ((alu_nreg + 1) * `VLENB(VLEN)) >> vsew;
     end else if(inst_type inside {LD, ST} && lsu_mop == LSU_US && src2_type == FUNC && src2_idx == MASK) begin
       // vlm/vsm
       if(vl%8 > 0) evl = int'(vl/8) + 1;
@@ -1285,7 +1289,7 @@ function void rvs_transaction::tr2bin();
       bin_inst[31:29] = lsu_nf;
       bin_inst[28]    = 1'b0;
       bin_inst[27:26] = lsu_mop;
-    end 
+    end
     ALU:bin_inst[31:26] = alu_inst[5:0];
   endcase
   /* vm */
@@ -1295,11 +1299,11 @@ function void rvs_transaction::tr2bin();
   case(inst_type)
     LD, ST: begin
       bin_inst[14:12] = lsu_width;
-    end 
+    end
     ALU: bin_inst[14:12] = alu_type;
   endcase
   case(inst_type)
-    ST:      bin_inst[11:7] = src3_idx; 
+    ST:      bin_inst[11:7] = src3_idx;
     ALU, LD: bin_inst[11:7] = dest_idx;
   endcase
   bin_inst[6:0]   = inst_type;
@@ -1318,7 +1322,7 @@ function bit rvs_transaction::bin2tr(logic [31:0] inst_in, logic [`XLEN-1:0] rs_
     end
     ALU: begin
       alu_inst[5:0] = bin_inst[31:26];
-    end 
+    end
   endcase
   /* vm */
   vm            = bin_inst[25];
@@ -1331,11 +1335,11 @@ function bit rvs_transaction::bin2tr(logic [31:0] inst_in, logic [`XLEN-1:0] rs_
       if(lsu_width == LSU_16BIT) lsu_eew = EEW16;
       if(lsu_width == LSU_32BIT) lsu_eew = EEW32;
       if(lsu_width == LSU_64BIT) lsu_eew = EEW64;
-    end 
+    end
     ALU: alu_type = bin_inst[14:12];
   endcase
   case(inst_type)
-    ST:      src3_idx = bin_inst[11:7]; 
+    ST:      src3_idx = bin_inst[11:7];
     ALU, LD: dest_idx = bin_inst[11:7];
   endcase
 
@@ -1388,7 +1392,7 @@ function bit rvs_transaction::bin2tr(logic [31:0] inst_in, logic [`XLEN-1:0] rs_
 
     // OPM
     if(alu_type inside {OPMVV, OPMVX}) begin
-      alu_inst[7:6] = 2'b01;      
+      alu_inst[7:6] = 2'b01;
       if(alu_type == OPMVV) begin
         dest_type = VRF;
         src2_type = VRF;
@@ -1444,7 +1448,7 @@ function bit rvs_transaction::bin2tr(logic [31:0] inst_in, logic [`XLEN-1:0] rs_
         src2_type = XRF;
         src1_type = XRF;
       end
-      LSU_UI, 
+      LSU_UI,
       LSU_OI: begin
         dest_type = VRF;
         src2_type = VRF;
@@ -1466,7 +1470,7 @@ function bit rvs_transaction::bin2tr(logic [31:0] inst_in, logic [`XLEN-1:0] rs_
         src2_type = XRF;
         src1_type = XRF;
       end
-      LSU_UI, 
+      LSU_UI,
       LSU_OI: begin
         src3_type = VRF;
         src2_type = VRF;
@@ -1496,7 +1500,7 @@ function bit rvs_transaction::bin2tr(logic [31:0] inst_in, logic [`XLEN-1:0] rs_
     if(!$cast(lsu_umop,src2_idx))
       lsu_umop = LSU_UMOP_NONE;
   end
-    
+
   if(src2_type == XRF) rs2_data = rs_data; else rs2_data = 'x;
   if(src1_type == XRF) rs1_data = rs_data; else rs1_data = 'x;
 
@@ -1510,37 +1514,37 @@ endfunction: bin2tr
 function void rvs_transaction::set_config_state(
   logic [`XLEN-1:0] vma,
   logic [`XLEN-1:0] vta,
-  logic [`XLEN-1:0] vsew, 
+  logic [`XLEN-1:0] vsew,
   logic [`XLEN-1:0] vlmul,
   logic [`XLEN-1:0] vl,
   logic [`XLEN-1:0] vstart,
   logic [`XLEN-1:0] vxrm
-);      
+);
   this.vma    = vma;
   this.vta    = vta;
-  this.vsew   = vsew; 
+  this.vsew   = vsew;
   this.vlmul  = vlmul;
   this.vl     = vl;
   this.vstart = vstart;
   this.vxrm   = vxrm;
 endfunction: set_config_state
 
-function void rvs_transaction::decode_vtype(bit dec_evl, bit dec_vlmax);      
+function void rvs_transaction::decode_vtype(bit dec_evl, bit dec_vlmax);
   // Calculate eew/emul
   if(inst_type == ALU && (alu_inst inside {VADC, VSBC, VMADC, VMSBC, VMERGE_VMVV}))
     use_vm_to_cal = 1;
   else
     use_vm_to_cal = 0;
 
-  is_widen_inst           = inst_type == ALU &&  (alu_inst inside {VWADDU, VWADD, VWADDU_W, VWADD_W, VWSUBU, VWSUB, VWSUBU_W, VWSUB_W, 
+  is_widen_inst           = inst_type == ALU &&  (alu_inst inside {VWADDU, VWADD, VWADDU_W, VWADD_W, VWSUBU, VWSUB, VWSUBU_W, VWSUB_W,
                                                                    VWMUL, VWMULU, VWMULSU, VWMACCU, VWMACC, VWMACCUS, VWMACCSU});
   is_widen_vs2_inst       = inst_type == ALU &&  (alu_inst inside {VWADD_W, VWADDU_W, VWSUBU_W, VWSUB_W});
   is_narrow_inst          = inst_type == ALU &&  (alu_inst inside {VNSRL, VNSRA, VNCLIPU, VNCLIP});
   is_mask_producing_inst  = inst_type == ALU && ((alu_inst inside {VMAND, VMOR, VMXOR, VMORN, VMNAND, VMNOR, VMANDN, VMXNOR,
-                                                                   VMADC, VMSBC, 
+                                                                   VMADC, VMSBC,
                                                                    VMSEQ, VMSNE, VMSLTU, VMSLT, VMSLEU, VMSLE, VMSGTU, VMSGT}) ||
                                                  (alu_inst inside {VMUNARY0} && src1_idx inside {VMSBF, VMSOF, VMSIF}));
-  is_reduction_inst       = inst_type == ALU &&  (alu_inst inside {VREDSUM, VREDAND, VREDOR, VREDXOR, 
+  is_reduction_inst       = inst_type == ALU &&  (alu_inst inside {VREDSUM, VREDAND, VREDOR, VREDXOR,
                                                                    VREDMINU,VREDMIN,VREDMAXU,VREDMAX,
                                                                    VWREDSUMU, VWREDSUM});
   is_permutation_inst     = inst_type == ALU && ((alu_inst inside {VSMUL_VMVNRR} && alu_type == OPIVI && vm == 1) ||
@@ -1565,7 +1569,7 @@ function void rvs_transaction::decode_vtype(bit dec_evl, bit dec_vlmax);
 
   case(inst_type)
     LD: begin
-      case(lsu_mop) 
+      case(lsu_mop)
         LSU_US   : begin
           case(lsu_umop)
             MASK: begin
@@ -1618,7 +1622,7 @@ function void rvs_transaction::decode_vtype(bit dec_evl, bit dec_vlmax);
           seg_num   = lsu_nf + 1;
           evl       = dec_evl ? vl : evl;
         end
-        LSU_UI, 
+        LSU_UI,
         LSU_OI: begin
           dest_eew  = eew;
           dest_emul = emul;
@@ -1630,11 +1634,11 @@ function void rvs_transaction::decode_vtype(bit dec_evl, bit dec_vlmax);
           emul_max  = (dest_eew > src2_eew) ? dest_emul: src2_emul;
           seg_num   = lsu_nf + 1;
           evl       = dec_evl ? vl : evl;
-        end      
+        end
       endcase
     end
     ST: begin
-      case(lsu_mop) 
+      case(lsu_mop)
         LSU_US   : begin
           case(lsu_umop)
             MASK: begin
@@ -1687,7 +1691,7 @@ function void rvs_transaction::decode_vtype(bit dec_evl, bit dec_vlmax);
           seg_num   = lsu_nf + 1;
           evl       = dec_evl ? vl : evl;
         end
-        LSU_UI, 
+        LSU_UI,
         LSU_OI: begin
           src3_eew  = eew;
           src3_emul = emul;
@@ -1699,7 +1703,7 @@ function void rvs_transaction::decode_vtype(bit dec_evl, bit dec_vlmax);
           emul_max  = (src3_eew > src2_eew) ? src3_emul: src2_emul;
           seg_num   = lsu_nf + 1;
           evl       = dec_evl ? vl : evl;
-        end      
+        end
       endcase
     end
     ALU: begin
@@ -1737,7 +1741,7 @@ function void rvs_transaction::decode_vtype(bit dec_evl, bit dec_vlmax);
         src1_eew = EEW1;
         src1_emul = src1_emul * src1_eew / eew;
       end
-      if(alu_inst inside {VMADC, VMSBC, VMSEQ, VMSNE, VMSLTU, 
+      if(alu_inst inside {VMADC, VMSBC, VMSEQ, VMSNE, VMSLTU,
                           VMSLT, VMSLEU, VMSLE, VMSGTU, VMSGT}) begin
         dest_eew = EEW1;
         dest_emul = dest_emul * dest_eew / eew;
@@ -1790,7 +1794,7 @@ function void rvs_transaction::decode_vtype(bit dec_evl, bit dec_vlmax);
           src2_emul = src1_idx + 1;
           evl       = dec_evl ? dest_emul * `VLEN / dest_eew : evl;
         end
-      end 
+      end
       // Permutation Instructions.
       if(alu_inst == VSLIDEUP_RGATHEREI16 && alu_type == OPIVV) begin
         src1_eew = EEW16;
@@ -1807,7 +1811,7 @@ function void rvs_transaction::decode_vtype(bit dec_evl, bit dec_vlmax);
   // dest is xrf
   if(dest_type == XRF) begin
     dest_eew = EEW32;
-    dest_emul = EMUL1; 
+    dest_emul = EMUL1;
   end
 
   if(is_mask_producing_inst) begin
@@ -1820,25 +1824,25 @@ function void rvs_transaction::decode_vtype(bit dec_evl, bit dec_vlmax);
   if(dec_vlmax) begin
     vlmax_max = 8 * `VLEN / 8;
     if(inst_type == ALU && alu_inst inside {VMAND, VMOR, VMXOR, VMORN, VMNAND, VMNOR, VMANDN, VMXNOR}) begin
-      vlmax = vlmax_max;  
+      vlmax = vlmax_max;
     end else if(inst_type == ALU && alu_inst inside {VMUNARY0} && src1_idx inside {VMSBF, VMSOF, VMSIF}) begin
-      vlmax = vlmax_max;  
+      vlmax = vlmax_max;
     end else if(inst_type == ALU && alu_inst inside {VMSEQ, VMSNE, VMSLTU, VMSLT, VMSLEU, VMSLE, VMSGTU, VMSGT, VMADC, VMSBC}) begin
       if(vlmul[2]) // fraction_lmul
-        vlmax = (`VLENB >> vsew);
-      else  
-        vlmax = ((`VLENB << vlmul) >> vsew);
+        vlmax = (`VLENB(VLEN) >> vsew);
+      else
+        vlmax = ((`VLENB(VLEN) << vlmul) >> vsew);
     end else begin
       if(vlmul[2]) // fraction_lmul
-        vlmax = ((`VLENB >> (~vlmul +3'b1)) >> vsew);
-      else  
-        vlmax = ((`VLENB << vlmul) >> vsew);
+        vlmax = ((`VLENB(VLEN) >> (~vlmul +3'b1)) >> vsew);
+      else
+        vlmax = ((`VLENB(VLEN) << vlmul) >> vsew);
     end
   end
 
 endfunction: decode_vtype
 
-function void rvs_transaction::get_vec_group_range();    
+function void rvs_transaction::get_vec_group_range();
   dest_idx_base = dest_idx;
   src3_idx_base = src3_idx;
   src2_idx_base = src2_idx;
@@ -1852,17 +1856,17 @@ function void rvs_transaction::get_vec_group_range();
   end
   if(inst_type == ST) begin
     src3_idx_last = src3_idx + seg_num * int'($ceil(src3_emul)) - 1;
-  end  
+  end
 endfunction: get_vec_group_range
 
-function void rvs_transaction::overlap_unalign_correct();      
+function void rvs_transaction::overlap_unalign_correct();
 
   `uvm_info("TR_GEN", "Origin.", UVM_HIGH)
   `uvm_info("TR_GEN",$sformatf("pc=0x%8x, dest_idx=%0d, src3_idx=%0d, src2_idx=%0d, src1_idx=%0d", pc, dest_idx, src3_idx, src2_idx, src1_idx), UVM_HIGH)
   `uvm_info("TR_GEN",$sformatf("pc=0x%8x, dest_eew=%0d, src3_eew=%0d, src2_eew=%0d, src1_eew=%0d", pc, dest_eew, src3_eew, src2_eew, src1_eew), UVM_HIGH)
   `uvm_info("TR_GEN",$sformatf("pc=0x%8x, dest_emul=%0d, src3_emul=%0d, src2_emul=%0d, src1_emul=%0d", pc, dest_emul, src3_emul, src2_emul, src1_emul), UVM_HIGH)
 
-  // Alignment 
+  // Alignment
   if(inst_type inside {LD, ST}) begin
     // Over range of segment load/store
     if(dest_type == VRF && (dest_idx + (seg_num) * int'($ceil(dest_emul)) - 1 > 31)) begin
@@ -1912,7 +1916,7 @@ function void rvs_transaction::overlap_unalign_correct();
     end
     src1_idx = dest_idx + int'($ceil(dest_emul));
   end
-  if(dest_type == VRF && src1_type == VRF && (dest_eew < src1_eew) && (dest_emul > 1 || src1_emul > 1) && 
+  if(dest_type == VRF && src1_type == VRF && (dest_eew < src1_eew) && (dest_emul > 1 || src1_emul > 1) &&
      (dest_idx > src1_idx) && (dest_idx+int'($ceil(dest_emul)) <= src1_idx+int'($ceil(src1_emul)))
   ) begin
     if(vm == 0 && src1_idx == 0 && dest_eew != EEW1)
@@ -1929,11 +1933,11 @@ function void rvs_transaction::overlap_unalign_correct();
     dest_idx = int'($ceil(dest_emul));
   end
   if(inst_type == ALU && alu_inst == VMUNARY0 && src1_idx inside {VMSBF, VMSOF, VMSIF} && dest_idx == src2_idx) begin
-    if(dest_idx === 31) begin 
+    if(dest_idx === 31) begin
       if(vm === 0) dest_idx = 1;
       else dest_idx = 0;
     end else begin
-      dest_idx++; 
+      dest_idx++;
     end
   end
   if(inst_type == ALU && alu_inst == VMUNARY0 && src1_idx inside {VIOTA} && src2_idx inside {[dest_idx:dest_idx+int'($ceil(dest_emul))-1]}) begin
@@ -1943,8 +1947,8 @@ function void rvs_transaction::overlap_unalign_correct();
   // When nf>1, vd cannot overlap any part of vs2.
   // When nf=1, overlap rule follows with normal check(Ch 31.5.1).
   if(inst_type inside {LD} && lsu_mop inside {LSU_UI, LSU_OI} && lsu_nf inside {NF2, NF3, NF4, NF5, NF6, NF7, NF8}) begin
-    if(dest_type == VRF && src2_type == VRF && 
-      ((src2_idx >= dest_idx) && (src2_idx <= dest_idx+(seg_num)*int'($ceil(dest_emul))-1) || 
+    if(dest_type == VRF && src2_type == VRF &&
+      ((src2_idx >= dest_idx) && (src2_idx <= dest_idx+(seg_num)*int'($ceil(dest_emul))-1) ||
        (dest_idx >= src2_idx) && (dest_idx <= src2_idx+int'($ceil(src2_emul))-1))
     ) begin
       int src2_idx_temp;
@@ -1953,7 +1957,7 @@ function void rvs_transaction::overlap_unalign_correct();
         src2_idx_temp = src2_idx_temp - src2_idx_temp % int'($ceil(src2_emul));
         src2_idx = src2_idx_temp;
       end else begin
-        src2_idx_temp = int'(dest_idx) + (seg_num)*int'($ceil(dest_emul)); 
+        src2_idx_temp = int'(dest_idx) + (seg_num)*int'($ceil(dest_emul));
         src2_idx_temp = src2_idx_temp + int'($ceil(src2_emul)) - src2_idx_temp % int'($ceil(src2_emul));
         if(src2_idx_temp<32) begin
           src2_idx = src2_idx_temp;
@@ -1964,20 +1968,20 @@ function void rvs_transaction::overlap_unalign_correct();
       `uvm_info("TR_GEN",$sformatf("pc=0x%8x, dest_idx=%0d, src3_idx=%0d, src2_idx=%0d, src1_idx=%0d, corrected for indexed seg load overlap.", pc, dest_idx, src3_idx, src2_idx, src1_idx), UVM_HIGH)
     end
   end
-  // For vcompress/vrgather/vslideup, vd cannot overlap vector source reg-group 
+  // For vcompress/vrgather/vslideup, vd cannot overlap vector source reg-group
   if(inst_type == ALU && alu_inst inside {VCOMPRESS,VSLIDEUP_RGATHEREI16,VRGATHER,VSLIDE1UP}) begin
     // vd overlap vs2
-    if(dest_type == VRF && src2_type == VRF && 
+    if(dest_type == VRF && src2_type == VRF &&
       ((dest_idx >= src2_idx) && (dest_idx <= src2_idx+int'($ceil(src2_emul))-1) ||
        (src2_idx >= dest_idx) && (src2_idx <= dest_idx+int'($ceil(dest_emul))-1)
-      )) begin 
+      )) begin
       int src2_idx_temp;
       src2_idx_temp = int'(dest_idx) - int'($ceil(src2_emul))-1;
       if(src2_idx_temp>=0) begin
         src2_idx_temp = src2_idx_temp - src2_idx_temp % int'($ceil(src2_emul));
         src2_idx = src2_idx_temp;
       end else begin
-        src2_idx_temp = int'(dest_idx) + int'($ceil(dest_emul)); 
+        src2_idx_temp = int'(dest_idx) + int'($ceil(dest_emul));
         src2_idx_temp = src2_idx_temp + int'($ceil(src2_emul)) - src2_idx_temp % int'($ceil(src2_emul));
         if(src2_idx_temp<32) begin
           src2_idx = src2_idx_temp;
@@ -1987,17 +1991,17 @@ function void rvs_transaction::overlap_unalign_correct();
       end
     end
     // vd overlap vs1
-    if(dest_type == VRF && src1_type == VRF && 
+    if(dest_type == VRF && src1_type == VRF &&
       ((dest_idx >= src1_idx) && (dest_idx <= src1_idx+int'($ceil(src1_emul))-1) ||
        (src1_idx >= dest_idx) && (src1_idx <= dest_idx+int'($ceil(dest_emul))-1)
-      )) begin 
+      )) begin
       int src1_idx_temp;
       src1_idx_temp = int'(dest_idx) - int'($ceil(src1_emul)) - 1;
       if(src1_idx_temp>=0) begin
         src1_idx_temp = src1_idx_temp - src1_idx_temp % int'($ceil(src1_emul));
         src1_idx = src1_idx_temp;
       end else begin
-        src1_idx_temp = int'(dest_idx) + int'($ceil(dest_emul)); 
+        src1_idx_temp = int'(dest_idx) + int'($ceil(dest_emul));
         src1_idx_temp = src1_idx_temp + int'($ceil(src1_emul)) - src1_idx_temp % int'($ceil(src1_emul));
         if(src1_idx_temp<32) begin
           src1_idx = src1_idx_temp;
@@ -2041,7 +2045,7 @@ function bit rvs_transaction::reserve_inst_check();
     return FAIL;
   end
 
-  if((inst_type == ALU && alu_inst == VSMUL_VMVNRR && alu_type == OPIVI) || 
+  if((inst_type == ALU && alu_inst == VSMUL_VMVNRR && alu_type == OPIVI) ||
      (inst_type inside {LD, ST} && lsu_mop == LSU_US && src2_type == FUNC && src2_idx == MASK) ||
      (inst_type inside {LD, ST} && lsu_mop == LSU_US && src2_type == FUNC && src2_idx == WHOLE_REG)
   ) begin
@@ -2052,7 +2056,7 @@ function bit rvs_transaction::reserve_inst_check();
   end else if(
      (inst_type == ALU && alu_inst inside {VWXUNARY0} && alu_type == OPMVX && src2_idx inside {VMV_S_X}) ||
      (inst_type == ALU && alu_inst inside {VMUNARY0} && src1_idx inside {VMSBF, VMSOF, VMSIF, VIOTA}) ||
-     (inst_type == ALU && alu_inst inside {VREDSUM, VREDAND, VREDOR, VREDXOR, VREDMINU, VREDMIN, VREDMAXU, VREDMAX}) || 
+     (inst_type == ALU && alu_inst inside {VREDSUM, VREDAND, VREDOR, VREDXOR, VREDMINU, VREDMIN, VREDMAXU, VREDMAX}) ||
      (inst_type == ALU && alu_inst inside {VWREDSUM, VWREDSUMU}) ||
      (inst_type == ALU && alu_inst inside {VCOMPRESS})
   ) begin
@@ -2087,8 +2091,8 @@ function bit rvs_transaction::reserve_inst_check();
   // OPI
   if(inst_type == ALU && alu_inst[7:6] == 2'b00) begin
     if(alu_inst inside {
-      VSUB, 
-      VMSBC, 
+      VSUB,
+      VMSBC,
       VMINU, VMIN, VMAXU, VMAX,
       VMSLTU, VMSLT,
       VSSUBU, VSSUB
@@ -2097,7 +2101,7 @@ function bit rvs_transaction::reserve_inst_check();
         `uvm_warning("TR/INST_CHECK", $sformatf("pc=0x%8x: alu_type == %s of %s is reserved.", pc, alu_type.name(), alu_inst.name()));
         return FAIL;
       end
-    end 
+    end
 
     if(alu_inst inside {VADC}) begin
       if(vm == 1) begin
@@ -2292,7 +2296,7 @@ function bit rvs_transaction::reserve_inst_check();
 
 // sew/lmul check ------------------------------------------
   if(inst_type == ALU) begin
-    if(alu_inst inside {VWADDU, VWADD, VWADDU_W, VWADD_W, VWSUBU, VWSUB, VWSUBU_W, VWSUB_W, 
+    if(alu_inst inside {VWADDU, VWADD, VWADDU_W, VWADD_W, VWSUBU, VWSUB, VWSUBU_W, VWSUB_W,
                         VWMUL, VWMULU, VWMULSU, VWMACCU, VWMACC, VWMACCUS, VWMACCSU}
     ) begin
       if(!(vsew inside {SEW8,SEW16})) begin
@@ -2304,14 +2308,14 @@ function bit rvs_transaction::reserve_inst_check();
         return FAIL;
       end
     end
-    
+
     if(alu_inst inside {VWREDSUMU, VWREDSUM}) begin
       if(!(vsew inside {SEW8,SEW16})) begin
         `uvm_warning("TR/INST_CHECK", $sformatf("pc=0x%8x: vsew == %s of %s is reserved.", pc, vsew.name(), alu_inst.name()));
         return FAIL;
       end
     end
-    
+
     if(alu_inst inside {VNSRL, VNSRA, VNCLIPU, VNCLIP}) begin
       if(!(vsew inside {SEW8,SEW16})) begin
         `uvm_warning("TR/INST_CHECK", $sformatf("pc=0x%8x: vsew == %s of %s is reserved.", pc, vsew.name(), alu_inst.name()));
@@ -2364,7 +2368,7 @@ function bit rvs_transaction::reserve_inst_check();
   if(inst_type inside {LD, ST} && !(lsu_mop == LSU_US && src2_idx inside {MASK, WHOLE_REG})) begin
     // lsu_eew:sew = 1:1
     if(lsu_width == LSU_8BIT  && vsew == SEW8  ||
-       lsu_width == LSU_16BIT && vsew == SEW16 || 
+       lsu_width == LSU_16BIT && vsew == SEW16 ||
        lsu_width == LSU_32BIT && vsew == SEW32
     ) begin
       if(!(vlmul inside {LMUL1_4, LMUL1_2, LMUL1, LMUL2, LMUL4, LMUL8})) begin
@@ -2380,10 +2384,10 @@ function bit rvs_transaction::reserve_inst_check();
            (lsu_nf == NF5) && !(vlmul inside {LMUL1_4, LMUL1_2, LMUL1                     }) ||
            (lsu_nf == NF6) && !(vlmul inside {LMUL1_4, LMUL1_2, LMUL1                     }) ||
            (lsu_nf == NF7) && !(vlmul inside {LMUL1_4, LMUL1_2, LMUL1                     }) ||
-           (lsu_nf == NF8) && !(vlmul inside {LMUL1_4, LMUL1_2, LMUL1                     }) 
+           (lsu_nf == NF8) && !(vlmul inside {LMUL1_4, LMUL1_2, LMUL1                     })
         ) begin
-          `uvm_warning("TR/INST_CHECK", 
-                       $sformatf("pc=0x%8x: lsu_nf == %s, vlmul == %s, vsew == %s, lsu_width == %s is reserved.", 
+          `uvm_warning("TR/INST_CHECK",
+                       $sformatf("pc=0x%8x: lsu_nf == %s, vlmul == %s, vsew == %s, lsu_width == %s is reserved.",
                        pc, lsu_nf.name(), vlmul.name(), vsew.name(), lsu_width.name()));
           return FAIL;
         end
@@ -2395,10 +2399,10 @@ function bit rvs_transaction::reserve_inst_check();
            (lsu_nf == NF5) && !(vlmul inside {LMUL1_4, LMUL1_2, LMUL1                     }) ||
            (lsu_nf == NF6) && !(vlmul inside {LMUL1_4, LMUL1_2, LMUL1                     }) ||
            (lsu_nf == NF7) && !(vlmul inside {LMUL1_4, LMUL1_2, LMUL1                     }) ||
-           (lsu_nf == NF8) && !(vlmul inside {LMUL1_4, LMUL1_2, LMUL1                     }) 
+           (lsu_nf == NF8) && !(vlmul inside {LMUL1_4, LMUL1_2, LMUL1                     })
         ) begin
-          `uvm_warning("TR/INST_CHECK", 
-                       $sformatf("pc=0x%8x: lsu_nf == %s, vlmul == %s, vsew == %s, lsu_width == %s is reserved.", 
+          `uvm_warning("TR/INST_CHECK",
+                       $sformatf("pc=0x%8x: lsu_nf == %s, vlmul == %s, vsew == %s, lsu_width == %s is reserved.",
                        pc, lsu_nf.name(), vlmul.name(), vsew.name(), lsu_width.name()));
           return FAIL;
         end
@@ -2420,10 +2424,10 @@ function bit rvs_transaction::reserve_inst_check();
            (lsu_nf == NF5) && !(vlmul inside {         LMUL1_2, LMUL1                     }) ||
            (lsu_nf == NF6) && !(vlmul inside {         LMUL1_2, LMUL1                     }) ||
            (lsu_nf == NF7) && !(vlmul inside {         LMUL1_2, LMUL1                     }) ||
-           (lsu_nf == NF8) && !(vlmul inside {         LMUL1_2, LMUL1                     }) 
+           (lsu_nf == NF8) && !(vlmul inside {         LMUL1_2, LMUL1                     })
         ) begin
-          `uvm_warning("TR/INST_CHECK", 
-                       $sformatf("pc=0x%8x: lsu_nf == %s, vlmul == %s, vsew == %s, lsu_width == %s is reserved.", 
+          `uvm_warning("TR/INST_CHECK",
+                       $sformatf("pc=0x%8x: lsu_nf == %s, vlmul == %s, vsew == %s, lsu_width == %s is reserved.",
                        pc, lsu_nf.name(), vlmul.name(), vsew.name(), lsu_width.name()));
           return FAIL;
         end
@@ -2435,10 +2439,10 @@ function bit rvs_transaction::reserve_inst_check();
            (lsu_nf == NF5) && !(vlmul inside {         LMUL1_2, LMUL1, LMUL2              }) ||
            (lsu_nf == NF6) && !(vlmul inside {         LMUL1_2, LMUL1, LMUL2              }) ||
            (lsu_nf == NF7) && !(vlmul inside {         LMUL1_2, LMUL1, LMUL2              }) ||
-           (lsu_nf == NF8) && !(vlmul inside {         LMUL1_2, LMUL1, LMUL2              }) 
+           (lsu_nf == NF8) && !(vlmul inside {         LMUL1_2, LMUL1, LMUL2              })
         ) begin
-          `uvm_warning("TR/INST_CHECK", 
-                       $sformatf("pc=0x%8x: lsu_nf == %s, vlmul == %s, vsew == %s, lsu_width == %s is reserved.", 
+          `uvm_warning("TR/INST_CHECK",
+                       $sformatf("pc=0x%8x: lsu_nf == %s, vlmul == %s, vsew == %s, lsu_width == %s is reserved.",
                        pc, lsu_nf.name(), vlmul.name(), vsew.name(), lsu_width.name()));
           return FAIL;
         end
@@ -2459,10 +2463,10 @@ function bit rvs_transaction::reserve_inst_check();
            (lsu_nf == NF5) && !(vlmul inside {                  LMUL1                     }) ||
            (lsu_nf == NF6) && !(vlmul inside {                  LMUL1                     }) ||
            (lsu_nf == NF7) && !(vlmul inside {                  LMUL1                     }) ||
-           (lsu_nf == NF8) && !(vlmul inside {                  LMUL1                     }) 
+           (lsu_nf == NF8) && !(vlmul inside {                  LMUL1                     })
         ) begin
-          `uvm_warning("TR/INST_CHECK", 
-                       $sformatf("pc=0x%8x: lsu_nf == %s, vlmul == %s, vsew == %s, lsu_width == %s is reserved.", 
+          `uvm_warning("TR/INST_CHECK",
+                       $sformatf("pc=0x%8x: lsu_nf == %s, vlmul == %s, vsew == %s, lsu_width == %s is reserved.",
                        pc, lsu_nf.name(), vlmul.name(), vsew.name(), lsu_width.name()));
           return FAIL;
         end
@@ -2474,17 +2478,17 @@ function bit rvs_transaction::reserve_inst_check();
            (lsu_nf == NF5) && !(vlmul inside {                  LMUL1, LMUL2, LMUL4       }) ||
            (lsu_nf == NF6) && !(vlmul inside {                  LMUL1, LMUL2, LMUL4       }) ||
            (lsu_nf == NF7) && !(vlmul inside {                  LMUL1, LMUL2, LMUL4       }) ||
-           (lsu_nf == NF8) && !(vlmul inside {                  LMUL1, LMUL2, LMUL4       }) 
+           (lsu_nf == NF8) && !(vlmul inside {                  LMUL1, LMUL2, LMUL4       })
         ) begin
-          `uvm_warning("TR/INST_CHECK", 
-                       $sformatf("pc=0x%8x: lsu_nf == %s, vlmul == %s, vsew == %s, lsu_width == %s is reserved.", 
+          `uvm_warning("TR/INST_CHECK",
+                       $sformatf("pc=0x%8x: lsu_nf == %s, vlmul == %s, vsew == %s, lsu_width == %s is reserved.",
                        pc, lsu_nf.name(), vlmul.name(), vsew.name(), lsu_width.name()));
           return FAIL;
         end
       end
     end
     // lsu_eew:sew = 2:1
-    if(lsu_width == LSU_16BIT && vsew == SEW8 || 
+    if(lsu_width == LSU_16BIT && vsew == SEW8 ||
        lsu_width == LSU_32BIT && vsew == SEW16) begin
       if(!(vlmul inside {LMUL1_4, LMUL1_2, LMUL1, LMUL2, LMUL4})) begin
         `uvm_warning("TR/INST_CHECK", $sformatf("pc=0x%8x: vlmul == %s, vsew == %s, lsu_width == %s is reserved.", pc, vlmul.name(), vsew.name(), lsu_width.name()));
@@ -2499,10 +2503,10 @@ function bit rvs_transaction::reserve_inst_check();
            (lsu_nf == NF5) && !(vlmul inside {LMUL1_4, LMUL1_2, LMUL1                     }) ||
            (lsu_nf == NF6) && !(vlmul inside {LMUL1_4, LMUL1_2, LMUL1                     }) ||
            (lsu_nf == NF7) && !(vlmul inside {LMUL1_4, LMUL1_2, LMUL1                     }) ||
-           (lsu_nf == NF8) && !(vlmul inside {LMUL1_4, LMUL1_2, LMUL1                     }) 
+           (lsu_nf == NF8) && !(vlmul inside {LMUL1_4, LMUL1_2, LMUL1                     })
         ) begin
-          `uvm_warning("TR/INST_CHECK", 
-                       $sformatf("pc=0x%8x: lsu_nf == %s, vlmul == %s, vsew == %s, lsu_width == %s is reserved.", 
+          `uvm_warning("TR/INST_CHECK",
+                       $sformatf("pc=0x%8x: lsu_nf == %s, vlmul == %s, vsew == %s, lsu_width == %s is reserved.",
                        pc, lsu_nf.name(), vlmul.name(), vsew.name(), lsu_width.name()));
           return FAIL;
         end
@@ -2514,10 +2518,10 @@ function bit rvs_transaction::reserve_inst_check();
            (lsu_nf == NF5) && !(vlmul inside {LMUL1_4, LMUL1_2                            }) ||
            (lsu_nf == NF6) && !(vlmul inside {LMUL1_4, LMUL1_2                            }) ||
            (lsu_nf == NF7) && !(vlmul inside {LMUL1_4, LMUL1_2                            }) ||
-           (lsu_nf == NF8) && !(vlmul inside {LMUL1_4, LMUL1_2                            }) 
+           (lsu_nf == NF8) && !(vlmul inside {LMUL1_4, LMUL1_2                            })
         ) begin
-          `uvm_warning("TR/INST_CHECK", 
-                       $sformatf("pc=0x%8x: lsu_nf == %s, vlmul == %s, vsew == %s, lsu_width == %s is reserved.", 
+          `uvm_warning("TR/INST_CHECK",
+                       $sformatf("pc=0x%8x: lsu_nf == %s, vlmul == %s, vsew == %s, lsu_width == %s is reserved.",
                        pc, lsu_nf.name(), vlmul.name(), vsew.name(), lsu_width.name()));
           return FAIL;
         end
@@ -2538,10 +2542,10 @@ function bit rvs_transaction::reserve_inst_check();
            (lsu_nf == NF5) && !(vlmul inside {LMUL1_4, LMUL1_2, LMUL1                     }) ||
            (lsu_nf == NF6) && !(vlmul inside {LMUL1_4, LMUL1_2, LMUL1                     }) ||
            (lsu_nf == NF7) && !(vlmul inside {LMUL1_4, LMUL1_2, LMUL1                     }) ||
-           (lsu_nf == NF8) && !(vlmul inside {LMUL1_4, LMUL1_2, LMUL1                     }) 
+           (lsu_nf == NF8) && !(vlmul inside {LMUL1_4, LMUL1_2, LMUL1                     })
         ) begin
-          `uvm_warning("TR/INST_CHECK", 
-                       $sformatf("pc=0x%8x: lsu_nf == %s, vlmul == %s, vsew == %s, lsu_width == %s is reserved.", 
+          `uvm_warning("TR/INST_CHECK",
+                       $sformatf("pc=0x%8x: lsu_nf == %s, vlmul == %s, vsew == %s, lsu_width == %s is reserved.",
                        pc, lsu_nf.name(), vlmul.name(), vsew.name(), lsu_width.name()));
           return FAIL;
         end
@@ -2553,10 +2557,10 @@ function bit rvs_transaction::reserve_inst_check();
            (lsu_nf == NF5) && !(vlmul inside {LMUL1_4                                     }) ||
            (lsu_nf == NF6) && !(vlmul inside {LMUL1_4                                     }) ||
            (lsu_nf == NF7) && !(vlmul inside {LMUL1_4                                     }) ||
-           (lsu_nf == NF8) && !(vlmul inside {LMUL1_4                                     }) 
+           (lsu_nf == NF8) && !(vlmul inside {LMUL1_4                                     })
         ) begin
-          `uvm_warning("TR/INST_CHECK", 
-                       $sformatf("pc=0x%8x: lsu_nf == %s, vlmul == %s, vsew == %s, lsu_width == %s is reserved.", 
+          `uvm_warning("TR/INST_CHECK",
+                       $sformatf("pc=0x%8x: lsu_nf == %s, vlmul == %s, vsew == %s, lsu_width == %s is reserved.",
                        pc, lsu_nf.name(), vlmul.name(), vsew.name(), lsu_width.name()));
           return FAIL;
         end
@@ -2612,16 +2616,16 @@ function bit rvs_transaction::reserve_inst_check();
   if(dest_type == VRF && src2_type == VRF && (dest_eew > src2_eew) && (dest_emul > 1 || src2_emul > 1) &&
      (src2_idx_base >= dest_idx_base) && (src2_idx_last < dest_idx_last)
   ) begin
-    `uvm_warning("TR/INST_CHECK", 
-                 $sformatf("pc=0x%8x: Ch31.5.2. The lowest part of dest vrf(v%0d~v%0d) overlaps the src2 vrf(v%0d~v%0d) in a widen instruction.", 
+    `uvm_warning("TR/INST_CHECK",
+                 $sformatf("pc=0x%8x: Ch31.5.2. The lowest part of dest vrf(v%0d~v%0d) overlaps the src2 vrf(v%0d~v%0d) in a widen instruction.",
                  pc, dest_idx_base, dest_idx_last, src2_idx_base, src2_idx_last));
     return FAIL;
   end
   if(dest_type == VRF && src2_type == VRF && (dest_eew < src2_eew) && (dest_emul > 1 || src2_emul > 1) &&
      (dest_idx_base > src2_idx_base) && (dest_idx_last <= src2_idx_last)
   ) begin
-    `uvm_warning("TR/INST_CHECK", 
-                 $sformatf("pc=0x%8x: Ch31.5.2. The dest vrf(v%0d~v%0d) overlaps the highest part of src2 vrf(v%0d~v%0d) in a widen instruction.", 
+    `uvm_warning("TR/INST_CHECK",
+                 $sformatf("pc=0x%8x: Ch31.5.2. The dest vrf(v%0d~v%0d) overlaps the highest part of src2 vrf(v%0d~v%0d) in a widen instruction.",
                  pc, dest_idx_base, dest_idx_last, src2_idx_base, src2_idx_last));
     return FAIL;
   end
@@ -2629,16 +2633,16 @@ function bit rvs_transaction::reserve_inst_check();
   if(dest_type == VRF && src1_type == VRF && (dest_eew > src1_eew) && (dest_emul > 1 || src1_emul > 1) &&
      (src1_idx_base >= dest_idx_base) && (src1_idx_last < dest_idx_last)
   ) begin
-    `uvm_warning("TR/INST_CHECK", 
-                 $sformatf("pc=0x%8x: Ch31.5.2. The lowest part of dest vrf(v%0d~v%0d) overlaps the src1 vrf(v%0d~v%0d) in a widen instruction.", 
+    `uvm_warning("TR/INST_CHECK",
+                 $sformatf("pc=0x%8x: Ch31.5.2. The lowest part of dest vrf(v%0d~v%0d) overlaps the src1 vrf(v%0d~v%0d) in a widen instruction.",
                  pc, dest_idx_base, dest_idx_last, src1_idx_base, src1_idx_last));
     return FAIL;
   end
   if(dest_type == VRF && src1_type == VRF && (dest_eew < src1_eew) && (dest_emul > 1 || src1_emul > 1) &&
      (dest_idx_base > src1_idx_base) && (dest_idx_last <= src1_idx_last)
   ) begin
-    `uvm_warning("TR/INST_CHECK", 
-                 $sformatf("pc=0x%8x: Ch31.5.2. The dest vrf(v%0d~v%0d) overlaps the highest part of src1 vrf(v%0d~v%0d) in a widen instruction.", 
+    `uvm_warning("TR/INST_CHECK",
+                 $sformatf("pc=0x%8x: Ch31.5.2. The dest vrf(v%0d~v%0d) overlaps the highest part of src1 vrf(v%0d~v%0d) in a widen instruction.",
                  pc, dest_idx_base, dest_idx_last, src1_idx_base, src1_idx_last));
     return FAIL;
   end
@@ -2648,14 +2652,14 @@ function bit rvs_transaction::reserve_inst_check();
     return FAIL;
   end
   if(inst_type == ALU && alu_inst == VMUNARY0 && src1_idx_base inside {VMSBF, VMSOF, VMSIF} && dest_idx_base == src2_idx_base) begin
-    `uvm_warning("TR/INST_CHECK", 
-                 $sformatf("pc=0x%8x: In vmsf/vmsof/vmsif, dest vrf(v%0d~v%0d) can't overlap src2 vrf(v%0d~v%0d).", 
+    `uvm_warning("TR/INST_CHECK",
+                 $sformatf("pc=0x%8x: In vmsf/vmsof/vmsif, dest vrf(v%0d~v%0d) can't overlap src2 vrf(v%0d~v%0d).",
                  pc, dest_idx_base, dest_idx_last, src2_idx_base, src2_idx_last));
     return FAIL;
   end
   if(inst_type == ALU && alu_inst == VMUNARY0 && src1_idx_base inside {VIOTA} && src2_idx_base inside {[dest_idx_base:dest_idx_last]}) begin
-    `uvm_warning("TR/INST_CHECK", 
-                 $sformatf("pc=0x%8x: In viota, dest vrf(v%0d~v%0d) can't overlap src2 vrf(v%0d~v%0d).", 
+    `uvm_warning("TR/INST_CHECK",
+                 $sformatf("pc=0x%8x: In viota, dest vrf(v%0d~v%0d) can't overlap src2 vrf(v%0d~v%0d).",
                  pc, dest_idx_base, dest_idx_last, src2_idx_base, src2_idx_last));
     return FAIL;
   end
@@ -2663,41 +2667,41 @@ function bit rvs_transaction::reserve_inst_check();
   // When nf>1, vd cannot overlap any part of vs2.
   // When nf=1, overlap rule follows with normal check(Ch 31.5.1).
   if(inst_type inside {LD} && lsu_mop inside {LSU_UI, LSU_OI} && lsu_nf inside {NF2, NF3, NF4, NF5, NF6, NF7, NF8}) begin
-    if(dest_type == VRF && src2_type == VRF && 
-      ((src2_idx_base inside {[dest_idx_base:dest_idx_last]}) || 
+    if(dest_type == VRF && src2_type == VRF &&
+      ((src2_idx_base inside {[dest_idx_base:dest_idx_last]}) ||
        (dest_idx_base inside {[src2_idx_base:src2_idx_last]}))
     ) begin
-      `uvm_warning("TR/INST_CHECK", 
+      `uvm_warning("TR/INST_CHECK",
                    $sformatf("pc=0x%8x: The dest vrf(v%0d~v%0d) overlaps src2 vrf(v%0d~v%0d) in indexed load/store.",
                    pc, dest_idx_base, dest_idx_last, src2_idx_base, src2_idx_last));
       return FAIL;
     end
-    if(dest_type == VRF && src1_type == VRF && 
-      ((src1_idx_base inside {[dest_idx_base:dest_idx_last]}) || 
+    if(dest_type == VRF && src1_type == VRF &&
+      ((src1_idx_base inside {[dest_idx_base:dest_idx_last]}) ||
        (dest_idx_base inside {[src1_idx_base:src1_idx_last]}))
     ) begin
-      `uvm_warning("TR/INST_CHECK", 
+      `uvm_warning("TR/INST_CHECK",
                    $sformatf("pc=0x%8x: The dest vrf(v%0d~v%0d) overlaps src1 vrf(v%0d~v%0d) in indexed load/store.",
                    pc, dest_idx_base, dest_idx_last, src1_idx_base, src1_idx_last));
       return FAIL;
     end
   end
-  // For vcompress/vrgather/vslideup, vd cannot overlap vector source reg-group 
+  // For vcompress/vrgather/vslideup, vd cannot overlap vector source reg-group
   if(inst_type == ALU && alu_inst inside {VCOMPRESS,VSLIDEUP_RGATHEREI16,VRGATHER,VSLIDE1UP}) begin
-    if(dest_type == VRF && src2_type == VRF && 
-      ((src2_idx_base inside {[dest_idx_base:dest_idx_last]}) || 
+    if(dest_type == VRF && src2_type == VRF &&
+      ((src2_idx_base inside {[dest_idx_base:dest_idx_last]}) ||
        (dest_idx_base inside {[src2_idx_base:src2_idx_last]}))
-    ) begin 
-      `uvm_warning("TR/INST_CHECK", 
+    ) begin
+      `uvm_warning("TR/INST_CHECK",
                    $sformatf("pc=0x%8x: The dest vrf(v%0d~v%0d) overlaps src2 vrf(v%0d~v%0d) in %s.",
                    pc, dest_idx_base, dest_idx_last, src2_idx_base, src2_idx_last, alu_inst.name()));
       return FAIL;
     end
-    if(dest_type == VRF && src1_type == VRF && 
-      ((src1_idx_base inside {[dest_idx_base:dest_idx_last]}) || 
+    if(dest_type == VRF && src1_type == VRF &&
+      ((src1_idx_base inside {[dest_idx_base:dest_idx_last]}) ||
        (dest_idx_base inside {[src1_idx_base:src1_idx_last]}))
-    ) begin 
-      `uvm_warning("TR/INST_CHECK", 
+    ) begin
+      `uvm_warning("TR/INST_CHECK",
                    $sformatf("pc=0x%8x: The dest vrf(v%0d~v%0d) overlaps src1 vrf(v%0d~v%0d) in %s.",
                    pc, dest_idx_base, dest_idx_last, src1_idx_base, src1_idx_last, alu_inst.name()));
       return FAIL;
@@ -2763,17 +2767,17 @@ function void rvs_transaction::asm_string_gen();
           end else begin
             inst = $sformatf("%suxseg%0dei%0d", inst, lsu_nf+1, lsu_eew);
           end
-        end       
+        end
         LSU_OI: begin
           if(this.lsu_nf == NF1) begin
             inst = $sformatf("%soxei%0d", inst, lsu_eew);
           end else begin
             inst = $sformatf("%soxseg%0dei%0d", inst, lsu_nf+1, lsu_eew);
           end
-        end      
+        end
       endcase
-    end 
-    ALU: begin 
+    end
+    ALU: begin
       if(alu_inst inside {VWADDU_W, VWADD_W, VWSUBU_W, VWSUB_W}) begin
         inst = this.alu_inst.name();
         inst = inst.substr(0,inst.len()-3);
@@ -2826,15 +2830,15 @@ function void rvs_transaction::asm_string_gen();
   // src1
   case(inst_type)
     LD, ST: begin
-      suf1 = ""; src1 = $sformatf("(x%0d)",this.src1_idx); 
+      suf1 = ""; src1 = $sformatf("(x%0d)",this.src1_idx);
     end
     ALU: begin
       case(this.src1_type)
-        VRF: begin 
+        VRF: begin
           if(inst_type == ALU && alu_inst inside {VMAND, VMOR, VMXOR, VMORN, VMNAND, VMNOR, VMANDN, VMXNOR}) begin
-            suf1 = "m"; src1 = $sformatf("v%0d",this.src1_idx); 
+            suf1 = "m"; src1 = $sformatf("v%0d",this.src1_idx);
           end else begin
-            suf1 = "v"; src1 = $sformatf("v%0d",this.src1_idx); 
+            suf1 = "v"; src1 = $sformatf("v%0d",this.src1_idx);
           end
         end
         SCALAR: begin suf1 = "s"; src1 = $sformatf("v%0d",this.src1_idx); end
@@ -2862,35 +2866,35 @@ function void rvs_transaction::asm_string_gen();
         VRF: begin suf2 = ""; src2 = $sformatf("v%0d",this.src2_idx); end
         XRF: begin suf2 = ""; src2 = $sformatf("x%0d",this.src2_idx); end
         FUNC: begin suf2 = ""; src2 = ""; end
-        UNUSE: begin suf2 = ""; src2 = ""; end 
+        UNUSE: begin suf2 = ""; src2 = ""; end
         default: begin suf2 = "?"; src2 = "?"; end
       endcase
     end
     ALU: begin
       case(this.src2_type)
-        VRF: begin 
+        VRF: begin
           if(inst_type == ALU && alu_inst inside {VWADDU_W, VWADD_W, VWSUBU_W, VWSUB_W}) begin
-            suf2 = "w"; src2 = $sformatf("v%0d",this.src2_idx); 
+            suf2 = "w"; src2 = $sformatf("v%0d",this.src2_idx);
           end else if(inst_type == ALU && alu_inst inside {VMAND, VMOR, VMXOR, VMORN, VMNAND, VMNOR, VMANDN, VMXNOR,
                                                            VMUNARY0}) begin
-            suf2 = "m"; src2 = $sformatf("v%0d",this.src2_idx); 
+            suf2 = "m"; src2 = $sformatf("v%0d",this.src2_idx);
           end else if(inst_type == ALU && alu_inst inside {VWXUNARY0}) begin
             if(src1_type == FUNC && src1_idx inside {VCPOP, VFIRST}) begin
-              suf2 = "m"; src2 = $sformatf("v%0d",this.src2_idx); 
+              suf2 = "m"; src2 = $sformatf("v%0d",this.src2_idx);
             end else if(src1_type == FUNC && src1_idx inside {VMV_X_S}) begin // vmv.x.s
-              suf2 = "s"; src2 = $sformatf("v%0d",this.src2_idx); 
+              suf2 = "s"; src2 = $sformatf("v%0d",this.src2_idx);
             end else begin
-              suf2 = "v"; src2 = $sformatf("v%0d",this.src2_idx); 
+              suf2 = "v"; src2 = $sformatf("v%0d",this.src2_idx);
             end
           end else begin
-            suf2 = "v"; src2 = $sformatf("v%0d",this.src2_idx); 
+            suf2 = "v"; src2 = $sformatf("v%0d",this.src2_idx);
           end
         end
         SCALAR: begin suf2 = "s"; src2 = $sformatf("v%0d",this.src2_idx); end
         XRF: begin suf2 = "x"; src2 = $sformatf("x%0d",this.src2_idx); end
         IMM: begin suf2 = "i"; src2 = $sformatf("%0d",$signed(this.src2_idx)); end
-        UNUSE: begin 
-            if(this.src1_idx ==  VID) begin suf2 = ""; src2 = ""; end 
+        UNUSE: begin
+            if(this.src1_idx ==  VID) begin suf2 = ""; src2 = ""; end
         end
         FUNC: begin
           suf2 = ""; src2 = "";
@@ -2957,13 +2961,13 @@ function void rvs_transaction::asm_string_gen();
 
   // asm string
   if(inst_type == ST) dest = src3;
-  if(this.vm) 
-    if(src1_type == FUNC) 
+  if(this.vm)
+    if(src1_type == FUNC)
       this.asm_string = $sformatf("%s.%s %s, %s %s",inst, suff, dest, src2,  comm);
     else
       this.asm_string = $sformatf("%s.%s %s, %s, %s %s",inst, suff, dest, src2, src1, comm);
   else
-    if(src1_type == FUNC) 
+    if(src1_type == FUNC)
       this.asm_string = $sformatf("%s.%s %s, %s, %s %s",inst, suff, dest, src2, src0, comm);
     else
       this.asm_string = $sformatf("%s.%s %s, %s, %s, %s %s",inst, suff, dest, src2, src1, src0, comm);
@@ -2991,7 +2995,7 @@ function bit rvs_transaction::compare_inst(ref rvs_transaction inst);
   end else begin
     same_bin_inst = DIFF;
   end
-  
+
   if(this.rs1_data === inst.rs1_data && this.rs2_data === inst.rs2_data) begin
     same_rs = SAME;
   end else begin
@@ -2999,6 +3003,6 @@ function bit rvs_transaction::compare_inst(ref rvs_transaction inst);
   end
 
   return (same_vcsr && same_bin_inst && same_rs);
-    
+
 endfunction: compare_inst
 `endif // RVS_TRANSACTION__SV

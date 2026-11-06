@@ -6,7 +6,45 @@
 `include "rvv_backend_sva.svh"
 `endif
 
-module rvv_backend
+module rvv_backend#(
+  parameter int unsigned N = 4,
+  parameter int unsigned VLEN = `VLEN,
+  localparam int unsigned VSTART_WIDTH = `VSTART_WIDTH(VLEN),
+  localparam int unsigned VLENB = `VLENB(VLEN),
+  parameter type RegDataT=logic [31:0],
+  localparam int unsigned XLEN = $bits(RegDataT),
+  localparam type VRegDataT = logic [VLEN-1:0],
+  parameter type RegAddrT = logic [4:0],
+  localparam type MaskT = logic [VLENB-1:0],
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  // Type Aliases
+  localparam type RVVConfigState = `CONFIG_STATE_t(VLEN),
+  localparam type RVVCmd = `CMD_t(VLEN, XLEN, PC_WIDTH),
+  localparam type RVVSEW = RVVSEW_e,
+  localparam type LCMD_t = `LCMD_t(VLEN, XLEN, PC_WIDTH),
+  localparam type UOP_QUEUE_t = `UOP_QUEUE_t(VLEN, XLEN, PC_WIDTH),
+  localparam type ALU_RS_t = `ALU_RS_t(VLEN, PC_WIDTH),
+  localparam type PMT_RDT_RS_t = `PMT_RDT_RS_t(VLEN, XLEN, PC_WIDTH),
+  localparam type MUL_RS_t = `MUL_RS_t(VLEN, PC_WIDTH),
+  localparam type DIV_RS_t = `DIV_RS_t(VLEN, PC_WIDTH),
+  localparam type FALU_RS_t = `FALU_RS_t(VLEN, XLEN, PC_WIDTH),
+`ifdef ZVT_ON
+  localparam type ZVT_RS_t = `ZVT_RS_t(VLEN, PC_WIDTH),
+  localparam type VMERT_t = `VMERT_t(VLEN, PC_WIDTH),
+  localparam type UOP_VME2LSU_t = `UOP_VME2LSU_t(VLEN, PC_WIDTH),
+  localparam type UOP_LSU2VME_t = `UOP_LSU2VME_t(VLEN, PC_WIDTH),
+`endif
+  localparam type UOP_RVV2LSU_t = `UOP_RVV2LSU_t(VLEN, PC_WIDTH),
+  localparam type LSU_MAP_INFO_t = `LSU_MAP_INFO_t(PC_WIDTH),
+  localparam type UOP_LSU_t = `UOP_LSU_t(VLEN, PC_WIDTH),
+  localparam type PU2ROB_t = `PU2ROB_t(VLEN, PC_WIDTH),
+  localparam type RT2VRF_t = `RT2VRF_t(VLEN, PC_WIDTH),
+  localparam type UOP_LSU2RVV_t = `UOP_LSU2RVV_t(VLEN, PC_WIDTH),
+  localparam type DP2ROB_t = `DP2ROB_t(VLEN, PC_WIDTH),
+  localparam type ROB2DP_t = `ROB2DP_t(VLEN, PC_WIDTH),
+  localparam type ROB2RT_t = `ROB2RT_t(VLEN, PC_WIDTH),
+  localparam type RT2RVS_t = `RT2RVS_t(XLEN, PC_WIDTH)
+)
 (
     clk,
     rst_n,
@@ -66,7 +104,7 @@ module rvv_backend
 `endif
 
     trap_valid_rvs2rvv,
-    trap_ready_rvv2rvs,    
+    trap_ready_rvv2rvs,
 
     vcsr_valid,
     vector_csr,
@@ -81,11 +119,11 @@ module rvv_backend
     input   logic                                 clk;
     input   logic                                 rst_n;
 
-// vector instruction and scalar operand input. 
-    input   logic         [`ISSUE_LANE-1:0]       insts_valid_rvs2cq;
-    input   RVVCmd        [`ISSUE_LANE-1:0]       insts_rvs2cq;
-    output  logic         [`ISSUE_LANE-1:0]       insts_ready_cq2rvs;  
-    output  logic         [$clog2(`CQ_DEPTH):0]   remaining_count_cq2rvs; 
+// vector instruction and scalar operand input.
+    input   logic         [N-1:0]       insts_valid_rvs2cq;
+    input   RVVCmd        [N-1:0]       insts_rvs2cq;
+    output  logic         [N-1:0]       insts_ready_cq2rvs;
+    output  logic         [$clog2(`CQ_DEPTH):0]   remaining_count_cq2rvs;
 
 // load/store unit interface
   // RVV send LSU uop to RVS
@@ -112,20 +150,20 @@ module rvv_backend
     output VMERT_t                                vmeRt;
     input  logic                                  vmeRtRdy;
 `endif
-// RT to XRF. 
+// RT to XRF.
     output  logic         [`NUM_RT_UOP-1:0]       rt_xrf_valid_rvv2rvs;
     output  RT2RVS_t      [`NUM_RT_UOP-1:0]       rt_rvs_rvv2rvs;
     input   logic         [`NUM_RT_UOP-1:0]       rt_rvs_ready_rvs2rvv;
 
-// RT to FRF. 
+// RT to FRF.
 `ifdef ZVE32F_ON
     output  logic [`NUM_RT_UOP-1:0]                     async_frd_valid;
   `ifdef TB_SUPPORT
-    output  logic [`NUM_RT_UOP-1:0][`PC_WIDTH-1:0]      async_frd_pc;
+    output  logic [`NUM_RT_UOP-1:0][PC_WIDTH-1:0]       async_frd_pc;
   `endif
     output  logic [`NUM_RT_UOP-1:0][`ROB_TAG_WIDTH-1:0] async_frd_rob_tag;
     output  logic [`NUM_RT_UOP-1:0][`REGIDX_WIDTH-1:0]  async_frd_addr;
-    output  logic [`NUM_RT_UOP-1:0][`XLEN-1:0]          async_frd_data;
+    output  logic [`NUM_RT_UOP-1:0][XLEN-1:0]           async_frd_data;
     input   logic [`NUM_RT_UOP-1:0]                     async_frd_ready;
 `endif
 
@@ -144,7 +182,7 @@ module rvv_backend
 // exception handler
   // trap signal handshake
     input   logic                                 trap_valid_rvs2rvv;
-    output  logic                                 trap_ready_rvv2rvs;    
+    output  logic                                 trap_ready_rvv2rvs;
   // the vcsr of last retired uop in last cycle
     output  logic                                 vcsr_valid;
     output  RVVConfigState                        vector_csr;
@@ -157,14 +195,14 @@ module rvv_backend
 // Once the test is passed, delete TB_SUPPORT and else-block
     output  logic     [`NUM_RT_UOP+`NUM_DE_INST-1:0]  rd_valid_rob2rt_o;
     output  ROB2RT_t  [`NUM_RT_UOP+`NUM_DE_INST-1:0]  rd_rob2rt_o;
-    
+
 // rvv_backend is not active.(IDLE)
     output  logic                                 rvv_idle;
 
 // ---internal signals definition-------------------------------------
   // RVV frontend to command queue
-    logic         [`ISSUE_LANE-1:0]       insts_ready;  
-    logic         [$clog2(`CQ_DEPTH):0]   used_count_cq; 
+    logic         [N-1:0]       insts_ready;
+    logic         [$clog2(`CQ_DEPTH):0]   used_count_cq;
   // Command queue to Decode in DE1 stage
     logic         [`NUM_DE_INST-1:0]      inst_valid_cq2de;
     RVVCmd        [`NUM_DE_INST-1:0]      inst_cq2de;
@@ -199,7 +237,7 @@ module rvv_backend
     logic         [`NUM_DP_UOP-1:0]       rs_valid_dp2alu;
     ALU_RS_t      [`NUM_DP_UOP-1:0]       rs_dp2alu;
     logic         [`NUM_DP_UOP-1:0]       rs_ready_alu2dp;
-    // PMTRDT_RS  
+    // PMTRDT_RS
     logic         [`NUM_DP_UOP-1:0]       rs_valid_dp2pmtrdt;
     PMT_RDT_RS_t  [`NUM_DP_UOP-1:0]       rs_dp2pmtrdt;
     logic         [`NUM_DP_UOP-1:0]       rs_ready_pmtrdt2dp;
@@ -239,7 +277,7 @@ module rvv_backend
     DP2ROB_t      [`NUM_DP_UOP-1:0]       uop_dp2rob;
     logic         [`NUM_DP_UOP-1:0]       uop_ready_rob2dp;
     logic         [`ROB_DEPTH_WIDTH-1:0]  rob_entry_rob2dp;
-  
+
   // RS to excution unit
   // ALU_RS to ALU
     logic         [`NUM_ALU-1:0]          pop_alu2rs;
@@ -269,10 +307,10 @@ module rvv_backend
 `endif
 `ifdef ZVT_ON
   // ZVT_RS to ZVT
-    logic         [`ZVT_LMUL-1:0]         pop_zvt2rs;
-    logic         [`ZVT_LMUL-1:0]         uop_valid_rs2zvt;
-    ZVT_RS_t      [`ZVT_LMUL-1:0]         uop_rs2zvt;
-    logic         [`ZVT_LMUL-1:0]         fifo_almost_empty_rs2zvt;
+    logic         [`ZVT_LMUL(VLEN)-1:0]         pop_zvt2rs;
+    logic         [`ZVT_LMUL(VLEN)-1:0]         uop_valid_rs2zvt;
+    ZVT_RS_t      [`ZVT_LMUL(VLEN)-1:0]         uop_rs2zvt;
+    logic         [`ZVT_LMUL(VLEN)-1:0]         fifo_almost_empty_rs2zvt;
 `endif
   // LSU mapinfo
     logic         [`NUM_LSU-1:0]          mapinfo_valid;
@@ -301,14 +339,14 @@ module rvv_backend
     logic     [`NUM_PU-1:`NUM_PU_NOPINGPONG]  req_ari;
     logic     [`NUM_PU-1:0]                   req_arb;
     logic     [`NUM_PU-1:0]                   grant_arb;
-    PU2ROB_t  [`NUM_PU-1:`NUM_PU_NOPINGPONG]  item_ari; 
-    PU2ROB_t  [`NUM_PU-1:0]                   item_arb; 
+    PU2ROB_t  [`NUM_PU-1:`NUM_PU_NOPINGPONG]  item_ari;
+    PU2ROB_t  [`NUM_PU-1:0]                   item_arb;
     logic     [`NUM_PU-1:`NUM_PU_NOPINGPONG]  res_ff_empty;
   `endif
   // ARB to ROB
     logic         [`NUM_SMPORT-1:0]                   res_valid_arb2rob;
     PU2ROB_t      [`NUM_SMPORT-1:0]                   res_arb2rob;
-    logic         [`NUM_SMPORT-1:0][$clog2(`VLENB):0] res_ff_tail_index;
+    logic         [`NUM_SMPORT-1:0][$clog2(VLENB):0] res_ff_tail_index;
   // ALU result
     logic         [`NUM_ALU-1:0]          res_valid_alu;
     PU2ROB_t      [`NUM_ALU-1:0]          res_alu;
@@ -334,7 +372,7 @@ module rvv_backend
   // LSU result
     logic         [`NUM_LSU-1:0]          	    res_valid_lsu;
     PU2ROB_t      [`NUM_LSU-1:0]          	    res_lsu;
-    logic         [`NUM_LSU-1:0][$clog2(`VLENB):0]  ff_tail_index;
+    logic         [`NUM_LSU-1:0][$clog2(VLENB):0]  ff_tail_index;
     logic         [`NUM_LSU-1:0]          	    res_ready_lsu;
 `ifdef ZVT_ON
   // VME2RVV
@@ -347,12 +385,12 @@ module rvv_backend
     logic                                 zvtFpexpRdy;
 `endif
   // DP to VRF
-    logic [`NUM_DP_VRF-1:0][`REGIDX_WIDTH-1:0]  rd_index_dp2vrf;          
-    logic [`NUM_DP_VRF-1:0][`VLEN-1:0]          rd_data_vrf2dp;
-    logic [`VLEN-1:0]                           v0_mask_vrf2dp;
+    logic [`NUM_DP_VRF-1:0][`REGIDX_WIDTH-1:0]  rd_index_dp2vrf;
+    logic [`NUM_DP_VRF-1:0][VLEN-1:0]          rd_data_vrf2dp;
+    logic [VLEN-1:0]                           v0_mask_vrf2dp;
   // PMT to VRF
-    logic [`REGIDX_WIDTH-1:0]             rd_index_pmt2vrf;          
-    logic [`VLEN-1:0]                     rd_data_vrf2pmt;
+    logic [`REGIDX_WIDTH-1:0]             rd_index_pmt2vrf;
+    logic [VLEN-1:0]                     rd_data_vrf2pmt;
   // ROB to dispatch
     ROB2DP_t      [`ROB_DEPTH-1:0]        uop_rob2dp;
     logic                                 rob_empty;
@@ -366,11 +404,11 @@ module rvv_backend
   // RT to VRF
     logic         [`NUM_RT_UOP-1:0]       wr_valid_rt2vrf;
     RT2VRF_t      [`NUM_RT_UOP-1:0]       wr_data_rt2vrf;
-  
+
   // trap handler
     logic                                 trap_en;
     logic                                 is_trapping;
-    logic                                 trap_ready_rob2rmp;   
+    logic                                 trap_ready_rob2rmp;
     logic                                 trap_flush_rvv;
 
 `ifdef ZVT_ON
@@ -380,14 +418,14 @@ module rvv_backend
 
 `ifdef RVVI_ON
   // 32 VRF value.
-    logic    [`NUM_VRF-1:0][`VLEN-1:0]    vrf_data;
+    logic    [`NUM_VRF-1:0][VLEN-1:0]    vrf_data;
 `endif
 
 // ---code start------------------------------------------------------
   // Command queue
     multi_fifo #(
         .T            (RVVCmd),
-        .M            (`ISSUE_LANE),
+        .M            (N),
         .N            (`NUM_DE_INST),
         .ASYNC_RSTN   (1'b1),
         .DEPTH        (`CQ_DEPTH),
@@ -427,9 +465,12 @@ module rvv_backend
 
   // Decode unit in DE1 stage
     assign inst_valid_cq2de = ~(fifo_almost_empty_cq2de | fifo_almost_full_lcq2de);
-    assign pop_de2cq = inst_valid_cq2de; 
-    
+    assign pop_de2cq = inst_valid_cq2de;
+
     rvv_backend_decode #(
+      .VLEN(VLEN),
+      .RegDataT(RegDataT),
+      .PC_WIDTH(PC_WIDTH)
     ) u_decode_de1 (
       .inst_valid         (inst_valid_cq2de),
       .inst               (inst_cq2de),
@@ -438,7 +479,7 @@ module rvv_backend
       .de2rt_valid      (de2rt_valid),
       .de2rt_data       (de2rt_data)
     );
-  
+
   // Legal Command Queue
     multi_fifo #(
         .T                (LCMD_t),
@@ -474,6 +515,9 @@ module rvv_backend
     assign lcmd_valid_lcq2de = ~fifo_almost_empty_lcq2de;
 
     rvv_backend_decode_de2 #(
+      .VLEN(VLEN),
+      .RegDataT(RegDataT),
+      .PC_WIDTH(PC_WIDTH)
     ) u_decode_de2 (
       .clk                (clk),
       .rst_n              (rst_n),
@@ -515,7 +559,7 @@ module rvv_backend
         .rptr             (),
         .entry_count      ()
     );
-   
+
     assign uop_valid_uop2dp = ~uq_almost_empty;
 
   `ifdef ASSERT_ON
@@ -535,7 +579,10 @@ module rvv_backend
   `endif // ASSERT_ON
 
   // Dispatch unit
-    rvv_backend_dispatch #(
+    rvv_backend_dispatch#(
+      .VLEN(VLEN),
+      .RegDataT(RegDataT),
+      .PC_WIDTH(PC_WIDTH)
     ) u_dispatch (
       // global
         .clk                  (clk),
@@ -549,7 +596,7 @@ module rvv_backend
         .rs_valid_dp2alu      (rs_valid_dp2alu),
         .rs_dp2alu            (rs_dp2alu),
         .rs_ready_alu2dp      (rs_ready_alu2dp),
-        // PMTRDT_RS 
+        // PMTRDT_RS
         .rs_valid_dp2pmtrdt   (rs_valid_dp2pmtrdt),
         .rs_dp2pmtrdt         (rs_dp2pmtrdt),
         .rs_ready_pmtrdt2dp   (rs_ready_pmtrdt2dp),
@@ -757,8 +804,8 @@ module rvv_backend
         .pushRdy        (rs_ready_falu2dp),
         .datain         (rs_dp2falu),
       // read
-        .pop            (pop_falu2rs),       
-        .dataout        (uop_rs2falu),       
+        .pop            (pop_falu2rs),
+        .dataout        (uop_rs2falu),
       // fifo status
         .full           (),
         .almost_full    (),
@@ -777,9 +824,9 @@ module rvv_backend
     multi_fifo #(
         .T              (ZVT_RS_t),
         .M              (`NUM_DP_UOP),
-        .N              (`ZVT_LMUL),
+        .N              (`ZVT_LMUL(VLEN)),
         .ASYNC_RSTN     (1'b1),
-        .DEPTH          (`ZVT_RS_DEPTH),
+        .DEPTH          (`ZVT_RS_DEPTH(VLEN)),
         .CHAOS_PUSH     (1'b1)
     ) u_zvt_rs (
       // global
@@ -790,8 +837,8 @@ module rvv_backend
         .datain         (rs_dp2zvt),
         .pushRdy        (),
       // read
-        .pop            (pop_zvt2rs),       
-        .dataout        (uop_rs2zvt),       
+        .pop            (pop_zvt2rs),
+        .dataout        (uop_rs2zvt),
       // fifo status
         .full           (),
         .almost_full    (zvt_rs_almost_full),
@@ -902,7 +949,7 @@ module rvv_backend
     assign uop_lsu_ready_rvv2lsu = trap_flush_rvv ? 'b0 : uop_lsu_ready;
 `else
   // trap handler
-    // make sure all lsu uops before the trapping uop have been pushed into LSU_RES_FIFO 
+    // make sure all lsu uops before the trapping uop have been pushed into LSU_RES_FIFO
     assign trap_en = trap_valid_rvs2rvv & (uop_lsu_valid_lsu2rvv=='b0) & (!lsu_res_almost_full[0]) & (!is_trapping);
 
     cdffr
@@ -918,10 +965,10 @@ module rvv_backend
 
   // LSU feedback result
     assign uop_lsu_valid = trap_en ? 'b1 : uop_lsu_valid_lsu2rvv;
-    
+
     assign uop_lsu[0].trap_valid  = trap_en;
     assign uop_lsu[0].uop_lsu2rvv = trap_en ? 'b0 : uop_lsu_lsu2rvv[0];
-    
+
     for (genvar i=1;i<`NUM_LSU;i++) begin: get_uop_lsu
       assign uop_lsu[i].trap_valid = 'b0;
       assign uop_lsu[i].uop_lsu2rvv = uop_lsu_lsu2rvv[i];
@@ -963,7 +1010,10 @@ module rvv_backend
   // PU, Process unit
     // ALU
     assign uop_valid_rs2alu = ~fifo_almost_empty_rs2alu;
-    rvv_backend_alu #(
+    rvv_backend_alu#(
+      .VLEN(VLEN),
+      .RegDataT(RegDataT),
+      .PC_WIDTH(PC_WIDTH)
     ) u_alu (
       // ALU_RS to ALU
         .clk                        (clk),
@@ -971,7 +1021,7 @@ module rvv_backend
         .pop                        (pop_alu2rs),
         .uop_valid                  (uop_valid_rs2alu),
         .uop                        (uop_rs2alu),
-      // ALU to ROB  
+      // ALU to ROB
         .result_valid               (res_valid_alu),
         .result                     (res_alu),
         .result_ready               (res_ready_alu),
@@ -981,6 +1031,9 @@ module rvv_backend
 
     // PMTRDT
     rvv_backend_pmtrdt #(
+      .VLEN(VLEN),
+      .RegDataT(RegDataT),
+      .PC_WIDTH(PC_WIDTH)
     ) u_pmtrdt (
         .clk                        (clk),
         .rst_n                      (rst_n),
@@ -1000,9 +1053,12 @@ module rvv_backend
       // trap-flush
         .trap_flush_rvv             (trap_flush_rvv)
     );
-    
+
     // MULMAC
     rvv_backend_mulmac #(
+      .VLEN(VLEN),
+      .PC_WIDTH(PC_WIDTH),
+      .RegDataT(RegDataT)
     ) u_mulmac (
         .clk                        (clk),
         .rst_n                      (rst_n),
@@ -1014,11 +1070,14 @@ module rvv_backend
         .res_ex2rob                 (res_mul),
         .res_ready_rob2ex           (res_ready_mul)
     );
-    
+
     // DIV
     assign uop_valid_rs2div = ~fifo_almost_empty_rs2div;
-    rvv_backend_div u_div
-    (  
+    rvv_backend_div#(
+      .VLEN(VLEN),
+      .PC_WIDTH(PC_WIDTH),
+      .RegDataT(RegDataT)
+    ) u_div (
       .clk                          (clk),
       .rst_n                        (rst_n),
       // DIV_RS to DIV
@@ -1036,8 +1095,11 @@ module rvv_backend
   `ifdef ZVE32F_ON
     // FALU
     assign uop_valid_rs2falu = ~fifo_almost_empty_rs2falu;
-    rvv_backend_falu u_falu
-    (  
+    rvv_backend_falu#(
+      .VLEN(VLEN),
+      .PC_WIDTH(PC_WIDTH),
+      .RegDataT(RegDataT)
+    ) u_falu (
       .clk                          (clk),
       .rst_n                        (rst_n),
       // FALU_RS to FALU
@@ -1056,8 +1118,10 @@ module rvv_backend
   `ifdef ZVT_ON
     // ZVT
     assign uop_valid_rs2zvt = ~fifo_almost_empty_rs2zvt;
-    zvt vme
-    (  
+    zvt#(
+      .VLEN(VLEN),
+      .PC_WIDTH(PC_WIDTH)
+    ) vme (
       .clk                          (clk),
       .rst_n                        (rst_n),
       .uopVld                       (uop_valid_rs2zvt),
@@ -1086,9 +1150,10 @@ module rvv_backend
     // LSU remap
     assign mapinfo_valid = ~mapinfo_almost_empty;
     assign lsu_res_valid = ~lsu_res_almost_empty;
-    rvv_backend_lsu_remap
-    u_lsu_remap
-    (
+    rvv_backend_lsu_remap#(
+      .VLEN(VLEN),
+      .PC_WIDTH(PC_WIDTH)
+    ) u_lsu_remap (
       .mapinfo_valid                (mapinfo_valid),
       .mapinfo                      (mapinfo),
       .pop_mapinfo                  (pop_mapinfo),
@@ -1096,12 +1161,12 @@ module rvv_backend
       .lsu_res                      (lsu_res),
       .pop_lsu_res                  (pop_lsu_res),
       .result_valid                 (res_valid_lsu),
-      .result                       (res_lsu),      
+      .result                       (res_lsu),
       .ff_tail_index                (ff_tail_index),
       .result_ready                 (res_ready_lsu),
       .trap_valid_rmp2rob           (trap_valid_rmp2rob),
       .trap_rob_entry_rmp2rob       (trap_rob_entry_rmp2rob),
-      .trap_ready_rob2rmp           (trap_ready_rob2rmp)  
+      .trap_ready_rob2rmp           (trap_ready_rob2rmp)
     );
 
     assign res_valid_pu2arb = {
@@ -1109,7 +1174,7 @@ module rvv_backend
                                res_valid_falu,
                               `endif
                                res_valid_div,
-                               res_valid_pmtrdt,  
+                               res_valid_pmtrdt,
                                res_valid_mul,
                                res_valid_alu,
                               `ifdef ZVT_ON
@@ -1117,7 +1182,7 @@ module rvv_backend
                               `endif
                                res_valid_lsu
                               };
-                             
+
     assign res_pu2arb = {
                         `ifdef ZVE32F_ON
                          res_falu,
@@ -1143,7 +1208,7 @@ module rvv_backend
            `ifdef ZVT_ON
             res_vme2rvv_rdy,
            `endif
-            res_ready_lsu 
+            res_ready_lsu
            } = res_ready_arb2pu;
 
 `ifdef ARBITER_ON
@@ -1191,7 +1256,10 @@ module rvv_backend
 
     assign item_arb = {item_ari, res_pu2arb[`NUM_PU_NOPINGPONG-1:0]};
 
-    rvv_backend_arb u_arb(
+    rvv_backend_arb#(
+      .VLEN(VLEN),
+      .PC_WIDTH(PC_WIDTH)
+    ) u_arb (
       .clk                (clk),
       .rst_n              (rst_n),
       .req                (req_arb),
@@ -1212,6 +1280,8 @@ module rvv_backend
 
   // ROB, Re-Order Buffer
     rvv_backend_rob #(
+      .VLEN(VLEN),
+      .PC_WIDTH(PC_WIDTH)
     ) u_rob (
       // global signal
         .clk                    (clk),
@@ -1250,6 +1320,9 @@ module rvv_backend
 
   // RT, Retire
     rvv_backend_retire #(
+      .VLEN(VLEN),
+      .PC_WIDTH(PC_WIDTH),
+      .RegDataT(RegDataT)
     ) u_retire (
       // ROB to RT
         .rob2rt_write_valid     (rd_valid_rob2rt),
@@ -1281,7 +1354,7 @@ module rvv_backend
         .rt2fcsr_write_data     (rt2fcsr_write_data),
         .fcsr2rt_write_ready    (fcsr2rt_write_ready),
       `endif
-      // write to update vcsr   
+      // write to update vcsr
         .rt2vcsr_write_valid    (vcsr_valid),
         .rt2vcsr_write_data     (vector_csr),
         .vcsr2rt_write_ready    (vcsr_ready),
@@ -1292,7 +1365,7 @@ module rvv_backend
         ,.vrf_data              (vrf_data)
       `endif
     );
-    
+
   `ifdef ZVE32F_ON
     // write back FRF.
     for(genvar i=0; i<`NUM_RT_UOP; i++) begin: gen_rt_frf
@@ -1307,6 +1380,8 @@ module rvv_backend
 
   // VRF, Vector Register File
     rvv_backend_vrf #(
+      .VLEN(VLEN),
+      .PC_WIDTH(PC_WIDTH)
     ) u_vrf (
       // global signal
         .clk              (clk),
@@ -1321,23 +1396,23 @@ module rvv_backend
       // VRF to PMT
         .vrf2pmt_rd_data  (rd_data_vrf2pmt),
       // RT to VRF
-      `ifdef RVVI_ON 
+      `ifdef RVVI_ON
         .vrf_data         (vrf_data),
       `endif
         .rt2vrf_wr_valid  (wr_valid_rt2vrf),
         .rt2vrf_wr_data   (wr_data_rt2vrf)
     );
-  
+
   // Retire information:
   // Decoder and RVV.ROB both need to retire instruction to RetirementBuffer for synthesis.
   // Once the test is passed, delete TB_SUPPORT and else-block
     assign rd_valid_rob2rt_o = {de2rt_valid, rvvrob2rt_valid};
     assign rd_rob2rt_o       = {de2rt_data, rvvrob2rt_data};
-  
-  // rvv_backend IDLE 
+
+  // rvv_backend IDLE
   assign rvv_idle = fifo_empty_cq2de&fifo_empty_lcq2de&uq_empty&rob_empty
                   `ifdef ZVT_ON
-                    &fifo_almost_empty_rs2zvt[0]&(!zvtBusy) 
+                    &fifo_almost_empty_rs2zvt[0]&(!zvtBusy)
                   `endif
                     ;
 

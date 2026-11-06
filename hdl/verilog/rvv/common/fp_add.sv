@@ -55,7 +55,7 @@ module fp_add #(
   assign pip_tag[0] = in_tag;
   assign out_tag = pip_tag[NUM_PIPE_REGS];
   for (genvar i = 0; i < NUM_PIPE_REGS; i++) begin: gen_tag_pip
-    edff #(.T(TAG_TYPE)) tag_reg(.q(pip_tag[i+1]), .d(pip_tag[i]), .e(reg_enable[i]), clk(clk), .rst_n(rst_n));
+    edff #(.T(TAG_TYPE)) tag_reg(.q(pip_tag[i+1]), .d(pip_tag[i]), .e(reg_enable[i]), .clk(clk), .rst_n(rst_n));
   end
 
   // ----------

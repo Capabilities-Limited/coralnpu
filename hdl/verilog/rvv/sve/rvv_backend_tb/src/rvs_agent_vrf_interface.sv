@@ -15,11 +15,14 @@ interface vrf_interface (input bit clk, input bit rst_n);
   logic [`NUM_RT_UOP-1:0]  rt_last_uop;
 
   task set_dut_vrf(input int reg_idx, input logic[`VLEN-1:0] value);
+    // Drive at negedge so the DUT's posedge sampling falls mid-window. Writing at
+    // posedge and clearing on the next posedge races the flop (same time step),
+    // and Verilator and VCS order that differently: some writes were lost.
+    @(negedge clk);
     `VRF_PATH.vrf_wr_wen_full[reg_idx] = '1;
     `VRF_PATH.vrf_wr_data_full[reg_idx] = value;
-    @(posedge clk);
+    @(negedge clk);
     `VRF_PATH.vrf_wr_wen_full[reg_idx] = '0;
-    @(posedge clk);
   endtask: set_dut_vrf
 
   function logic[`VLEN-1:0] get_dut_vrf(input int reg_idx);

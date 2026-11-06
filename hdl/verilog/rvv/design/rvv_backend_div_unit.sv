@@ -9,7 +9,15 @@
 `include "rvv_backend_sva.svh"
 `endif
 
-module rvv_backend_div_unit
+module rvv_backend_div_unit#(
+  parameter int unsigned VLEN = `VLEN,
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  parameter type RegDataT=logic [31:0],
+  localparam int unsigned XLEN = $bits(RegDataT),
+  localparam type DIV_RS_t = `DIV_RS_t(VLEN, PC_WIDTH),
+  localparam type PU2ROB_t = `PU2ROB_t(VLEN, PC_WIDTH),
+  localparam type DIV_RES_t = `DIV_RES_t(PC_WIDTH)
+)
 (
   clk,
   rst_n,
@@ -39,7 +47,7 @@ module rvv_backend_div_unit
   input   logic     result_ready;
 
   // trap-flush
-  input   logic     trap_flush_rvv;                
+  input   logic     trap_flush_rvv;
 
 //
 // internal signals
@@ -48,37 +56,37 @@ module rvv_backend_div_unit
   logic   [`ROB_DEPTH_WIDTH-1:0]  rob_entry;
   FUNCT6_u                        uop_funct6;
   logic   [`FUNCT3_WIDTH-1:0]     uop_funct3;
-  logic   [`VLEN-1:0]             vs1_data;           
-  logic   [`VLEN-1:0]             vs2_data;	        
+  logic   [VLEN-1:0]             vs1_data;
+  logic   [VLEN-1:0]             vs2_data;
   EEW_e                           vs2_eew;
-  logic   [`XLEN-1:0] 	          rs1_data;        
+  logic   [XLEN-1:0] 	          rs1_data;
 
-  // execute 
+  // execute
   logic                                     uop_valid;
   logic                                     uop_valid_e;
   logic                                     uop_valid_d1;
-  logic   [`VLENB/2-1:0]                    div_ready8;
-  logic   [`VLENH/2-1:0]                    div_ready16;
-  logic   [`VLENW-1:0]                      div_ready32;
-  logic   [`VLENB/2-1:0][`BYTE_WIDTH-1:0]   src2_data8;
-  logic   [`VLENH/2-1:0][`HWORD_WIDTH-1:0]  src2_data16;
-  logic   [`VLENW-1:0][`WORD_WIDTH-1:0]     src2_data32;
-  logic   [`VLENB/2-1:0][`BYTE_WIDTH-1:0]   src1_data8;
-  logic   [`VLENH/2-1:0][`HWORD_WIDTH-1:0]  src1_data16;
-  logic   [`VLENW-1:0][`WORD_WIDTH-1:0]     src1_data32;
+  logic   [`VLENB(VLEN)/2-1:0]                    div_ready8;
+  logic   [`VLENH(VLEN)/2-1:0]                    div_ready16;
+  logic   [`VLENW(VLEN)-1:0]                      div_ready32;
+  logic   [`VLENB(VLEN)/2-1:0][`BYTE_WIDTH-1:0]   src2_data8;
+  logic   [`VLENH(VLEN)/2-1:0][`HWORD_WIDTH-1:0]  src2_data16;
+  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]     src2_data32;
+  logic   [`VLENB(VLEN)/2-1:0][`BYTE_WIDTH-1:0]   src1_data8;
+  logic   [`VLENH(VLEN)/2-1:0][`HWORD_WIDTH-1:0]  src1_data16;
+  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]     src1_data32;
   DIV_RES_t                                 res_info;
   DIV_RES_t                                 res_info_d1;
-  logic   [`VLENB/2-1:0][`BYTE_WIDTH-1:0]   quotient8;
-  logic   [`VLENH/2-1:0][`HWORD_WIDTH-1:0]  quotient16;
-  logic   [`VLENW-1:0][`WORD_WIDTH-1:0]     quotient32;
-  logic   [`VLENB/2-1:0][`BYTE_WIDTH-1:0]   remainder8;
-  logic   [`VLENH/2-1:0][`HWORD_WIDTH-1:0]  remainder16;
-  logic   [`VLENW-1:0][`WORD_WIDTH-1:0]     remainder32;
-  logic   [`VLENB/2-1:0]                    result_valid8;
-  logic   [`VLENH/2-1:0]                    result_valid16;
-  logic   [`VLENW-1:0]                      result_valid32;
-  logic   [`VLEN-1:0]                       result_data; 
-  logic                                     result_all_valid; 
+  logic   [`VLENB(VLEN)/2-1:0][`BYTE_WIDTH-1:0]   quotient8;
+  logic   [`VLENH(VLEN)/2-1:0][`HWORD_WIDTH-1:0]  quotient16;
+  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]     quotient32;
+  logic   [`VLENB(VLEN)/2-1:0][`BYTE_WIDTH-1:0]   remainder8;
+  logic   [`VLENH(VLEN)/2-1:0][`HWORD_WIDTH-1:0]  remainder16;
+  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]     remainder32;
+  logic   [`VLENB(VLEN)/2-1:0]                    result_valid8;
+  logic   [`VLENH(VLEN)/2-1:0]                    result_valid16;
+  logic   [`VLENW(VLEN)-1:0]                      result_valid32;
+  logic   [VLEN-1:0]                       result_data;
+  logic                                     result_all_valid;
 
   // opcode
   logic                                     opcode;
@@ -89,23 +97,23 @@ module rvv_backend_div_unit
   genvar                                                j;
 
 //
-// prepare source data to calculate    
+// prepare source data to calculate
 //
   // split ALU_RS_t struct
   assign  rob_entry   = div_uop.rob_entry;
   assign  uop_funct6  = div_uop.uop_funct6;
   assign  uop_funct3  = div_uop.uop_funct3;
   assign  vs1_data    = div_uop.vs1_data;
-  assign  rs1_data    = div_uop.vs1_data[`XLEN-1:0];
+  assign  rs1_data    = div_uop.vs1_data[XLEN-1:0];
   assign  vs2_data    = div_uop.vs2_data;
   assign  vs2_eew     = div_uop.vs2_eew;
-  
-//  
-// prepare source data 
+
+//
+// prepare source data
 //
   // prepare valid signal
   assign uop_valid = div_uop_valid&div_uop_ready;
- 
+
   // prepare source data
   always_comb begin
     // initial the data
@@ -116,41 +124,41 @@ module rvv_backend_div_unit
     src1_data16  = 'b0;
     src1_data32  = 'b0;
 
-    case(uop_funct3) 
+    case(uop_funct3)
       OPMVV: begin
         case(uop_funct6.ari_funct6)
           VDIVU,
           VREMU: begin
             case(vs2_eew)
               EEW8: begin
-                for (int i=0;i<`VLENB/2;i++) begin
+                for (int i=0;i<`VLENB(VLEN)/2;i++) begin
                   src2_data8[i] = vs2_data[i*`BYTE_WIDTH +: `BYTE_WIDTH];
                   src1_data8[i] = vs1_data[i*`BYTE_WIDTH +: `BYTE_WIDTH];
                 end
-                for (int i=`VLENB/2;i<`VLENB*3/4;i++) begin
-                  src2_data16[i-`VLENB/2] = {8'b0,vs2_data[i*`BYTE_WIDTH +: `BYTE_WIDTH]};
-                  src1_data16[i-`VLENB/2] = {8'b0,vs1_data[i*`BYTE_WIDTH +: `BYTE_WIDTH]};
+                for (int i=`VLENB(VLEN)/2;i<`VLENB(VLEN)*3/4;i++) begin
+                  src2_data16[i-`VLENB(VLEN)/2] = {8'b0,vs2_data[i*`BYTE_WIDTH +: `BYTE_WIDTH]};
+                  src1_data16[i-`VLENB(VLEN)/2] = {8'b0,vs1_data[i*`BYTE_WIDTH +: `BYTE_WIDTH]};
                 end
-                for (int i=`VLENB*3/4;i<`VLENB;i++) begin
-                  src2_data32[i-`VLENB*3/4] = {24'b0,vs2_data[i*`BYTE_WIDTH +: `BYTE_WIDTH]};
-                  src1_data32[i-`VLENB*3/4] = {24'b0,vs1_data[i*`BYTE_WIDTH +: `BYTE_WIDTH]};
+                for (int i=`VLENB(VLEN)*3/4;i<`VLENB(VLEN);i++) begin
+                  src2_data32[i-`VLENB(VLEN)*3/4] = {24'b0,vs2_data[i*`BYTE_WIDTH +: `BYTE_WIDTH]};
+                  src1_data32[i-`VLENB(VLEN)*3/4] = {24'b0,vs1_data[i*`BYTE_WIDTH +: `BYTE_WIDTH]};
                 end
               end
               EEW16: begin
-                for (int i=0;i<`VLEN/`HWORD_WIDTH/2;i++) begin
+                for (int i=0;i<VLEN/`HWORD_WIDTH/2;i++) begin
                   src2_data16[i] = vs2_data[i*`HWORD_WIDTH +: `HWORD_WIDTH];
                   src1_data16[i] = vs1_data[i*`HWORD_WIDTH +: `HWORD_WIDTH];
                 end
-                for (int i=`VLEN/`HWORD_WIDTH/2;i<`VLEN/`HWORD_WIDTH;i++) begin
-                  src2_data32[i-`VLEN/`HWORD_WIDTH/2] = {16'b0,vs2_data[i*`HWORD_WIDTH +: `HWORD_WIDTH]};
-                  src1_data32[i-`VLEN/`HWORD_WIDTH/2] = {16'b0,vs1_data[i*`HWORD_WIDTH +: `HWORD_WIDTH]};
+                for (int i=VLEN/`HWORD_WIDTH/2;i<VLEN/`HWORD_WIDTH;i++) begin
+                  src2_data32[i-VLEN/`HWORD_WIDTH/2] = {16'b0,vs2_data[i*`HWORD_WIDTH +: `HWORD_WIDTH]};
+                  src1_data32[i-VLEN/`HWORD_WIDTH/2] = {16'b0,vs1_data[i*`HWORD_WIDTH +: `HWORD_WIDTH]};
                 end
-              end             
+              end
               EEW32: begin
-                for (int i=0;i<`VLEN/`WORD_WIDTH;i++) begin
+                for (int i=0;i<VLEN/`WORD_WIDTH;i++) begin
                   src2_data32[i] = vs2_data[i*`WORD_WIDTH +: `WORD_WIDTH];
                   src1_data32[i] = vs1_data[i*`WORD_WIDTH +: `WORD_WIDTH];
-                end             
+                end
               end
             endcase
           end
@@ -159,34 +167,34 @@ module rvv_backend_div_unit
           VREM: begin
             case(vs2_eew)
               EEW8: begin
-                for (int i=0;i<`VLENB/2;i++) begin
+                for (int i=0;i<`VLENB(VLEN)/2;i++) begin
                   src2_data8[i] = vs2_data[i*`BYTE_WIDTH +: `BYTE_WIDTH];
                   src1_data8[i] = vs1_data[i*`BYTE_WIDTH +: `BYTE_WIDTH];
                 end
-                for (int i=`VLENB/2;i<`VLENB*3/4;i++) begin
-                  src2_data16[i-`VLENB/2] = {{8{vs2_data[(i+1)*`BYTE_WIDTH-1]}},vs2_data[i*`BYTE_WIDTH +: `BYTE_WIDTH]};
-                  src1_data16[i-`VLENB/2] = {{8{vs1_data[(i+1)*`BYTE_WIDTH-1]}},vs1_data[i*`BYTE_WIDTH +: `BYTE_WIDTH]};
+                for (int i=`VLENB(VLEN)/2;i<`VLENB(VLEN)*3/4;i++) begin
+                  src2_data16[i-`VLENB(VLEN)/2] = {{8{vs2_data[(i+1)*`BYTE_WIDTH-1]}},vs2_data[i*`BYTE_WIDTH +: `BYTE_WIDTH]};
+                  src1_data16[i-`VLENB(VLEN)/2] = {{8{vs1_data[(i+1)*`BYTE_WIDTH-1]}},vs1_data[i*`BYTE_WIDTH +: `BYTE_WIDTH]};
                 end
-                for (int i=`VLENB*3/4;i<`VLENB;i++) begin
-                  src2_data32[i-`VLENB*3/4] = {{24{vs2_data[(i+1)*`BYTE_WIDTH-1]}},vs2_data[i*`BYTE_WIDTH +: `BYTE_WIDTH]};
-                  src1_data32[i-`VLENB*3/4] = {{24{vs1_data[(i+1)*`BYTE_WIDTH-1]}},vs1_data[i*`BYTE_WIDTH +: `BYTE_WIDTH]};
+                for (int i=`VLENB(VLEN)*3/4;i<`VLENB(VLEN);i++) begin
+                  src2_data32[i-`VLENB(VLEN)*3/4] = {{24{vs2_data[(i+1)*`BYTE_WIDTH-1]}},vs2_data[i*`BYTE_WIDTH +: `BYTE_WIDTH]};
+                  src1_data32[i-`VLENB(VLEN)*3/4] = {{24{vs1_data[(i+1)*`BYTE_WIDTH-1]}},vs1_data[i*`BYTE_WIDTH +: `BYTE_WIDTH]};
                 end
               end
               EEW16: begin
-                for (int i=0;i<`VLEN/`HWORD_WIDTH/2;i++) begin
+                for (int i=0;i<VLEN/`HWORD_WIDTH/2;i++) begin
                   src2_data16[i] = vs2_data[i*`HWORD_WIDTH +: `HWORD_WIDTH];
                   src1_data16[i] = vs1_data[i*`HWORD_WIDTH +: `HWORD_WIDTH];
                 end
-                for (int i=`VLEN/`HWORD_WIDTH/2;i<`VLEN/`HWORD_WIDTH;i++) begin
-                  src2_data32[i-`VLEN/`HWORD_WIDTH/2] = {{16{vs2_data[(i+1)*`HWORD_WIDTH-1]}},vs2_data[i*`HWORD_WIDTH +: `HWORD_WIDTH]};
-                  src1_data32[i-`VLEN/`HWORD_WIDTH/2] = {{16{vs1_data[(i+1)*`HWORD_WIDTH-1]}},vs1_data[i*`HWORD_WIDTH +: `HWORD_WIDTH]};
+                for (int i=VLEN/`HWORD_WIDTH/2;i<VLEN/`HWORD_WIDTH;i++) begin
+                  src2_data32[i-VLEN/`HWORD_WIDTH/2] = {{16{vs2_data[(i+1)*`HWORD_WIDTH-1]}},vs2_data[i*`HWORD_WIDTH +: `HWORD_WIDTH]};
+                  src1_data32[i-VLEN/`HWORD_WIDTH/2] = {{16{vs1_data[(i+1)*`HWORD_WIDTH-1]}},vs1_data[i*`HWORD_WIDTH +: `HWORD_WIDTH]};
                 end
-              end             
+              end
               EEW32: begin
-                for (int i=0;i<`VLEN/`WORD_WIDTH;i++) begin
+                for (int i=0;i<VLEN/`WORD_WIDTH;i++) begin
                   src2_data32[i] = vs2_data[i*`WORD_WIDTH +: `WORD_WIDTH];
                   src1_data32[i] = vs1_data[i*`WORD_WIDTH +: `WORD_WIDTH];
-                end             
+                end
               end
             endcase
           end
@@ -198,34 +206,34 @@ module rvv_backend_div_unit
           VREMU: begin
             case(vs2_eew)
               EEW8: begin
-                for (int i=0;i<`VLENB/2;i++) begin
+                for (int i=0;i<`VLENB(VLEN)/2;i++) begin
                   src2_data8[i] = vs2_data[i*`BYTE_WIDTH +: `BYTE_WIDTH];
                   src1_data8[i] = rs1_data[0             +: `BYTE_WIDTH];
                 end
-                for (int i=`VLENB/2;i<`VLENB*3/4;i++) begin
-                  src2_data16[i-`VLENB/2] = {8'b0,vs2_data[i*`BYTE_WIDTH +: `BYTE_WIDTH]};
-                  src1_data16[i-`VLENB/2] = {8'b0,rs1_data[0             +: `BYTE_WIDTH]};
+                for (int i=`VLENB(VLEN)/2;i<`VLENB(VLEN)*3/4;i++) begin
+                  src2_data16[i-`VLENB(VLEN)/2] = {8'b0,vs2_data[i*`BYTE_WIDTH +: `BYTE_WIDTH]};
+                  src1_data16[i-`VLENB(VLEN)/2] = {8'b0,rs1_data[0             +: `BYTE_WIDTH]};
                 end
-                for (int i=`VLENB*3/4;i<`VLENB;i++) begin
-                  src2_data32[i-`VLENB*3/4] = {24'b0,vs2_data[i*`BYTE_WIDTH +: `BYTE_WIDTH]};
-                  src1_data32[i-`VLENB*3/4] = {24'b0,rs1_data[0             +: `BYTE_WIDTH]};
+                for (int i=`VLENB(VLEN)*3/4;i<`VLENB(VLEN);i++) begin
+                  src2_data32[i-`VLENB(VLEN)*3/4] = {24'b0,vs2_data[i*`BYTE_WIDTH +: `BYTE_WIDTH]};
+                  src1_data32[i-`VLENB(VLEN)*3/4] = {24'b0,rs1_data[0             +: `BYTE_WIDTH]};
                 end
               end
               EEW16: begin
-                for (int i=0;i<`VLEN/`HWORD_WIDTH/2;i++) begin
+                for (int i=0;i<VLEN/`HWORD_WIDTH/2;i++) begin
                   src2_data16[i] = vs2_data[i*`HWORD_WIDTH +: `HWORD_WIDTH];
                   src1_data16[i] = rs1_data[0              +: `HWORD_WIDTH];
                 end
-                for (int i=`VLEN/`HWORD_WIDTH/2;i<`VLEN/`HWORD_WIDTH;i++) begin
-                  src2_data32[i-`VLEN/`HWORD_WIDTH/2] = {16'b0,vs2_data[i*`HWORD_WIDTH +: `HWORD_WIDTH]};
-                  src1_data32[i-`VLEN/`HWORD_WIDTH/2] = {16'b0,rs1_data[0              +: `HWORD_WIDTH]};
+                for (int i=VLEN/`HWORD_WIDTH/2;i<VLEN/`HWORD_WIDTH;i++) begin
+                  src2_data32[i-VLEN/`HWORD_WIDTH/2] = {16'b0,vs2_data[i*`HWORD_WIDTH +: `HWORD_WIDTH]};
+                  src1_data32[i-VLEN/`HWORD_WIDTH/2] = {16'b0,rs1_data[0              +: `HWORD_WIDTH]};
                 end
-              end             
+              end
               EEW32: begin
-                for (int i=0;i<`VLEN/`WORD_WIDTH;i++) begin
+                for (int i=0;i<VLEN/`WORD_WIDTH;i++) begin
                   src2_data32[i] = vs2_data[i*`WORD_WIDTH +: `WORD_WIDTH];
                   src1_data32[i] = rs1_data[0             +: `WORD_WIDTH];
-                end             
+                end
               end
             endcase
           end
@@ -234,34 +242,34 @@ module rvv_backend_div_unit
           VREM: begin
             case(vs2_eew)
               EEW8: begin
-                for (int i=0;i<`VLENB/2;i++) begin
+                for (int i=0;i<`VLENB(VLEN)/2;i++) begin
                   src2_data8[i] = vs2_data[i*`BYTE_WIDTH +: `BYTE_WIDTH];
                   src1_data8[i] = rs1_data[0             +: `BYTE_WIDTH];
                 end
-                for (int i=`VLENB/2;i<`VLENB*3/4;i++) begin
-                  src2_data16[i-`VLENB/2] = {{8{vs2_data[(i+1)*`BYTE_WIDTH-1]}},vs2_data[i*`BYTE_WIDTH +: `BYTE_WIDTH]};
-                  src1_data16[i-`VLENB/2] = {{8{rs1_data[      `BYTE_WIDTH-1]}},rs1_data[0             +: `BYTE_WIDTH]};
+                for (int i=`VLENB(VLEN)/2;i<`VLENB(VLEN)*3/4;i++) begin
+                  src2_data16[i-`VLENB(VLEN)/2] = {{8{vs2_data[(i+1)*`BYTE_WIDTH-1]}},vs2_data[i*`BYTE_WIDTH +: `BYTE_WIDTH]};
+                  src1_data16[i-`VLENB(VLEN)/2] = {{8{rs1_data[      `BYTE_WIDTH-1]}},rs1_data[0             +: `BYTE_WIDTH]};
                 end
-                for (int i=`VLENB*3/4;i<`VLENB;i++) begin
-                  src2_data32[i-`VLENB*3/4] = {{24{vs2_data[(i+1)*`BYTE_WIDTH-1]}},vs2_data[i*`BYTE_WIDTH +: `BYTE_WIDTH]};
-                  src1_data32[i-`VLENB*3/4] = {{24{rs1_data[      `BYTE_WIDTH-1]}},rs1_data[0             +: `BYTE_WIDTH]};
+                for (int i=`VLENB(VLEN)*3/4;i<`VLENB(VLEN);i++) begin
+                  src2_data32[i-`VLENB(VLEN)*3/4] = {{24{vs2_data[(i+1)*`BYTE_WIDTH-1]}},vs2_data[i*`BYTE_WIDTH +: `BYTE_WIDTH]};
+                  src1_data32[i-`VLENB(VLEN)*3/4] = {{24{rs1_data[      `BYTE_WIDTH-1]}},rs1_data[0             +: `BYTE_WIDTH]};
                 end
               end
               EEW16: begin
-                for (int i=0;i<`VLEN/`HWORD_WIDTH/2;i++) begin
+                for (int i=0;i<VLEN/`HWORD_WIDTH/2;i++) begin
                   src2_data16[i] = vs2_data[i*`HWORD_WIDTH +: `HWORD_WIDTH];
                   src1_data16[i] = rs1_data[0              +: `HWORD_WIDTH];
                 end
-                for (int i=`VLEN/`HWORD_WIDTH/2;i<`VLEN/`HWORD_WIDTH;i++) begin
-                  src2_data32[i-`VLEN/`HWORD_WIDTH/2] = {{16{vs2_data[(i+1)*`HWORD_WIDTH-1]}},vs2_data[i*`HWORD_WIDTH +: `HWORD_WIDTH]};
-                  src1_data32[i-`VLEN/`HWORD_WIDTH/2] = {{16{rs1_data[      `HWORD_WIDTH-1]}},rs1_data[0              +: `HWORD_WIDTH]};
+                for (int i=VLEN/`HWORD_WIDTH/2;i<VLEN/`HWORD_WIDTH;i++) begin
+                  src2_data32[i-VLEN/`HWORD_WIDTH/2] = {{16{vs2_data[(i+1)*`HWORD_WIDTH-1]}},vs2_data[i*`HWORD_WIDTH +: `HWORD_WIDTH]};
+                  src1_data32[i-VLEN/`HWORD_WIDTH/2] = {{16{rs1_data[      `HWORD_WIDTH-1]}},rs1_data[0              +: `HWORD_WIDTH]};
                 end
-              end             
+              end
               EEW32: begin
-                for (int i=0;i<`VLEN/`WORD_WIDTH;i++) begin
+                for (int i=0;i<VLEN/`WORD_WIDTH;i++) begin
                   src2_data32[i] = vs2_data[i*`WORD_WIDTH +: `WORD_WIDTH];
                   src1_data32[i] = rs1_data[0             +: `WORD_WIDTH];
-                end             
+                end
               end
             endcase
           end
@@ -276,10 +284,10 @@ module rvv_backend_div_unit
     opcode = DIV_SIGN;
 
     // prepare source data
-    case(uop_funct3) 
+    case(uop_funct3)
       OPMVV,
       OPMVX: begin
-        case(uop_funct6.ari_funct6)    
+        case(uop_funct6.ari_funct6)
           VDIV,
           VREM: begin
             opcode = DIV_SIGN;
@@ -293,13 +301,13 @@ module rvv_backend_div_unit
     endcase
   end
 
-//    
+//
 // calculate the result
 //
   // register valid
   assign uop_valid_e = uop_valid || result_valid&result_ready;
 
-  cdffr 
+  cdffr
   div_vld
   (
     .clk    (clk),
@@ -310,7 +318,7 @@ module rvv_backend_div_unit
     .q      (uop_valid_d1)
   );
 
-  // register information 
+  // register information
 `ifdef TB_SUPPORT
   assign res_info.uop_pc      = div_uop.uop_pc;
 `endif
@@ -332,7 +340,7 @@ module rvv_backend_div_unit
   );
 
   generate
-    for(j=0;j<`VLENB/2;j++) begin: DIVIDER8
+    for(j=0;j<`VLENB(VLEN)/2;j++) begin: DIVIDER8
       intdivider
       #(
         .DIV_WIDTH          (8'd`BYTE_WIDTH)
@@ -343,7 +351,7 @@ module rvv_backend_div_unit
         .rst_n              (rst_n),
         .div_valid          (uop_valid&(vs2_eew==EEW8) || uop_valid_d1&(res_info_d1.vs2_eew==EEW8)),
         .div_ready          (div_ready8[j]),
-        .opcode             (opcode), 
+        .opcode             (opcode),
         .src2_dividend      (src2_data8[j]),
         .src1_divisor       (src1_data8[j]),
         .result_quotient    (quotient8[j]),
@@ -351,12 +359,12 @@ module rvv_backend_div_unit
         .result_valid       (result_valid8[j]),
         .result_ready       (result_ready&result_valid),
         .trap_flush_rvv     (trap_flush_rvv)
-      );     
+      );
     end
-  endgenerate 
+  endgenerate
 
   generate
-    for(j=0;j<`VLENH/2;j++) begin: DIVIDER16
+    for(j=0;j<`VLENH(VLEN)/2;j++) begin: DIVIDER16
       intdivider
       #(
         .DIV_WIDTH          (8'd`HWORD_WIDTH)
@@ -367,7 +375,7 @@ module rvv_backend_div_unit
         .rst_n              (rst_n),
         .div_valid          (uop_valid&(vs2_eew!=EEW32) || uop_valid_d1&(res_info_d1.vs2_eew!=EEW32)),
         .div_ready          (div_ready16[j]),
-        .opcode             (opcode), 
+        .opcode             (opcode),
         .src2_dividend      (src2_data16[j]),
         .src1_divisor       (src1_data16[j]),
         .result_quotient    (quotient16[j]),
@@ -375,12 +383,12 @@ module rvv_backend_div_unit
         .result_valid       (result_valid16[j]),
         .result_ready       (result_ready&result_valid),
         .trap_flush_rvv     (trap_flush_rvv)
-      );     
+      );
     end
-  endgenerate 
+  endgenerate
 
   generate
-    for(j=0;j<`VLENW;j++) begin: DIVIDER32
+    for(j=0;j<`VLENW(VLEN);j++) begin: DIVIDER32
       intdivider
       #(
         .DIV_WIDTH          (8'd`WORD_WIDTH)
@@ -391,7 +399,7 @@ module rvv_backend_div_unit
         .rst_n              (rst_n),
         .div_valid          (uop_valid || uop_valid_d1),
         .div_ready          (div_ready32[j]),
-        .opcode             (opcode), 
+        .opcode             (opcode),
         .src2_dividend      (src2_data32[j]),
         .src1_divisor       (src1_data32[j]),
         .result_quotient    (quotient32[j]),
@@ -399,14 +407,14 @@ module rvv_backend_div_unit
         .result_valid       (result_valid32[j]),
         .result_ready       (result_ready&result_valid),
         .trap_flush_rvv     (trap_flush_rvv)
-      );     
+      );
     end
   endgenerate
-  
+
   // divider is ready to receive a new uop
   always_comb begin
     case(vs2_eew)
-      EEW8:    div_uop_ready = &{div_ready32,div_ready16,div_ready8}; 
+      EEW8:    div_uop_ready = &{div_ready32,div_ready16,div_ready8};
       EEW16:   div_uop_ready = &{div_ready32,div_ready16};
       EEW32:   div_uop_ready = &{div_ready32};
       default: div_uop_ready = 'b0;
@@ -416,7 +424,7 @@ module rvv_backend_div_unit
   // check whether all the results are gotten
   always_comb begin
     result_all_valid = 'b0;
-    
+
     case(res_info_d1.vs2_eew)
       EEW8: begin
         result_all_valid = ({result_valid8,result_valid16,result_valid32}=='1);
@@ -435,7 +443,7 @@ module rvv_backend_div_unit
     // initial the data
     result_data = 'b0;
 
-    case(res_info_d1.uop_funct3) 
+    case(res_info_d1.uop_funct3)
       OPMVV,
       OPMVX: begin
         case(res_info_d1.uop_funct6.ari_funct6)
@@ -443,28 +451,28 @@ module rvv_backend_div_unit
           VDIV: begin
             case(res_info_d1.vs2_eew)
               EEW8: begin
-                for (int i=0;i<`VLENB/2;i++) begin
+                for (int i=0;i<`VLENB(VLEN)/2;i++) begin
                   result_data[i*`BYTE_WIDTH +: `BYTE_WIDTH] = quotient8[i];
                 end
-                for (int i=`VLENB/2;i<`VLENB*3/4;i++) begin
-                  result_data[i*`BYTE_WIDTH +: `BYTE_WIDTH] = quotient16[i-`VLENB/2][0 +: `BYTE_WIDTH];
+                for (int i=`VLENB(VLEN)/2;i<`VLENB(VLEN)*3/4;i++) begin
+                  result_data[i*`BYTE_WIDTH +: `BYTE_WIDTH] = quotient16[i-`VLENB(VLEN)/2][0 +: `BYTE_WIDTH];
                 end
-                for (int i=`VLENB*3/4;i<`VLENB;i++) begin
-                  result_data[i*`BYTE_WIDTH +: `BYTE_WIDTH] = quotient32[i-`VLENB*3/4][0 +: `BYTE_WIDTH];
+                for (int i=`VLENB(VLEN)*3/4;i<`VLENB(VLEN);i++) begin
+                  result_data[i*`BYTE_WIDTH +: `BYTE_WIDTH] = quotient32[i-`VLENB(VLEN)*3/4][0 +: `BYTE_WIDTH];
                 end
               end
               EEW16: begin
-                for (int i=0;i<`VLEN/`HWORD_WIDTH/2;i++) begin
+                for (int i=0;i<VLEN/`HWORD_WIDTH/2;i++) begin
                   result_data[i*`HWORD_WIDTH +: `HWORD_WIDTH] = quotient16[i];
                 end
-                for (int i=`VLEN/`HWORD_WIDTH/2;i<`VLEN/`HWORD_WIDTH;i++) begin
-                  result_data[i*`HWORD_WIDTH +: `HWORD_WIDTH] = quotient32[i-`VLEN/`HWORD_WIDTH/2][0 +: `HWORD_WIDTH];
+                for (int i=VLEN/`HWORD_WIDTH/2;i<VLEN/`HWORD_WIDTH;i++) begin
+                  result_data[i*`HWORD_WIDTH +: `HWORD_WIDTH] = quotient32[i-VLEN/`HWORD_WIDTH/2][0 +: `HWORD_WIDTH];
                 end
-              end             
+              end
               EEW32: begin
-                for (int i=0;i<`VLEN/`WORD_WIDTH;i++) begin
+                for (int i=0;i<VLEN/`WORD_WIDTH;i++) begin
                   result_data[i*`WORD_WIDTH +: `WORD_WIDTH] = quotient32[i];
-                end             
+                end
               end
             endcase
           end
@@ -473,28 +481,28 @@ module rvv_backend_div_unit
           VREM: begin
             case(res_info_d1.vs2_eew)
               EEW8: begin
-                for (int i=0;i<`VLENB/2;i++) begin
+                for (int i=0;i<`VLENB(VLEN)/2;i++) begin
                   result_data[i*`BYTE_WIDTH +: `BYTE_WIDTH] = remainder8[i];
                 end
-                for (int i=`VLENB/2;i<`VLENB*3/4;i++) begin
-                  result_data[i*`BYTE_WIDTH +: `BYTE_WIDTH] = remainder16[i-`VLENB/2][0 +: `BYTE_WIDTH];
+                for (int i=`VLENB(VLEN)/2;i<`VLENB(VLEN)*3/4;i++) begin
+                  result_data[i*`BYTE_WIDTH +: `BYTE_WIDTH] = remainder16[i-`VLENB(VLEN)/2][0 +: `BYTE_WIDTH];
                 end
-                for (int i=`VLENB*3/4;i<`VLENB;i++) begin
-                  result_data[i*`BYTE_WIDTH +: `BYTE_WIDTH] = remainder32[i-`VLENB*3/4][0 +: `BYTE_WIDTH];
+                for (int i=`VLENB(VLEN)*3/4;i<`VLENB(VLEN);i++) begin
+                  result_data[i*`BYTE_WIDTH +: `BYTE_WIDTH] = remainder32[i-`VLENB(VLEN)*3/4][0 +: `BYTE_WIDTH];
                 end
               end
               EEW16: begin
-                for (int i=0;i<`VLEN/`HWORD_WIDTH/2;i++) begin
+                for (int i=0;i<VLEN/`HWORD_WIDTH/2;i++) begin
                   result_data[i*`HWORD_WIDTH +: `HWORD_WIDTH] = remainder16[i];
                 end
-                for (int i=`VLEN/`HWORD_WIDTH/2;i<`VLEN/`HWORD_WIDTH;i++) begin
-                  result_data[i*`HWORD_WIDTH +: `HWORD_WIDTH] = remainder32[i-`VLEN/`HWORD_WIDTH/2][0 +: `HWORD_WIDTH];
+                for (int i=VLEN/`HWORD_WIDTH/2;i<VLEN/`HWORD_WIDTH;i++) begin
+                  result_data[i*`HWORD_WIDTH +: `HWORD_WIDTH] = remainder32[i-VLEN/`HWORD_WIDTH/2][0 +: `HWORD_WIDTH];
                 end
-              end             
+              end
               EEW32: begin
-                for (int i=0;i<`VLEN/`WORD_WIDTH;i++) begin
+                for (int i=0;i<VLEN/`WORD_WIDTH;i++) begin
                   result_data[i*`WORD_WIDTH +: `WORD_WIDTH] = remainder32[i];
-                end             
+                end
               end
             endcase
           end

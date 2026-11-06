@@ -21,16 +21,35 @@
 // instructions) arrive one cycle after the Instruction is dispatched, so this
 // module introduces one cycle of latency before putting the command into the
 // queue.
-module RvvFrontEnd#(parameter N = 4,
-                    parameter CAPACITYBITS=$clog2(2*N + 1),
-                    parameter REDUCE_LMUL = 1,
-                    type RegDataT = logic [31:0],
-                    type RegAddrT = logic [4:0])
+module RvvFrontEnd#(
+  parameter int unsigned N = 4,
+  parameter int unsigned CAPACITYBITS=$clog2(2*N + 1),
+  parameter bit REDUCE_LMUL = 1,
+  parameter int unsigned VLEN = `VLEN,
+  localparam int unsigned VSTART_WIDTH = $clog2(VLEN),
+  localparam int unsigned VL_WIDTH = VSTART_WIDTH+1,
+  localparam int unsigned VLENB = VLEN/`BYTE_WIDTH,
+  parameter type RegDataT = logic [31:0],
+  parameter type RegAddrT = logic [4:0],
+  localparam int unsigned XLEN = $bits(RegDataT),
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam int unsigned COUNTBITS = $clog2(N + 1),
+  // Type Aliases
+  localparam type count_t = logic [COUNTBITS-1:0],
+  localparam type capacity_t = logic [CAPACITYBITS-1:0],
+  localparam type RVVConfigState = `CONFIG_STATE_t(VLEN),
+  localparam type RVVCmd = `CMD_t(VLEN, XLEN, PC_WIDTH),
+  localparam type RVVInstruction = `INSTRUCTION_t(PC_WIDTH),
+  localparam type RVVSEW = RVVSEW_e,
+  localparam type RVVLMUL = RVVLMUL_e,
+  localparam type RVVXRM = RVVXRM_e,
+  localparam type RVFRM = RVFRM_e
+)
 (
   input clk,
   input rstn,
 
-  input logic [`VSTART_WIDTH-1:0]     vstart_i,
+  input logic [VSTART_WIDTH-1:0]     vstart_i,
   input logic                         vstart_valid_i,
   input logic [`VCSR_VXRM_WIDTH-1:0]  vxrm_i,
   input logic [`VCSR_VXSAT_WIDTH-1:0] vxsat_i,
@@ -74,9 +93,6 @@ module RvvFrontEnd#(parameter N = 4,
   output RegDataT [N-1:0] vme_mtype_data_o,
   output logic [N-1:0][`ROB_TAG_WIDTH-1:0] vme_mtype_tag_o
 );
-  localparam COUNTBITS = $clog2(N + 1);
-  typedef logic [COUNTBITS-1:0] count_t;
-  typedef logic [CAPACITYBITS-1:0] capacity_t;
 
   // vtype architectural state
   logic vill;
@@ -150,7 +166,7 @@ module RvvFrontEnd#(parameter N = 4,
   RegDataT vlmax [N-1:0];
   logic vconfig_change [N-1:0];
   logic setvl_reserved_bits [N-1:0];
-  logic [`VL_WIDTH-1:0] vl_minus_one [N-1:0];
+  logic [VL_WIDTH-1:0] vl_minus_one [N-1:0];
 `ifdef ZVT_ON
   // tm = min(tm, LMUL*EVE, ETE) = min(tm, 16)
   localparam logic [13:0] TILE_EDGE_DIM = 14'd16;
@@ -159,7 +175,7 @@ module RvvFrontEnd#(parameter N = 4,
   // vl-to-rd.
   logic mset_writes_rd [N-1:0];
   logic mset_writes_mtype [N-1:0];
-  logic [31:0] mset_rd_data [N-1:0];
+  RegDataT mset_rd_data [N-1:0];
   logic mset_illegal_trap [N-1:0];
   logic is_msettn [N-1:0];
   logic is_msettype [N-1:0];
@@ -200,7 +216,7 @@ module RvvFrontEnd#(parameter N = 4,
           unique case (inst_q[i].bits[12:8])
             0: unique case (inst_q[i].bits[4:0])
               0:  avl[i] = inst_config_state[i].vl;  // rd = x0, rs1 = x0
-              default: avl[i] = 32'hFFFFFFFF;        // rd != x0, rs1 = x0
+              default: avl[i] = {XLEN{1'b1}};        // rd != x0, rs1 = x0
             endcase
             default: avl[i] = reg_read_data_i[2*i];  // rs1 != x0
           endcase
@@ -220,7 +236,7 @@ module RvvFrontEnd#(parameter N = 4,
           vconfig_change[i] = 1;
         end else if (inst_q[i].bits[24:23] == 2'b11) begin  // vsetivli
           avl[i] =
-              {{(`VL_WIDTH - 5){1'b0}}, inst_q[i].bits[12:8]};
+              {{(VL_WIDTH - 5){1'b0}}, inst_q[i].bits[12:8]};
           inst_config_state[i+1].lmul_orig = RVVLMUL'(inst_q[i].bits[15:13]);
           inst_config_state[i+1].sew = RVVSEW'(inst_q[i].bits[18:16]);
           inst_config_state[i+1].ta = inst_q[i].bits[19];
@@ -242,7 +258,7 @@ module RvvFrontEnd#(parameter N = 4,
           unique case (inst_q[i].bits[12:8])
             0: unique case (inst_q[i].bits[4:0])
               0:  avl[i] = inst_config_state[i].vl;  // rd = x0, rs1 = x0
-              default: avl[i] = 32'hFFFFFFFF;        // rd != x0, rs1 = x0
+              default: avl[i] = {XLEN{1'b1}};        // rd != x0, rs1 = x0
             endcase
             default: avl[i] = reg_read_data_i[2*i];  // rs1 != x0
           endcase
@@ -362,7 +378,7 @@ module RvvFrontEnd#(parameter N = 4,
                 unique case (inst_q[i].bits[12:8])
                   0: unique case (inst_q[i].bits[4:0])
                     0:  avl[i] = inst_config_state[i].vl;  // rd = x0, rs1 = x0
-                    default: avl[i] = 32'hFFFFFFFF;        // rd != x0, rs1 = x0
+                    default: avl[i] = {XLEN{1'b1}};        // rd != x0, rs1 = x0
                   endcase
                   default: avl[i] = reg_read_data_i[2*i];  // rs1 != x0
                 endcase
@@ -382,12 +398,12 @@ module RvvFrontEnd#(parameter N = 4,
                 inst_config_state[i+1].tk = 3'd0;
               end else begin
                 logic [13:0] msettm_new_tm;
-                msettm_new_tm = (reg_read_data_i[2*i] > {18'd0, TILE_EDGE_DIM}) ? TILE_EDGE_DIM
+                msettm_new_tm = (reg_read_data_i[2*i] > RegDataT'(TILE_EDGE_DIM)) ? TILE_EDGE_DIM
                                                                                 : reg_read_data_i[2*i][13:0];
                 inst_config_state[i+1].tm = msettm_new_tm;
                 mset_writes_rd[i] = 1;
                 mset_writes_mtype[i] = 1;
-                mset_rd_data[i] = {18'd0, msettm_new_tm};
+                mset_rd_data[i] = RegDataT'(msettm_new_tm);
               end
             end
             2'b10: begin  // msettk rd, rs1 - mtype.tk <- min(rs1, KMAX).
@@ -405,12 +421,12 @@ module RvvFrontEnd#(parameter N = 4,
                   SEW32:   kmax = 3'd1;
                   default: kmax = 3'd0;
                 endcase
-                msettk_new_tk = (reg_read_data_i[2*i] > {29'd0, kmax}) ? kmax
+                msettk_new_tk = (reg_read_data_i[2*i] > RegDataT'(kmax)) ? kmax
                                                                        : reg_read_data_i[2*i][2:0];
                 inst_config_state[i+1].tk = msettk_new_tk;
                 mset_writes_rd[i] = 1;
                 mset_writes_mtype[i] = 1;
-                mset_rd_data[i] = {29'd0, msettk_new_tk};
+                mset_rd_data[i] = RegDataT'(msettk_new_tk);
               end
             end
             default: ;
@@ -475,13 +491,13 @@ module RvvFrontEnd#(parameter N = 4,
 
         // Compute vl to set (saturating with necessary)
         unique case (inst_config_state[i+1].lmul_orig)
-          LMUL1_8: vlmax[i] = ((`VLENB)/8) >> inst_config_state[i+1].sew;
-          LMUL1_4: vlmax[i] = ((`VLENB)/4) >> inst_config_state[i+1].sew;
-          LMUL1_2: vlmax[i] = ((`VLENB)/2) >> inst_config_state[i+1].sew;
-          LMUL1: vlmax[i] = (`VLENB) >> inst_config_state[i+1].sew;
-          LMUL2: vlmax[i] = (2*(`VLENB)) >> inst_config_state[i+1].sew;
-          LMUL4: vlmax[i] = (4*(`VLENB)) >> inst_config_state[i+1].sew;
-          LMUL8: vlmax[i] = (8*(`VLENB)) >> inst_config_state[i+1].sew;
+          LMUL1_8: vlmax[i] = ((VLENB)/8) >> inst_config_state[i+1].sew;
+          LMUL1_4: vlmax[i] = ((VLENB)/4) >> inst_config_state[i+1].sew;
+          LMUL1_2: vlmax[i] = ((VLENB)/2) >> inst_config_state[i+1].sew;
+          LMUL1: vlmax[i] = (VLENB) >> inst_config_state[i+1].sew;
+          LMUL2: vlmax[i] = (2*(VLENB)) >> inst_config_state[i+1].sew;
+          LMUL4: vlmax[i] = (4*(VLENB)) >> inst_config_state[i+1].sew;
+          LMUL8: vlmax[i] = (8*(VLENB)) >> inst_config_state[i+1].sew;
           default: vlmax[i] = 0;
         endcase
 
@@ -502,10 +518,10 @@ module RvvFrontEnd#(parameter N = 4,
 `endif
         end else if (avl[i] > vlmax[i]) begin
           // One possible valid impl according to 6.3 of RVV spec.
-          inst_config_state[i+1].vl = vlmax[i][`VL_WIDTH-1:0];
+          inst_config_state[i+1].vl = vlmax[i][VL_WIDTH-1:0];
           inst_config_state[i+1].lmul = inst_config_state[i+1].lmul_orig;
         end else begin
-          inst_config_state[i+1].vl = avl[i][`VL_WIDTH-1:0];
+          inst_config_state[i+1].vl = avl[i][VL_WIDTH-1:0];
           inst_config_state[i+1].lmul = inst_config_state[i+1].lmul_orig;
         end
 
@@ -523,24 +539,24 @@ module RvvFrontEnd#(parameter N = 4,
           //   we don't increase it, so we cannot generate emul>8.
           // - we must keep lmul valid for the current sew, like lmul>=m1 for
           //   sew=e32. The resulting enul must also be valid.
-          vl_minus_one[i] = (inst_config_state[i+1].vl == (`VL_WIDTH)'('b0)) ?
-              (`VL_WIDTH)'('b0) :
-              inst_config_state[i+1].vl - (`VL_WIDTH)'('b1);
+          vl_minus_one[i] = (inst_config_state[i+1].vl == (VL_WIDTH)'('b0)) ?
+              (VL_WIDTH)'('b0) :
+              inst_config_state[i+1].vl - (VL_WIDTH)'('b1);
           unique case (inst_config_state[i+1].sew)
             SEW8: begin
-              if (vl_minus_one[i][`VL_WIDTH-2+:2] != 'b00) begin
+              if (vl_minus_one[i][VL_WIDTH-2+:2] != 'b00) begin
                 // vl from VLEN/2+1 to VLEN
                 inst_config_state[i+1].lmul = LMUL8;
-              end else if (vl_minus_one[i][`VL_WIDTH-3] == 'b1) begin
+              end else if (vl_minus_one[i][VL_WIDTH-3] == 'b1) begin
                 // vl from VLEN/4+1 to VLEN/2
                 inst_config_state[i+1].lmul = LMUL4;
-              end else if (vl_minus_one[i][`VL_WIDTH-4] == 'b1) begin
+              end else if (vl_minus_one[i][VL_WIDTH-4] == 'b1) begin
                 // vl from VLEN/8+1 to VLEN/4
                 inst_config_state[i+1].lmul = LMUL2;
-              end else if (vl_minus_one[i][`VL_WIDTH-5] == 'b1) begin
+              end else if (vl_minus_one[i][VL_WIDTH-5] == 'b1) begin
                 // vl from VLEN/16+1 to VLEN/8
                 inst_config_state[i+1].lmul = LMUL1;
-              end else if (vl_minus_one[i][`VL_WIDTH-6] == 'b1) begin
+              end else if (vl_minus_one[i][VL_WIDTH-6] == 'b1) begin
                 // vl from VLEN/32+1 to VLEN/16
                 inst_config_state[i+1].lmul = LMUL1_2;
               end else begin
@@ -549,45 +565,36 @@ module RvvFrontEnd#(parameter N = 4,
               end
             end
             SEW16: begin
-              if (vl_minus_one[i][`VL_WIDTH-3+:2] != 'b00) begin
+              if (vl_minus_one[i][VL_WIDTH-3+:2] != 'b00) begin
                 // vl from VLEN/4+1 to VLEN/2
                 inst_config_state[i+1].lmul = LMUL8;
-              end else if (vl_minus_one[i][`VL_WIDTH-4] == 'b1) begin
+              end else if (vl_minus_one[i][VL_WIDTH-4] == 'b1) begin
                 // vl from VLEN/8+1 to VLEN/4
                 inst_config_state[i+1].lmul = LMUL4;
-              end else if (vl_minus_one[i][`VL_WIDTH-5] == 'b1) begin
+              end else if (vl_minus_one[i][VL_WIDTH-5] == 'b1) begin
                 // vl from VLEN/16+1 to VLEN/8
                 inst_config_state[i+1].lmul = LMUL2;
-              end else if (vl_minus_one[i][`VL_WIDTH-6] == 'b1) begin
+              end else if (vl_minus_one[i][VL_WIDTH-6] == 'b1) begin
                 // vl from VLEN/32+1 to VLEN/16
                 inst_config_state[i+1].lmul = LMUL1;
-              end else if (vl_minus_one[i][`VL_WIDTH-7] == 'b1) begin
-                // vl from VLEN/64+1 to VLEN/32
-                inst_config_state[i+1].lmul = LMUL1_2;
               end else begin
-                // vl from 0 to VLEN/64
-                inst_config_state[i+1].lmul = LMUL1_4;
+                // vl from 0 to VLEN/32
+                inst_config_state[i+1].lmul = LMUL1_2;
               end
             end
             SEW32: begin
-              if (vl_minus_one[i][`VL_WIDTH-4+:2] != 'b00) begin
+              if (vl_minus_one[i][VL_WIDTH-4+:2] != 'b00) begin
                 // vl from VLEN/8+1 to VLEN/4
                 inst_config_state[i+1].lmul = LMUL8;
-              end else if (vl_minus_one[i][`VL_WIDTH-5] == 'b1) begin
+              end else if (vl_minus_one[i][VL_WIDTH-5] == 'b1) begin
                 // vl from VLEN/16+1 to VLEN/8
                 inst_config_state[i+1].lmul = LMUL4;
-              end else if (vl_minus_one[i][`VL_WIDTH-6] == 'b1) begin
+              end else if (vl_minus_one[i][VL_WIDTH-6] == 'b1) begin
                 // vl from VLEN/32+1 to VLEN/16
                 inst_config_state[i+1].lmul = LMUL2;
-              end else if (vl_minus_one[i][`VL_WIDTH-7] == 'b1) begin
-                // vl from VLEN/64+1 to VLEN/32
-                inst_config_state[i+1].lmul = LMUL1;
-              end else if (vl_minus_one[i][`VL_WIDTH-8] == 'b1) begin
-                // vl from VLEN/128+1 to VLEN/64
-                inst_config_state[i+1].lmul = LMUL1_2;
               end else begin
-                // vl from 0 to VLEN/128
-                inst_config_state[i+1].lmul = LMUL1_4;
+                // vl from 0 to VLEN/32
+                inst_config_state[i+1].lmul = LMUL1;
               end
             end
           endcase
@@ -707,7 +714,7 @@ module RvvFrontEnd#(parameter N = 4,
 `ifdef ZVT_ON
           mset_writes_rd[i] ? mset_rd_data[i] :
 `endif
-          {{(`XLEN-(`VL_WIDTH)){1'b0}}, inst_config_state[i+1].vl};
+          {{(XLEN-(VL_WIDTH)){1'b0}}, inst_config_state[i+1].vl};
     end
   end
 

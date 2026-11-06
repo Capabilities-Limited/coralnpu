@@ -1,6 +1,6 @@
 //
 // description:
-// 1. control to pop data from Command Queue and push data into Uop Queue. 
+// 1. control to pop data from Command Queue and push data into Uop Queue.
 //
 // features:
 // 1. decode_ctrl will push data to Uops Queue only when Uops Queue has 4 free spaces at least.
@@ -9,12 +9,19 @@
 `include "rvv_backend.svh"
 `endif
 
-module rvv_backend_decode_ctrl
+module rvv_backend_decode_ctrl#(
+  parameter int unsigned VLEN = `VLEN,
+  // Scalar Register Data
+  parameter type RegDataT=logic [31:0],
+  localparam int unsigned XLEN = $bits(RegDataT),
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type UOP_QUEUE_t = `UOP_QUEUE_t(VLEN, XLEN, PC_WIDTH)
+)
 (
   clk,
   rst_n,
   de_uop_valid,
-  de_uop,   
+  de_uop,
   uop_index_remain,
   pop,
   push,
@@ -40,17 +47,17 @@ module rvv_backend_decode_ctrl
   output  UOP_QUEUE_t [`NUM_DE_UOP-1:0]                   uop;
   input   logic       [`NUM_DE_UOP-1:0]                   uq_ready;
   // trap-flush
-  input   logic                                           trap_flush_rvv; 
+  input   logic                                           trap_flush_rvv;
 
 //
 // internal signals
 //
   // last uop signal for pop
   logic [`NUM_DE_UOP-1:0]                                 last_uop;
-  // signals in uop_index DFF 
+  // signals in uop_index DFF
   logic                                                   uop_index_en;
   logic [`UOP_INDEX_WIDTH-1:0]                            uop_index_din;
-  
+
   // for-loop
   integer                                                 i;
   genvar                                                  j;
@@ -88,14 +95,14 @@ module rvv_backend_decode_ctrl
               push[2] = uq_ready[2];
               uop[2]  = de_uop[1][1];
             end
-            default: begin 
+            default: begin
               push[2] = 'b0;
               uop[2]  = de_uop[0][2];
             end
           endcase
         end
       end // NUM_DE_UOP==3
-    
+
       if(`NUM_DE_UOP>=3'd4) begin : gen_push3_uop3
         always_comb begin
           casez({de_uop_valid[1][2:0],de_uop_valid[0][3:1]})
@@ -115,7 +122,7 @@ module rvv_backend_decode_ctrl
               push[3] = uq_ready[3];
               uop[3]  = de_uop[1][2];
             end
-            default: begin 
+            default: begin
               push[3] = 'b0;
               uop[3]  = de_uop[0][3];
             end
@@ -146,7 +153,7 @@ module rvv_backend_decode_ctrl
               push[4] = uq_ready[4];
               uop[4]  = de_uop[1][3];
             end
-            default: begin 
+            default: begin
               push[4] = 'b0;
               uop[4]  = de_uop[0][4];
             end
@@ -181,7 +188,7 @@ module rvv_backend_decode_ctrl
               push[5] = uq_ready[5];
               uop[5]  = de_uop[1][4];
             end
-            default: begin 
+            default: begin
               push[5] = 'b0;
               uop[5]  = de_uop[0][5];
             end
@@ -210,14 +217,14 @@ module rvv_backend_decode_ctrl
               push[2] = uq_ready[2];
               uop[2]  = de_uop[2][0];
             end
-            default: begin 
+            default: begin
               push[2] = 'b0;
               uop[2]  = de_uop[0][2];
             end
           endcase
         end
       end // NUM_DE_UOP==3
-    
+
       if(`NUM_DE_UOP>=3'd4) begin : gen_push3_uop3
         always_comb begin
           casez({de_uop_valid[2][1:0],de_uop_valid[1][2:0],de_uop_valid[0][3:1]})
@@ -249,7 +256,7 @@ module rvv_backend_decode_ctrl
               push[3] = uq_ready[3];
               uop[3]  = de_uop[2][1];
             end
-            default: begin 
+            default: begin
               push[3] = 'b0;
               uop[3]  = de_uop[0][3];
             end
@@ -304,7 +311,7 @@ module rvv_backend_decode_ctrl
               push[4] = uq_ready[4];
               uop[4]  = de_uop[2][2];
             end
-            default: begin 
+            default: begin
               push[4] = 'b0;
               uop[4]  = de_uop[0][4];
             end
@@ -335,7 +342,7 @@ module rvv_backend_decode_ctrl
               push[5] = uq_ready[5];
               uop[5]  = de_uop[1][2];
             end
-            14'b???1_??011_??011: begin            
+            14'b???1_??011_??011: begin
               push[5] = uq_ready[5];
               uop[5]  = de_uop[2][0];
             end
@@ -379,13 +386,13 @@ module rvv_backend_decode_ctrl
               push[5] = uq_ready[5];
               uop[5]  = de_uop[2][3];
             end
-            default: begin 
+            default: begin
               push[5] = 'b0;
               uop[5]  = de_uop[0][5];
             end
           endcase
         end
-      end // NUM_DE_UOP==6 
+      end // NUM_DE_UOP==6
     end // NUM_DE_INST==3
 
     if (`NUM_DE_INST==3'd4) begin : if_inst_eq_4
@@ -408,14 +415,14 @@ module rvv_backend_decode_ctrl
               push[2] = uq_ready[2];
               uop[2]  = de_uop[2][0];
             end
-            default: begin 
+            default: begin
               push[2] = 'b0;
               uop[2]  = de_uop[0][2];
             end
           endcase
         end
       end // NUM_DE_UOP==3
-    
+
       if(`NUM_DE_UOP>=3'd4) begin : gen_push3_uop3
         always_comb begin
           casez({de_uop_valid[3][0],de_uop_valid[2][1:0],de_uop_valid[1][2:0],de_uop_valid[0][3:1]})
@@ -451,7 +458,7 @@ module rvv_backend_decode_ctrl
               push[3] = uq_ready[3];
               uop[3]  = de_uop[3][0];
             end
-            default: begin 
+            default: begin
               push[3] = 'b0;
               uop[3]  = de_uop[0][3];
             end
@@ -522,7 +529,7 @@ module rvv_backend_decode_ctrl
               push[4] = uq_ready[4];
               uop[4]  = de_uop[3][1];
             end
-            default: begin 
+            default: begin
               push[4] = 'b0;
               uop[4]  = de_uop[0][4];
             end
@@ -637,15 +644,15 @@ module rvv_backend_decode_ctrl
               push[5] = uq_ready[5];
               uop[5]  = de_uop[3][2];
             end
-            default: begin 
+            default: begin
               push[5] = 'b0;
               uop[5]  = de_uop[0][5];
             end
           endcase
         end
-      end // NUM_DE_UOP==6 
+      end // NUM_DE_UOP==6
     end // NUM_DE_INST==3
-      
+
     // calculate pop siganl for LCQ
     for(j=0;j<`NUM_DE_UOP;j++) begin : gen_last_uop
       assign last_uop[j] = push[j]&uop[j].last_uop_valid;
@@ -665,7 +672,7 @@ module rvv_backend_decode_ctrl
       end
     end
   end
-  
+
   // uop index remain
   always_comb begin
     uop_index_din = 'b0;
@@ -678,18 +685,18 @@ module rvv_backend_decode_ctrl
 
   assign uop_index_en = |push;
 
-  cdffr 
+  cdffr
   #(
     .T         (logic[`UOP_INDEX_WIDTH-1:0])
   )
   uop_index_cdffr
-  ( 
-    .clk       (clk), 
-    .rst_n     (rst_n), 
-    .c         (trap_flush_rvv), 
-    .e         (uop_index_en), 
+  (
+    .clk       (clk),
+    .rst_n     (rst_n),
+    .c         (trap_flush_rvv),
+    .e         (uop_index_en),
     .d         (uop_index_din),
     .q         (uop_index_remain)
-  ); 
+  );
 
 endmodule

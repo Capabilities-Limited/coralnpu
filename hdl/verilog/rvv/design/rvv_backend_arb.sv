@@ -2,7 +2,12 @@
 `include "rvv_backend.svh"
 `endif
 
-module rvv_backend_arb(
+module rvv_backend_arb#(
+  parameter int unsigned VLEN = `VLEN,
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type PU2ROB_t = `PU2ROB_t(VLEN, PC_WIDTH)
+)
+(
   clk,
   rst_n,
   req,
@@ -20,12 +25,12 @@ module rvv_backend_arb(
 // PU to ARB
     input   logic     [`NUM_PU-1:0]                       req;
     input   PU2ROB_t  [`NUM_PU-1:0]                       item;
-    input   logic     [`NUM_LSU-1:0][$clog2(`VLENB):0]    ff_tail_index;
+    input   logic     [`NUM_LSU-1:0][$clog2(`VLENB(VLEN)):0]    ff_tail_index;
     output  logic     [`NUM_PU-1:0]                       grant;
 // ARB to ROB
     output  logic     [`NUM_SMPORT-1:0]                   result_valid;
     output  PU2ROB_t  [`NUM_SMPORT-1:0]                   result;
-    output  logic     [`NUM_SMPORT-1:0][$clog2(`VLENB):0] res_ff_tail_index;
+    output  logic     [`NUM_SMPORT-1:0][$clog2(`VLENB(VLEN)):0] res_ff_tail_index;
 
 // ---internal signal definition--------------------------------------
 `ifdef ZVE32F_ON
@@ -89,8 +94,11 @@ assign item_odd_np[1] = item[5];
 
 logic [EVEN_NP_NUM-1:0] even_np_total_grant;
 
-rvv_backend_arb_slice #(.NP_NUM(EVEN_NP_NUM))
-u_even_slice (
+rvv_backend_arb_slice#(
+  .VLEN(VLEN),
+  .PC_WIDTH(PC_WIDTH),
+  .NP_NUM(EVEN_NP_NUM)
+) u_even_slice (
   .clk(clk),
   .rst_n(rst_n),
   .req_hp0(req[0]),
@@ -110,8 +118,11 @@ u_even_slice (
 
 logic [ODD_NP_NUM-1:0] odd_np_total_grant;
 
-rvv_backend_arb_slice #(.NP_NUM(ODD_NP_NUM))
-u_odd_slice (
+rvv_backend_arb_slice#(
+  .VLEN(VLEN),
+  .PC_WIDTH(PC_WIDTH),
+  .NP_NUM(ODD_NP_NUM)
+) u_odd_slice (
   .clk(clk),
   .rst_n(rst_n),
   .req_hp0(req[1]),
@@ -157,6 +168,9 @@ endmodule
 
 
 module rvv_backend_arb_slice #(
+  parameter int unsigned VLEN = `VLEN,
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type PU2ROB_t = `PU2ROB_t(VLEN, PC_WIDTH),
   parameter int NP_NUM = 2
 ) (
   input  logic               clk,

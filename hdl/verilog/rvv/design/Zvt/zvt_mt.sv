@@ -2,7 +2,9 @@
 `include "rvv_backend.svh"
 `endif
 
-module zvt_mt (
+module zvt_mt#(
+  parameter int unsigned VLEN = `VLEN
+) (
   clk,
   rst_n,
   readMtIdx,
@@ -12,8 +14,8 @@ module zvt_mt (
   rvviMtIdx,
   rvviSubIdx,
   rvviReadData,
-`endif 
-  writeEn, 
+`endif
+  writeEn,
   writeMtIdx,
   writeSubIdx,
   writeData
@@ -22,30 +24,30 @@ module zvt_mt (
 // interface signals
   input  logic clk;
   input  logic rst_n;
-  // read subtile     
-  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][$clog2(`NUM_MT)-1:0]      readMtIdx;
-  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][$clog2(`NUM_SUBTILE)-1:0] readSubIdx;
-  output logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][`SUBTILE_SIZE*8-1:0]      readData;
+  // read subtile
+  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0]      readMtIdx;
+  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] readSubIdx;
+  output logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0]      readData;
 `ifdef RVVI_ON
-  // rvvi read subtile     
+  // rvvi read subtile
   input  logic [`NUM_BLK-1:0][3:0][$clog2(`NUM_MT)-1:0]                          rvviMtIdx;
-  input  logic [`NUM_BLK-1:0][3:0][`NUM_SUBTILE/2-1:0][$clog2(`NUM_SUBTILE)-1:0] rvviSubIdx;
-  output logic [`NUM_BLK-1:0][3:0][`NUM_SUBTILE/2-1:0][`SUBTILE_SIZE*8-1:0]      rvviReadData;
-`endif 
+  input  logic [`NUM_BLK-1:0][3:0][`NUM_SUBTILE(VLEN)/2-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] rvviSubIdx;
+  output logic [`NUM_BLK-1:0][3:0][`NUM_SUBTILE(VLEN)/2-1:0][`SUBTILE_SIZE*8-1:0]      rvviReadData;
+`endif
   // write subtile
-  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][`SUBTILE_SIZE-1:0]        writeEn;  
-  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][$clog2(`NUM_MT)-1:0]      writeMtIdx;
-  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][$clog2(`NUM_SUBTILE)-1:0] writeSubIdx;
-  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][`SUBTILE_SIZE*8-1:0]      writeData;    
+  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE-1:0]        writeEn;
+  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0]      writeMtIdx;
+  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] writeSubIdx;
+  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0]      writeData;
 
-// -------------- code start --------------------    
+// -------------- code start --------------------
 `ifdef FPGA_XILINX
-  zvt_mt_fpga u_zvt_mt_fpga (.*);
+  zvt_mt_fpga #(.VLEN(VLEN)) u_zvt_mt_fpga (.*);
 `else
   // write data
-  logic [`NUM_MT-1:0][`NUM_SUBTILE-1:0][`SUBTILE_SIZE-1:0]   wen;    // byte enable
-  logic [`NUM_MT-1:0][`NUM_SUBTILE-1:0][`SUBTILE_SIZE*8-1:0] wdata;
-  logic [`NUM_MT-1:0][`NUM_SUBTILE-1:0][`SUBTILE_SIZE*8-1:0] mt;
+  logic [`NUM_MT-1:0][`NUM_SUBTILE(VLEN)-1:0][`SUBTILE_SIZE-1:0]   wen;    // byte enable
+  logic [`NUM_MT-1:0][`NUM_SUBTILE(VLEN)-1:0][`SUBTILE_SIZE*8-1:0] wdata;
+  logic [`NUM_MT-1:0][`NUM_SUBTILE(VLEN)-1:0][`SUBTILE_SIZE*8-1:0] mt;
 
   always_comb begin
     wen      = 'b0;
@@ -53,7 +55,7 @@ module zvt_mt (
     readData = 'b0;
 
     for(int i=0; i<`NUM_BLK; i++) begin: block_addr
-      for(int j=0; j<`NUM_BLKPORT; j++) begin: block_subtile_addr
+      for(int j=0; j<`NUM_BLKPORT(VLEN); j++) begin: block_subtile_addr
         // write
         // Multiple (i,j) entries can map to the same (mt, sub) slot, and the
         // unused entries default to writeMtIdx=0, writeSubIdx=0, writeEn=0.
@@ -71,19 +73,19 @@ module zvt_mt (
   end
 
 `ifdef RVVI_ON
-  // rvvi read subtile     
+  // rvvi read subtile
   always_comb begin
     for(int i=0;i<`NUM_BLK;i++) begin
       for(int j=0;j<4;j++) begin
-        for(int k=0;k<`NUM_SUBTILE/2;k++) begin
+        for(int k=0;k<`NUM_SUBTILE(VLEN)/2;k++) begin
           rvviReadData[i][j][k] = mt[rvviMtIdx[i][j]][rvviSubIdx[i][j][k]];
         end
       end
     end
   end
-`endif 
+`endif
 
-  zvt_mt_reg mtReg (
+  zvt_mt_reg#(.VLEN(VLEN)) mtReg (
     .clk    (clk),
     .rst_n  (rst_n),
     .wen    (wen),

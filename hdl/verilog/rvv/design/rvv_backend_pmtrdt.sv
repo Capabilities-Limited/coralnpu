@@ -17,7 +17,14 @@
 `include "rvv_backend_sva.svh"
 `endif
 
-module rvv_backend_pmtrdt
+module rvv_backend_pmtrdt#(
+  parameter int unsigned VLEN = `VLEN,
+  parameter type RegDataT=logic [31:0],
+  localparam int unsigned XLEN = $bits(RegDataT),
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type PMT_RDT_RS_t = `PMT_RDT_RS_t(VLEN, XLEN, PC_WIDTH),
+  localparam type PU2ROB_t = `PU2ROB_t(VLEN, PC_WIDTH)
+)
 (
   clk,
   rst_n,
@@ -48,7 +55,7 @@ module rvv_backend_pmtrdt
 
 // read vrf for permutation
   output logic [`REGIDX_WIDTH-1:0]        rd_index_pmt2vrf;
-  input  logic [`VLEN-1:0]                rd_data_vrf2pmt;
+  input  logic [VLEN-1:0]                rd_data_vrf2pmt;
 
 // PMTRDT unit to ROB
   output  logic        [`NUM_PMTRDT-1:0]  result_valid_ex2rob;
@@ -79,7 +86,7 @@ module rvv_backend_pmtrdt
 
       assign result_valid_ex2rob[i] = pmtrdt_res_valid[i];
       assign result_ex2rob[i]       = pmtrdt_res[i];
-      assign pmtrdt_res_ready[i]    = result_ready_rob2ex[i]; 
+      assign pmtrdt_res_ready[i]    = result_ready_rob2ex[i];
     end
   endgenerate
 
@@ -87,6 +94,9 @@ module rvv_backend_pmtrdt
   generate
     for (i=0; i<`NUM_PMTRDT; i++) begin : gen_pmtrdt_unit
         rvv_backend_pmtrdt_unit #(
+          .VLEN(VLEN),
+          .RegDataT(RegDataT),
+          .PC_WIDTH(PC_WIDTH),
           .GEN_RDT      (1'b1),
         `ifdef ZVE32F_ON
           .GEN_FRDT     (1'b1),

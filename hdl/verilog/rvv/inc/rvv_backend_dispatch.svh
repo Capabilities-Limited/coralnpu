@@ -17,8 +17,8 @@ typedef struct packed {
 } SUC_UOP_RAW_t;
 
 typedef struct packed {
-  logic [`REGFILE_INDEX_WIDTH-1:0] w_index; 
-  W_DATA_TYPE_e                    w_type; 
+  logic [`REGFILE_INDEX_WIDTH-1:0] w_index;
+  W_DATA_TYPE_e                    w_type;
   logic                            w_valid;
   logic                            valid;
 } PRE_UOP_RAW_t;
@@ -60,20 +60,22 @@ typedef struct packed {
 } ARCH_HAZARD_t;
 
 // input signals of ROB for bypass unit
-typedef struct packed {
-  logic [`VLEN-1:0]      w_data;
-  BYTE_TYPE_t            byte_type;
-  logic                  tail_one;
-  logic                  inactive_one;
-} ROB_BYP_t;
+`define ROB_BYP_t(VLEN) \
+struct packed { \
+  logic [VLEN-1:0]       w_data; \
+  `BYTE_TYPE_t(VLEN)     byte_type; \
+  logic                  tail_one; \
+  logic                  inactive_one; \
+}
 
 // the vector operand of uop
-typedef struct packed {
-  logic [`VLEN-1:0]      vs1;
-  logic [`VLEN-1:0]      vs2;
-  logic [`VLEN-1:0]      vd;
-  logic [`VLEN-1:0]      v0;
-} UOP_OPN_t;
+`define UOP_OPN_t(VLEN) \
+struct packed { \
+  logic [VLEN-1:0]      vs1; \
+  logic [VLEN-1:0]      vs2; \
+  logic [VLEN-1:0]      vd; \
+  logic [VLEN-1:0]      v0; \
+}
 
 // input signals for ctrl unit
 typedef struct packed {
@@ -83,24 +85,26 @@ typedef struct packed {
 } UOP_CTRL_t;
 
 // input signals for opr_byte_type unit
-typedef struct packed {
-  logic [$clog2(`EMUL_MAX)-1:0] uop_index;      
-  EXE_UNIT_e                    uop_exe_unit;
-  EEW_e                         vd_eew;
-  EEW_e                         vs1_eew;
-  EEW_e                         vs2_eew;
-  logic [`VSTART_WIDTH-1:0]     vstart;
-  logic [`VL_WIDTH-1:0]         vl;
-  logic                         vm;
-  logic                         ignore_vma;
-  logic                         ignore_vta;
-} UOP_INFO_t;
+`define UOP_INFO_t(VLEN) \
+struct packed { \
+  logic [$clog2(`EMUL_MAX)-1:0]   uop_index; \
+  EXE_UNIT_e                      uop_exe_unit; \
+  EEW_e                           vd_eew; \
+  EEW_e                           vs1_eew; \
+  EEW_e                           vs2_eew; \
+  logic [`VSTART_WIDTH(VLEN)-1:0] vstart; \
+  logic [`VL_WIDTH(VLEN)-1:0]     vl; \
+  logic                           vm; \
+  logic                           ignore_vma; \
+  logic                           ignore_vta; \
+}
 
 // the vector operand byte type in uop
-typedef struct packed {
-  BYTE_TYPE_t           vs2;
-  BYTE_TYPE_t           vd;
-  logic [`VLENB-1:0]    v0_strobe;
-} UOP_OPN_BYTE_TYPE_t;
+`define UOP_OPN_BYTE_TYPE_t(VLEN) \
+struct packed { \
+  `BYTE_TYPE_t(VLEN)        vs2; \
+  `BYTE_TYPE_t(VLEN)        vd; \
+  logic [`VLENB(VLEN)-1:0]  v0_strobe; \
+}
 
 `endif // RVV_DISPATCH__SVH

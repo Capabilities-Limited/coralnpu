@@ -2,7 +2,18 @@
 `include "rvv_backend.svh"
 `endif
 
-module rvv_backend_retire(
+module rvv_backend_retire#(
+  parameter int unsigned VLEN = `VLEN,
+  // Scalar Register Data
+  parameter type RegDataT=logic [31:0],
+  localparam int unsigned XLEN = $bits(RegDataT),
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type RVVConfigState = `CONFIG_STATE_t(VLEN),
+  localparam type ROB2RT_t = `ROB2RT_t(VLEN, PC_WIDTH),
+  localparam type RT2RVS_t = `RT2RVS_t(XLEN, PC_WIDTH),
+  localparam type RT2VRF_t = `RT2VRF_t(VLEN, PC_WIDTH)
+)
+(
   rob2rt_write_valid,
   rob2rt_write_data,
   rt2rob_write_ready,
@@ -83,27 +94,27 @@ module rvv_backend_retire(
 
 // Retire information for RVVI.
     output  logic    [`NUM_RT_UOP-1:0]          rvvrob2rt_valid; // always ready to receive.
-    output  ROB2RT_t [`NUM_RT_UOP-1:0]          rvvrob2rt_data;  
+    output  ROB2RT_t [`NUM_RT_UOP-1:0]          rvvrob2rt_data;
 `ifdef RVVI_ON
-    input   logic    [`NUM_VRF-1:0][`VLEN-1:0]  vrf_data;
+    input   logic    [`NUM_VRF-1:0][VLEN-1:0]  vrf_data;
 `endif
 
 ////////////Wires & Regs  ///////////////
 logic [`NUM_RT_UOP-1:0]                         w_valid_chkTrap;
-logic [`NUM_RT_UOP-1:0][`VLENB-1:0]             w_strobe;
+logic [`NUM_RT_UOP-1:0][`VLENB(VLEN)-1:0]             w_strobe;
 logic [`NUM_RT_UOP-1:0][`REGIDX_WIDTH-1:0]      w_addr;
 logic [`NUM_RT_UOP-1:0]                         w_valid;
-logic [`NUM_RT_UOP-1:0][`VLEN-1:0]              w_data;
+logic [`NUM_RT_UOP-1:0][VLEN-1:0]              w_data;
 logic [`NUM_RT_UOP-1:0]                         trap_flag;
 RVVConfigState  [`NUM_RT_UOP-1:0]               w_vcsr;
-logic [`NUM_RT_UOP-1:0][`VLENB-1:0]             w_vxsaturate;
+logic [`NUM_RT_UOP-1:0][`VLENB(VLEN)-1:0]             w_vxsaturate;
 logic [`NUM_RT_UOP-1:0][`VCSR_VXSAT_WIDTH-1:0]  w_vxsat;
 `ifdef ZVE32F_ON
-logic [`NUM_RT_UOP-1:0][`VLENB-1:0]             fpexp_nv_lanes;
-logic [`NUM_RT_UOP-1:0][`VLENB-1:0]             fpexp_dz_lanes;
-logic [`NUM_RT_UOP-1:0][`VLENB-1:0]             fpexp_of_lanes;
-logic [`NUM_RT_UOP-1:0][`VLENB-1:0]             fpexp_uf_lanes;
-logic [`NUM_RT_UOP-1:0][`VLENB-1:0]             fpexp_nx_lanes;
+logic [`NUM_RT_UOP-1:0][`VLENB(VLEN)-1:0]             fpexp_nv_lanes;
+logic [`NUM_RT_UOP-1:0][`VLENB(VLEN)-1:0]             fpexp_dz_lanes;
+logic [`NUM_RT_UOP-1:0][`VLENB(VLEN)-1:0]             fpexp_of_lanes;
+logic [`NUM_RT_UOP-1:0][`VLENB(VLEN)-1:0]             fpexp_uf_lanes;
+logic [`NUM_RT_UOP-1:0][`VLENB(VLEN)-1:0]             fpexp_nx_lanes;
 logic [`NUM_RT_UOP-1:0]                         fpexp_nv;
 logic [`NUM_RT_UOP-1:0]                         fpexp_dz;
 logic [`NUM_RT_UOP-1:0]                         fpexp_of;
@@ -116,8 +127,8 @@ logic     [`NUM_RT_UOP-1:0]                     fcsr2rt_ready;
 logic [`NUM_RT_UOP-1:1][`NUM_RT_UOP-1:0]        waw;
 logic [`NUM_RT_UOP-1:0]                         hit_waw;
 logic [`NUM_RT_UOP-1:0]                         vrfres_valid;
-logic [`NUM_RT_UOP-1:0][`VLEN-1:0]              vrfres;
-logic [`NUM_RT_UOP-1:0][`VLENB-1:0]             vrfres_strobe;
+logic [`NUM_RT_UOP-1:0][VLEN-1:0]              vrfres;
+logic [`NUM_RT_UOP-1:0][`VLENB(VLEN)-1:0]             vrfres_strobe;
 logic [`NUM_RT_UOP-1:0]                         w_vrf_valid;
 logic [`NUM_RT_UOP-1:0]                         w_vrf;
 logic [`NUM_RT_UOP-1:0]                         w_xrf_valid;
@@ -141,15 +152,15 @@ generate
     assign trap_flag[j] = rob2rt_write_data[j].trap_flag;
     assign w_vcsr[j]    = rob2rt_write_data[j].vector_csr;
 
-    for (i=0;i<`VLENB;i++) begin : gen_vlenb
+    for (i=0;i<`VLENB(VLEN);i++) begin : gen_vlenb
       assign w_strobe[j][i]       = rob2rt_write_data[j].vd_type[i]==BODY_ACTIVE;
       assign w_vxsaturate[j][i]   = w_strobe[j][i] & rob2rt_write_data[j].vxsaturate[i];
       `ifdef ZVE32F_ON
-      assign fpexp_nv_lanes[j][i] = w_strobe[j][i] & rob2rt_write_data[j].fpexp[i].nv; 
-      assign fpexp_dz_lanes[j][i] = w_strobe[j][i] & rob2rt_write_data[j].fpexp[i].dz; 
-      assign fpexp_of_lanes[j][i] = w_strobe[j][i] & rob2rt_write_data[j].fpexp[i].of; 
-      assign fpexp_uf_lanes[j][i] = w_strobe[j][i] & rob2rt_write_data[j].fpexp[i].uf; 
-      assign fpexp_nx_lanes[j][i] = w_strobe[j][i] & rob2rt_write_data[j].fpexp[i].nx; 
+      assign fpexp_nv_lanes[j][i] = w_strobe[j][i] & rob2rt_write_data[j].fpexp[i].nv;
+      assign fpexp_dz_lanes[j][i] = w_strobe[j][i] & rob2rt_write_data[j].fpexp[i].dz;
+      assign fpexp_of_lanes[j][i] = w_strobe[j][i] & rob2rt_write_data[j].fpexp[i].of;
+      assign fpexp_uf_lanes[j][i] = w_strobe[j][i] & rob2rt_write_data[j].fpexp[i].uf;
+      assign fpexp_nx_lanes[j][i] = w_strobe[j][i] & rob2rt_write_data[j].fpexp[i].nx;
       `endif
     end
 
@@ -191,6 +202,7 @@ generate
 
   for(j=1;j<`NUM_RT_UOP;j++) begin: process_waw
     rvv_backend_retire_waw #(
+      .VLEN(VLEN),
       .UOP_NUM    (j+1)
     ) u_process_waw (
       .valid      (w_vrf_valid[j:0]&rt2rob_write_ready[j:0]),
@@ -209,7 +221,7 @@ generate
       hit_waw = hit_waw | waw[i];
     end
   end
-  
+
   // mask the existing WAW uop
   assign vrfres_valid = w_vrf_valid & rt2rob_write_ready & (~hit_waw);
 
@@ -219,7 +231,7 @@ generate
   assign rt2vcsr_write_data   = w_vcsr[0];
 
   // To vxsat
-  assign vxsat2rt_ready       = ~(w_vrf_valid&w_vxsat) | {`NUM_RT_UOP{vxsat2rt_write_ready}}; 
+  assign vxsat2rt_ready       = ~(w_vrf_valid&w_vxsat) | {`NUM_RT_UOP{vxsat2rt_write_ready}};
   assign rt2vxsat_write_valid = |(w_vrf_valid&rt2rob_write_ready&w_vxsat) && !trap_flag[0];
   assign rt2vxsat_write_data  = rt2vxsat_write_valid;
 
@@ -249,7 +261,7 @@ generate
   assign rt2fcsr_write_data.uf  = |(fpexp_uf & rob2rt_write_valid & rt2rob_write_ready);
   assign rt2fcsr_write_data.nx  = |(fpexp_nx & rob2rt_write_valid & rt2rob_write_ready);
 `endif
-  
+
   always_comb begin
     if(trap_flag[0])
       rt2rob_write_ready[0] = vcsr2rt_write_ready;
@@ -280,8 +292,8 @@ generate
       end
       else begin
       `ifdef ZVE32F_ON
-        rt2rob_write_ready[j] = (rob2rt_write_data[j].w_type==XRF) 
-                                ? rt2rob_write_ready[j-1] & rvs2rt_write_ready[j] 
+        rt2rob_write_ready[j] = (rob2rt_write_data[j].w_type==XRF)
+                                ? rt2rob_write_ready[j-1] & rvs2rt_write_ready[j]
                                 : rt2rob_write_ready[j-1] & frf2rt_write_ready[j] & fcsr2rt_ready[j];
       `else
         rt2rob_write_ready[j] = rt2rob_write_ready[j-1] & rvs2rt_write_ready[j];
@@ -293,7 +305,7 @@ generate
   for(j=0;j<`NUM_RT_UOP;j++) begin : gen_rt2vrf_write
     always_comb begin
       if(vrfres_valid[j]) begin
-        rt2vrf_write_valid[j]           = 1'b1; 
+        rt2vrf_write_valid[j]           = 1'b1;
 
         `ifdef TB_SUPPORT
         rt2vrf_write_data[j].uop_pc     = rob2rt_write_data[j].uop_pc;
@@ -303,7 +315,7 @@ generate
         rt2vrf_write_data[j].rt_strobe  = vrfres_strobe[j];
       end
       else begin
-        rt2vrf_write_valid[j]           = 'b0;     
+        rt2vrf_write_valid[j]           = 'b0;
         rt2vrf_write_data[j]            = 'b0;
       end
     end
@@ -316,9 +328,9 @@ generate
       `else
       if(w_xrf[j]) begin
       `endif
-        rt2xrf_write_valid[j]           = w_xrf[j];     
+        rt2xrf_write_valid[j]           = w_xrf[j];
         `ifdef ZVE32F_ON
-        rt2frf_write_valid[j]           = w_frf[j]; 
+        rt2frf_write_valid[j]           = w_frf[j];
         `endif
 
         `ifdef TB_SUPPORT
@@ -329,9 +341,9 @@ generate
         rt2rvs_write_data[j].rt_data    = w_data[j][31:0];
       end
       else begin
-        rt2xrf_write_valid[j]           = 'b0;     
+        rt2xrf_write_valid[j]           = 'b0;
         `ifdef ZVE32F_ON
-        rt2frf_write_valid[j]           = 'b0; 
+        rt2frf_write_valid[j]           = 'b0;
         `endif
         rt2rvs_write_data[j]            = 'b0;
       end
@@ -344,18 +356,18 @@ endgenerate
     for(int j=0;j<`NUM_RT_UOP;j++) begin
       rvvrob2rt_valid[j]        = rob2rt_write_valid[j] &
                                   rt2rob_write_ready[j] &
-                                  rob2rt_write_data[j].w_valid & 
+                                  rob2rt_write_data[j].w_valid &
                                   rob2rt_write_data[j].res_updating_end;
 
       rvvrob2rt_data[j]         = rob2rt_write_data[j];
-      rvvrob2rt_data[j].w_valid = rvvrob2rt_valid[j];  
+      rvvrob2rt_data[j].w_valid = rvvrob2rt_valid[j];
 
     `ifdef RVVI_ON
       if(rob2rt_write_data[j].w_type==VRF) begin
-        for(int i=0;i<`VLENB;i++) begin
-          rvvrob2rt_data[j].vd_type                             = {`VLENB{BODY_ACTIVE}};
-          rvvrob2rt_data[j].w_data[i*`BYTE_WIDTH+:`BYTE_WIDTH]  = vrfres_strobe[j][i] 
-                                                                ? vrfres[j][i*`BYTE_WIDTH+:`BYTE_WIDTH] 
+        for(int i=0;i<`VLENB(VLEN);i++) begin
+          rvvrob2rt_data[j].vd_type                             = {`VLENB(VLEN){BODY_ACTIVE}};
+          rvvrob2rt_data[j].w_data[i*`BYTE_WIDTH+:`BYTE_WIDTH]  = vrfres_strobe[j][i]
+                                                                ? vrfres[j][i*`BYTE_WIDTH+:`BYTE_WIDTH]
                                                                 : vrf_data[rob2rt_write_data[j].w_index][i*`BYTE_WIDTH+:`BYTE_WIDTH];
         end
       end

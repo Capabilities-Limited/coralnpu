@@ -15,6 +15,76 @@ package delay_mode_pkg;
 typedef enum {FAST, NORMAL, SLOW} delay_mode_e;
 endpackage: delay_mode_pkg
 
+// Mask-result tail policy ----------------------------------
+// RVV spec 3.4.3: any tail element of a mask result may be written with the old value
+// (undisturbed), with 1 (agnostic), or with the value calculated with vl=VLMAX. For mask-logical
+// instructions and vmsbf/vmsif/vmsof it may also be calculated with vl=VLEN, SEW=8, LMUL=8 (the
+// whole register). The model follows one policy per instruction class so that architectural
+// state stays identical to the DUT's, which does not use the same policy for every class.
+// Select each at compile time with +define+RVV_TB_MASK_TAIL_<CLASS>=<0|1|2>
+// (0: undisturbed, 1: all_ones, 2: calculated). The Makefile does this from
+// MASK_TAIL_LOGIC / _SET / _CMP / _CARRY, or all at once from MASK_TAIL.
+//   LOGIC: vmand, vmor, vmxor, vmorn, vmnand, vmnor, vmandn, vmxnor  (default: calculated)
+//   SET:   vmsbf, vmsif, vmsof                                       (default: undisturbed)
+//   CMP:   vmseq, vmsne, vmsltu, vmslt, vmsleu, vmsle, vmsgtu, vmsgt (default: undisturbed)
+//   CARRY: vmadc, vmsbc                                              (default: undisturbed)
+`ifndef RVV_TB_MASK_TAIL_LOGIC
+  `define RVV_TB_MASK_TAIL_LOGIC 2
+`endif
+`ifndef RVV_TB_MASK_TAIL_SET
+  `define RVV_TB_MASK_TAIL_SET 0
+`endif
+`ifndef RVV_TB_MASK_TAIL_CMP
+  `define RVV_TB_MASK_TAIL_CMP 0
+`endif
+`ifndef RVV_TB_MASK_TAIL_CARRY
+  `define RVV_TB_MASK_TAIL_CARRY 0
+`endif
+package mask_tail_pkg;
+  typedef enum {MASK_TAIL_UNDISTURBED, MASK_TAIL_ALL_ONES, MASK_TAIL_CALCULATED} mask_tail_policy_e;
+  localparam mask_tail_policy_e MASK_TAIL_POLICY_LOGIC = mask_tail_policy_e'(`RVV_TB_MASK_TAIL_LOGIC);
+  localparam mask_tail_policy_e MASK_TAIL_POLICY_SET   = mask_tail_policy_e'(`RVV_TB_MASK_TAIL_SET);
+  localparam mask_tail_policy_e MASK_TAIL_POLICY_CMP   = mask_tail_policy_e'(`RVV_TB_MASK_TAIL_CMP);
+  localparam mask_tail_policy_e MASK_TAIL_POLICY_CARRY = mask_tail_policy_e'(`RVV_TB_MASK_TAIL_CARRY);
+endpackage: mask_tail_pkg
+
+// Fault-only-first policies --------------------------------
+// RVV spec, unit-stride fault-only-first loads. These are the choices the spec leaves to the
+// implementation that the testbench can model. Each is selected at compile time
+// (+define+RVV_TB_FOF_<NAME>=<n>; Makefile: FOF_POST_FAULT, FOF_SEGMENT) and the defaults match
+// this DUT.
+//
+// POST_FAULT - active elements between the faulting element k and the original vl, when the load
+//   faults on an element k > 0 (vl is trimmed to k and no trap is taken). The spec says such loads
+//   "may update active destination elements past the element that causes trimming of the vector
+//   length (but not past the original vector length)", with values that need not match memory.
+//   0 not_updated: they are treated as tail elements and not written (default).
+//   1 loaded:      they are loaded from memory as if the load had not faulted.
+//
+// SEGMENT - a fault inside a segment of vlseg<nf>e<eew>ff.v. The spec says "it is
+//   implementation-defined whether a subset of the segment is loaded".
+//   0 whole:   no field of the faulting segment is loaded (default).
+//   1 partial: the fields before the faulting field are loaded, the rest are not.
+//
+// Not configurable, because the testbench acts as the LSU and the DUT decides them:
+// - Whether a load that traps overwrites active elements past the trapping element (the spec
+//   allows it; the DUT flushes the later uops, so it never does).
+// - Whether an implementation trims vl without a fault ("permitted to process fewer than vl
+//   elements ... if vstart=0 and vl>0 then at least one element must be processed"). To the backend
+//   that is the same as a fault on element k > 0, so lsu_fof_gen_fault covers it.
+`ifndef RVV_TB_FOF_POST_FAULT
+  `define RVV_TB_FOF_POST_FAULT 0
+`endif
+`ifndef RVV_TB_FOF_SEGMENT
+  `define RVV_TB_FOF_SEGMENT 0
+`endif
+package fof_policy_pkg;
+  typedef enum {FOF_POST_FAULT_NOT_UPDATED, FOF_POST_FAULT_LOADED} fof_post_fault_e;
+  typedef enum {FOF_SEGMENT_WHOLE, FOF_SEGMENT_PARTIAL}            fof_segment_e;
+  localparam fof_post_fault_e FOF_POST_FAULT = fof_post_fault_e'(`RVV_TB_FOF_POST_FAULT);
+  localparam fof_segment_e    FOF_SEGMENT    = fof_segment_e'(`RVV_TB_FOF_SEGMENT);
+endpackage: fof_policy_pkg
+
 package rvv_tb_pkg;
 import vrf_mon_pkg::*;
 import rvv_state_pkg::*;
@@ -22,12 +92,12 @@ import delay_mode_pkg::*;
 typedef logic [`REGFILE_INDEX_WIDTH-1:0] reg_idx_t;
 typedef logic [`XLEN-1:0] xrf_t;
 typedef logic [`VLEN-1:0] vrf_t;
-typedef logic [`VLENB-1:0] vrf_byte_t;
+typedef logic [`VLENB(VLEN)-1:0] vrf_byte_t;
 
 
 // typedef RVVSEW sew_e;
 typedef enum logic [2:0] {
-  SEW8  = 3'b000, 
+  SEW8  = 3'b000,
   SEW16 = 3'b001,
   SEW32 = 3'b010,
   SEW_LAST = 3'b111
@@ -35,8 +105,8 @@ typedef enum logic [2:0] {
 
 typedef enum int {
   EEW_NONE = 0,
-  EEW1  = 1, 
-  EEW8  = 8, 
+  EEW1  = 1,
+  EEW8  = 8,
   EEW16 = 16,
   EEW32 = 32,
   EEW64 = 64
@@ -66,11 +136,11 @@ parameter real EMUL4     = 4.00;
 parameter real EMUL8     = 8.00;
 
 typedef struct packed {
-  logic [31] vill;
+  logic vill;
   logic [30:8] rsv;
   agnostic_e vma;
   agnostic_e vta;
-  sew_e vsew; 
+  sew_e vsew;
   lmul_e vlmul;
 } vtype_t;
 
@@ -82,8 +152,8 @@ typedef enum logic [1:0] {
 } vxrm_e;
 
 typedef enum logic [6:0] {
-  LD  = 7'b000_0111, 
-  ST  = 7'b010_0111, 
+  LD  = 7'b000_0111,
+  ST  = 7'b010_0111,
   ALU = 7'b101_0111
 } inst_type_e;
 
@@ -95,7 +165,7 @@ typedef enum logic [2:0] {
   OPIVX=3'b100,      // vs2,      rs1, vd.
   OPFVF=3'b101,      // vs2,      rs1, vd. float, not support
   OPMVX=3'b110,      // vs2,      rs1, vd/rd.
-  OPCFG=3'b111       // vset* instructions    
+  OPCFG=3'b111       // vset* instructions
 } alu_type_e;
 
 typedef enum logic [7:0] {
@@ -103,7 +173,7 @@ typedef enum logic [7:0] {
   VADD            =   8'b00_000_000,
   VSUB            =   8'b00_000_010,
   VRSUB           =   8'b00_000_011,
-  
+
   VADC            =   8'b00_010_000,
   VMADC           =   8'b00_010_001,
   VSBC            =   8'b00_010_010,
@@ -140,7 +210,7 @@ typedef enum logic [7:0] {
   VSSUBU          =   8'b00_100_010,
   VSSUB           =   8'b00_100_011,
 
-  VSMUL_VMVNRR    =   8'b00_100_111, // .vv,.vx: vsmul; .vi: vmvnrr 
+  VSMUL_VMVNRR    =   8'b00_100_111, // .vv,.vx: vsmul; .vi: vmvnrr
 
   VSSRL           =   8'b00_101_010,
   VSSRA           =   8'b00_101_011,
@@ -167,7 +237,7 @@ typedef enum logic [7:0] {
   VWSUBU_W        =   8'b01_110_110,
   VWSUB_W         =   8'b01_110_111,
 
-  VXUNARY0        =   8'b01_010_010,  // VZEXT/VSEXT 
+  VXUNARY0        =   8'b01_010_010,  // VZEXT/VSEXT
 
   VMUL            =   8'b01_100_101,
   VMULH           =   8'b01_100_111,
@@ -191,7 +261,7 @@ typedef enum logic [7:0] {
   VWMACCU         =   8'b01_111_100,
   VWMACC          =   8'b01_111_101,
   VWMACCUS        =   8'b01_111_110,
-  VWMACCSU        =   8'b01_111_111,  
+  VWMACCSU        =   8'b01_111_111,
 
   VAADDU          =   8'b01_001_000,
   VAADD           =   8'b01_001_001,
@@ -218,7 +288,7 @@ typedef enum logic [7:0] {
 
 
   VMUNARY0        =   8'b01_010_100,     // it could be vmsbf, vmsof, vmsif, viota, vid. They can be distinguished by vs1 field(inst_encoding[19:15]).
-// Vector Permutation Operations in OPM 
+// Vector Permutation Operations in OPM
   //VMV             =   8'b01_010_000,
   VSLIDE1UP       =   8'b01_001_110,
   VSLIDE1DOWN     =   8'b01_001_111,
@@ -234,7 +304,7 @@ typedef enum logic [4:0] {
   VZEXT_VF4       =   5'b00100,
   VSEXT_VF4       =   5'b00101,
   VZEXT_VF2       =   5'b00110,
-  VSEXT_VF2       =   5'b00111,  
+  VSEXT_VF2       =   5'b00111,
   VXUNARY0_NONE   =   5'b11111
 } vxunary0_e;
 
@@ -277,13 +347,13 @@ typedef enum logic [2:0] {
 } lsu_nf_e;
 
 typedef enum logic [2:0] {
-  NR1 = 3'b000,  
-  NR2 = 3'b001,  
-  NR3 = 3'b010,  
+  NR1 = 3'b000,
+  NR2 = 3'b001,
+  NR3 = 3'b010,
   NR4 = 3'b011,
-  NR5 = 3'b100,  
-  NR6 = 3'b101,  
-  NR7 = 3'b110,  
+  NR5 = 3'b100,
+  NR6 = 3'b101,
+  NR7 = 3'b110,
   NR8 = 3'b111
 } lsu_nr_e;
 

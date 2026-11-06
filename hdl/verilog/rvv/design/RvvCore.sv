@@ -12,18 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-module RvvCore #(parameter N = 4,
-                 parameter CMD_BUFFER_MAX_CAPACITY = 16,
-                 type RegDataT=logic [31:0],
-                 type VRegDataT=logic [127:0],
-                 type RegAddrT=logic [4:0],
-                 type MaskT=logic [15:0]
-                 )
+module RvvCore #(
+  // Width of issue queue
+  parameter int unsigned N = 4,
+  parameter int unsigned CMD_BUFFER_MAX_CAPACITY = 16,
+  // Length of Vector Registers (128/256/512/1024)b
+  parameter int unsigned VLEN = `VLEN,
+  localparam int unsigned VSTART_WIDTH = `VSTART_WIDTH(VLEN),
+  localparam int unsigned VLENB = `VLENB(VLEN),
+  // Scalar Register Data
+  parameter type RegDataT=logic [31:0],
+  localparam int unsigned XLEN = $bits(RegDataT),
+  localparam type VRegDataT=logic [VLEN-1:0],
+  localparam type RegAddrT=logic [4:0],
+  localparam type MaskT=logic [VLENB-1:0],
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  // Type aliases - macros are constructors for parameterised types
+  localparam type RVVConfigState = `CONFIG_STATE_t(VLEN),
+  localparam type RVVCmd = `CMD_t(VLEN, XLEN, PC_WIDTH),
+  localparam type RVVInstruction = `INSTRUCTION_t(PC_WIDTH),
+  localparam type UOP_RVV2LSU_t = `UOP_RVV2LSU_t(VLEN, PC_WIDTH),
+  localparam type UOP_LSU2RVV_t = `UOP_LSU2RVV_t(VLEN, PC_WIDTH),
+  localparam type ROB2RT_t = `ROB2RT_t(VLEN, PC_WIDTH)
+)
 (
   input clk,
   input rstn,
 
-  input logic [`VSTART_WIDTH-1:0] vstart,
+  input logic [VSTART_WIDTH-1:0] vstart,
   input logic vstart_valid,
   input logic [1:0] vxrm,
   input logic vxsat,
@@ -76,7 +92,7 @@ module RvvCore #(parameter N = 4,
   input  RegAddrT  [`NUM_LSU-1:0] uop_lsu_addr_lsu2rvv,
   input  VRegDataT [`NUM_LSU-1:0] uop_lsu_wdata_lsu2rvv,
   input  logic     [`NUM_LSU-1:0] uop_lsu_last_lsu2rvv,
-  input  logic     [`NUM_LSU-1:0][$clog2(`VLENB):0] uop_lsu_ff_tail_index_lsu2rvv,
+  input  logic     [`NUM_LSU-1:0][$clog2(`VLENB(VLEN)):0] uop_lsu_ff_tail_index_lsu2rvv,
   output logic     [`NUM_LSU-1:0] uop_lsu_ready_rvv2lsu,
 
   // Vector CSR writeback
@@ -112,7 +128,7 @@ module RvvCore #(parameter N = 4,
 
   // Floating point fflags update from backend
   output logic                            wr_fflags_valid_o,
-  output logic    [4:0]                   wr_fflags_o
+  output RVFEXP_t                         wr_fflags_o
 `ifdef ZVT_ON
   ,
   // VME to LSU (store data)
@@ -131,10 +147,21 @@ module RvvCore #(parameter N = 4,
   input  logic vmeRtRdy_i
 `endif
 );
+  // Elaboration-time parameter checks.
+  if (XLEN != 32 && XLEN != 64) begin : g_check_xlen
+    $fatal(1, "RvvCore: XLEN ($bits(RegDataT)) must be 32 or 64, got %0d", XLEN);
+  end
+
   logic [N-1:0] frontend_cmd_valid;
   RVVCmd [N-1:0] frontend_cmd_data;
   logic [$clog2(2*N + 1)-1:0] queue_capacity_internal;
-  RvvFrontEnd#(.N(N), .RegDataT(RegDataT), .RegAddrT(RegAddrT)) frontend(
+  RvvFrontEnd#(
+    .N(N),
+    .RegDataT(RegDataT),
+    .RegAddrT(RegAddrT),
+    .VLEN(VLEN),
+    .PC_WIDTH(PC_WIDTH)
+  ) frontend(
       .clk(clk),
       .rstn(rstn),
       .vstart_i(vstart),
@@ -217,7 +244,7 @@ module RvvCore #(parameter N = 4,
   // TODO(derekjchow): Properly arbitrate write-back tie-offs by extending
   // interface. For time being, only accept from slot 0.
   logic    [`NUM_RT_UOP-1:0] rt_xrf_valid_rvv2rvs;
-  RT2RVS_t [`NUM_RT_UOP-1:0] rt_rvs_rvv2rvs;
+  `RT2RVS_t(XLEN, PC_WIDTH) [`NUM_RT_UOP-1:0] rt_rvs_rvv2rvs;
   logic    [`NUM_RT_UOP-1:0] rt_rvs_ready_rvs2rvv;
 
   always_comb begin
@@ -235,11 +262,11 @@ module RvvCore #(parameter N = 4,
   // interface. For time being, only accept from slot 0.
   logic [`NUM_RT_UOP-1:0]                           rvv2rvs_frd_valid;
 `ifdef TB_SUPPORT
-  logic [`NUM_RT_UOP-1:0][`PC_WIDTH-1:0]            rvv2rvs_frd_pc;
+  logic [`NUM_RT_UOP-1:0][PC_WIDTH-1:0]            rvv2rvs_frd_pc;
 `endif
   logic [`NUM_RT_UOP-1:0][`ROB_TAG_WIDTH-1:0]       rvv2rvs_frd_rob_tag;
   logic [`NUM_RT_UOP-1:0][`REGFILE_INDEX_WIDTH-1:0] rvv2rvs_frd_addr;
-  logic [`NUM_RT_UOP-1:0][`XLEN-1:0]                rvv2rvs_frd_data;
+  logic [`NUM_RT_UOP-1:0][XLEN-1:0]                 rvv2rvs_frd_data;
   logic [`NUM_RT_UOP-1:0]                           rvv2rvs_frd_ready;
   always_comb begin
     rvv2rvs_frd_ready[0] = async_frd_ready;
@@ -298,10 +325,16 @@ module RvvCore #(parameter N = 4,
   assign uop_lsu2vme_ready = uop_lsu2vme_rdy;
 `endif
 
-  logic   [`ISSUE_LANE-1:0] insts_ready_cq2rvs;
+  logic   [N-1:0] insts_ready_cq2rvs;
   logic rvv_backend_idle;
   assign rvv_idle = rvv_backend_idle && (frontend_cmd_valid == 0);
-  rvv_backend backend(
+  rvv_backend#(
+    .N(N),
+    .VLEN(VLEN),
+    .PC_WIDTH(PC_WIDTH),
+    .RegDataT(RegDataT),
+    .RegAddrT(RegAddrT)
+  ) backend(
       .clk(clk),
       .rst_n(rstn),
       .insts_valid_rvs2cq(frontend_cmd_valid),

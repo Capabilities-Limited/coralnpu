@@ -20,7 +20,9 @@
 `endif
 
 (* keep_hierarchy = "yes" *)
-module rvv_backend_alu_addsub_p1_datapath (
+module rvv_backend_alu_addsub_p1_datapath#(
+  localparam type RVVXRM = RVVXRM_e
+) (
   input  logic        is_sub,
   input  EEW_e        vs2_eew,
   input  FUNCT6_u     uop_funct6,

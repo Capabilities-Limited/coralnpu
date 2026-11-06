@@ -11,25 +11,25 @@ typedef class trap_info_transaction;
   `uvm_analysis_imp_decl(_trap_rvs)
 class rvs_driver extends uvm_driver # (rvs_transaction);
 
-  uvm_analysis_port #(rvs_transaction) inst_ap; 
+  uvm_analysis_port #(rvs_transaction) inst_ap;
   uvm_blocking_get_port #(vrf_mon_pkg::vrf_state_e) vrf_state_port;
   uvm_blocking_get_port #(rvv_state_pkg::rvv_state_e) rvv_state_port;
-  uvm_analysis_imp_trap_rvs #(trap_info_transaction,rvs_driver) trap_imp; 
+  uvm_analysis_imp_trap_rvs #(trap_info_transaction,rvs_driver) trap_imp;
 
   rvv_backend_test test_top;
-  
-  typedef virtual rvs_interface v_if1; 
-  typedef virtual vrf_interface v_if3; 
+
+  typedef virtual rvs_interface v_if1;
+  typedef virtual vrf_interface v_if3;
   v_if1 rvs_if;
   v_if3 vrf_if;
-  
+
   int             inst_tx_queue_depth = 4;
   rvs_transaction inst_tx_queue[$];
-  RVVCmd          inst     [`ISSUE_LANE-1:0];
+  `CMD_t(`VLEN, `XLEN, `PC_WIDTH) inst [`ISSUE_LANE-1:0];
   logic           inst_vld [`ISSUE_LANE-1:0];
   bit             stall_tx;
 
-  bit             single_inst_mode = 0; 
+  bit             single_inst_mode = 0;
   int             inst_tx_delay_max = 8;
   int             inst_tx_delay = 0;
 
@@ -41,8 +41,8 @@ class rvs_driver extends uvm_driver # (rvs_transaction);
   int unsigned    vcsr_ready_delay;
   int unsigned    gen_inst_after_trap;
 
-  extern function new(string name = "rvs_driver", uvm_component parent = null); 
- 
+  extern function new(string name = "rvs_driver", uvm_component parent = null);
+
   `uvm_component_utils_begin(rvs_driver)
   `uvm_component_utils_end
 
@@ -131,7 +131,7 @@ endtask:configure_phase
 
 task rvs_driver::run_phase(uvm_phase phase);
   super.run_phase(phase);
-  fork 
+  fork
     tx_driver();
     rx_driver();
     vrf_driver();
@@ -141,7 +141,7 @@ endtask: run_phase
 task rvs_driver::inst_manage();
   rvs_transaction tr;
   tr = new();
-  
+
   for(int i=0; i<`ISSUE_LANE; i++) begin
     if((rvs_if.insts_ready_cq2rvs[i]===1'b1) && (rvs_if.insts_valid_rvs2cq[i]===1'b1)) begin
       tr = inst_tx_queue.pop_front();
@@ -149,7 +149,7 @@ task rvs_driver::inst_manage();
   end
 
   while (inst_tx_queue.size() < inst_tx_queue_depth) begin
-    if(inst_tx_delay != 0) begin 
+    if(inst_tx_delay != 0) begin
       inst_tx_delay--;
       break;
     end
@@ -160,7 +160,7 @@ task rvs_driver::inst_manage();
       inst_tx_queue.push_back(tr);
       `uvm_info(get_type_name(), $sformatf("Send transaction to rvs_mon:\n%s",tr.sprint()),UVM_HIGH)
       inst_ap.write(tr);
-      seq_item_port.item_done(); 
+      seq_item_port.item_done();
       if(single_inst_mode) begin
         inst_tx_delay = inst_tx_delay_max;
       end else begin
@@ -188,11 +188,13 @@ task rvs_driver::inst_manage();
       inst[i].arch_state.ta         = inst_tx_queue[i].vta;
       assert($cast(inst[i].arch_state.sew,  inst_tx_queue[i].vsew));
       assert($cast(inst[i].arch_state.lmul, inst_tx_queue[i].vlmul));
+      // The LSU/ARI decode units read lmul_orig (the architectural vtype LMUL).
+      assert($cast(inst[i].arch_state.lmul_orig, inst_tx_queue[i].vlmul));
       inst_vld[i] = 1'b1;
     end else begin
       inst[i] = inst[i];
       inst_vld[i] = 1'b0;
-    end 
+    end
   end
 
 endtask: inst_manage
@@ -257,11 +259,11 @@ task rvs_driver::rx_driver();
     // rt_xrf_ready response
     for(int i=0; i<`NUM_RT_UOP; i++) begin
       case(delay_mode_rt_xrf)
-        delay_mode_pkg::SLOW: 
+        delay_mode_pkg::SLOW:
           assert(std::randomize(rt_xrf_ready[i]) with {rt_xrf_ready[i] dist {0 := 90, 1 := 10};});
-        delay_mode_pkg::NORMAL: 
+        delay_mode_pkg::NORMAL:
           assert(std::randomize(rt_xrf_ready[i]) with {rt_xrf_ready[i] dist {0 := 20, 1 := 80};});
-        delay_mode_pkg::FAST: 
+        delay_mode_pkg::FAST:
           assert(std::randomize(rt_xrf_ready[i]) with {rt_xrf_ready[i] dist {0 := 0, 1 := 100};});
       endcase
       rvs_if.rt_xrf_ready_rvs2rvv[i] <= rt_xrf_ready[i];
@@ -269,11 +271,11 @@ task rvs_driver::rx_driver();
 
     // wr_vxsat_ready response
     case(delay_mode_wr_vxsat)
-      delay_mode_pkg::SLOW: 
+      delay_mode_pkg::SLOW:
         assert(std::randomize(wr_vxsat_ready) with {wr_vxsat_ready dist {0 := 90, 1 := 10};});
-      delay_mode_pkg::NORMAL: 
+      delay_mode_pkg::NORMAL:
         assert(std::randomize(wr_vxsat_ready) with {wr_vxsat_ready dist {0 := 20, 1 := 80};});
-      delay_mode_pkg::FAST: 
+      delay_mode_pkg::FAST:
         assert(std::randomize(wr_vxsat_ready) with {wr_vxsat_ready dist {0 := 0, 1 := 100};});
     endcase
     rvs_if.wr_vxsat_ready <= wr_vxsat_ready;
@@ -309,7 +311,7 @@ task rvs_driver::vrf_driver();
           `uvm_info(get_type_name(),$sformatf("Got rvv status %s",rvv_state.name()),UVM_HIGH)
           `uvm_info(get_type_name(), "Start to randomize vrf", UVM_HIGH)
           for(int reg_idx=0; reg_idx<32; reg_idx++) begin
-            for(int j=0; j<`VLENB; j++) begin
+            for(int j=0; j<`VLENB(VLEN); j++) begin
               value[j*8+:8] = $urandom_range(0, 8'hFF);
             end
             test_top.set_mdl_vrf(reg_idx, value);
@@ -329,12 +331,10 @@ endtask: vrf_driver
     `uvm_info(get_type_name(), "get a trap", UVM_HIGH)
     `uvm_info(get_type_name(), trap_tr.sprint(), UVM_HIGH)
     assert(trap_tr.randomize(vcsr_ready_delay) with {
-      vcsr_ready_delay dist { 
+      vcsr_ready_delay dist {
         [0:10] := 100
       };
     });
     trap_queue.push_back(trap_tr);
   endfunction
 `endif // RVS_DRIVER__SV
-
-

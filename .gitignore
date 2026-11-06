@@ -33,3 +33,7 @@ dispatch.log
 results_*/
 synthesis/flow_runs.db
 synthesis/telemetry/
+
+hdl/verilog/rvv/outfiles
+hdl/verilog/rvv/build
+build/

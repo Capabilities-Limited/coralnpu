@@ -6,9 +6,17 @@
 `include "rvv_backend_sva.svh"
 `endif
 
-module rvv_backend_decode_de2
+module rvv_backend_decode_de2#(
+  parameter int unsigned VLEN = `VLEN,
+  // Scalar Register Data
+  parameter type RegDataT=logic [31:0],
+  localparam int unsigned XLEN = $bits(RegDataT),
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type LCMD_t = `LCMD_t(VLEN, XLEN, PC_WIDTH),
+  localparam type UOP_QUEUE_t = `UOP_QUEUE_t(VLEN, XLEN, PC_WIDTH)
+)
 (
-  clk, 
+  clk,
   rst_n,
   lcmd_valid,
   lcmd,
@@ -16,7 +24,7 @@ module rvv_backend_decode_de2
   push,
   uop,
   uq_ready,
-  trap_flush_rvv 
+  trap_flush_rvv
 );
 //
 // interface signals
@@ -33,7 +41,7 @@ module rvv_backend_decode_de2
   output  UOP_QUEUE_t [`NUM_DE_UOP-1:0] uop;
   input   logic   [`NUM_DE_UOP-1:0]     uq_ready;
   // trap-flush
-  input   logic                         trap_flush_rvv;  
+  input   logic                         trap_flush_rvv;
 
 //
 // internal signals
@@ -50,31 +58,40 @@ module rvv_backend_decode_de2
 // decode
 //
   // decode unit
-  rvv_backend_decode_unit_de2 u_decode_unit0_de2
-  (
+  rvv_backend_decode_unit_de2#(
+    .VLEN(VLEN),
+    .RegDataT(RegDataT),
+    .PC_WIDTH(PC_WIDTH)
+  ) u_decode_unit0_de2 (
     .lcmd_valid             (lcmd_valid[0]),
     .lcmd                   (lcmd[0]),
     .uop_index_remain       (uop_index_remain),
     .uop_valid              (de_uop_valid[0]),
     .uop                    (de_uop[0])
   );
-   
-  generate 
+
+  generate
     for (i=1;i<`NUM_DE_INST;i=i+1) begin: DECODE_UNIT
-      rvv_backend_decode_unit_de2 u_decode_unit_de2
-      (
+      rvv_backend_decode_unit_de2#(
+        .VLEN(VLEN),
+        .RegDataT(RegDataT),
+        .PC_WIDTH(PC_WIDTH)
+      ) u_decode_unit_de2 (
         .lcmd_valid         (lcmd_valid[i]),
         .lcmd               (lcmd[i]),
         .uop_index_remain   ({`UOP_INDEX_WIDTH{1'b0}}),
         .uop_valid          (de_uop_valid[i]),
         .uop                (de_uop[i])
-      );    
+      );
     end
   endgenerate
-  
+
   // decode controller
-  rvv_backend_decode_ctrl u_decode_ctrl
-  (
+  rvv_backend_decode_ctrl#(
+    .VLEN(VLEN),
+    .RegDataT(RegDataT),
+    .PC_WIDTH(PC_WIDTH)
+  ) u_decode_ctrl (
     .clk                    (clk),
     .rst_n                  (rst_n),
     .de_uop_valid           (de_uop_valid),

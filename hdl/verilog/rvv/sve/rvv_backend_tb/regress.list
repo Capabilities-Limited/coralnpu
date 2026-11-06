@@ -25,7 +25,7 @@ alu_vmunary0_test
 
 # pmt tests
 alu_vmvnr_test
-alu_vmv_test 
+alu_vmv_test
 alu_slide_test
 alu_gather_test
 alu_vcompress_test
@@ -44,6 +44,7 @@ lsu_indexed_seg_test
 lsu_unit_stride_mask_test
 lsu_whole_reg_test
 lsu_fof_test
+lsu_fof_fault_test
 
 # trap direct tests
 lsu_unit_stride_test_trap_en
@@ -55,3 +56,4 @@ lsu_indexed_seg_test_trap_en
 lsu_unit_stride_mask_test_trap_en
 lsu_whole_reg_test_trap_en
 lsu_fof_test_trap_en
+lsu_fof_fault_test_trap_en

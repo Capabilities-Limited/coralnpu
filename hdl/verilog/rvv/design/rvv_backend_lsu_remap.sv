@@ -5,7 +5,13 @@
 `include "rvv_backend_sva.svh"
 `endif
 
-module rvv_backend_lsu_remap
+module rvv_backend_lsu_remap#(
+  parameter int unsigned VLEN = `VLEN,
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type PU2ROB_t = `PU2ROB_t(VLEN, PC_WIDTH),
+  localparam type LSU_MAP_INFO_t = `LSU_MAP_INFO_t(PC_WIDTH),
+  localparam type UOP_LSU_t = `UOP_LSU_t(VLEN, PC_WIDTH)
+)
 (
   mapinfo_valid,
   mapinfo,
@@ -36,13 +42,13 @@ module rvv_backend_lsu_remap
   // submit LSU result to ROB
   output  logic           [`NUM_LSU-1:0]                    result_valid;
   output  PU2ROB_t        [`NUM_LSU-1:0]                    result;
-  output  logic           [`NUM_LSU-1:0][$clog2(`VLENB):0]  ff_tail_index;  
+  output  logic           [`NUM_LSU-1:0][$clog2(`VLENB(VLEN)):0]  ff_tail_index;
   input   logic           [`NUM_LSU-1:0]                    result_ready;
 
   // submit trap to ROB
   output  logic                           trap_valid_rmp2rob;
   output  logic   [`ROB_DEPTH_WIDTH-1:0]  trap_rob_entry_rmp2rob;
-  input   logic                           trap_ready_rob2rmp;   
+  input   logic                           trap_ready_rob2rmp;
 
 //
 // internal signals
@@ -50,13 +56,13 @@ module rvv_backend_lsu_remap
   genvar                i;
 
 //
-// logic start 
+// logic start
 //
-  // result valid 
+  // result valid
   generate
     for(i=0;i<`NUM_LSU;i++) begin: RES_VALID
       assign result_valid[i] = mapinfo_valid[i]&lsu_res_valid[i]&mapinfo[i].valid&(!lsu_res[i].trap_valid)&(
-                               (!mapinfo[i].lsu_is_store) & lsu_res[i].uop_lsu2rvv.vregfile_write_valid || 
+                               (!mapinfo[i].lsu_is_store) & lsu_res[i].uop_lsu2rvv.vregfile_write_valid ||
                                 (mapinfo[i].lsu_is_store) & lsu_res[i].uop_lsu2rvv.lsu_vstore_last);
     end
   endgenerate

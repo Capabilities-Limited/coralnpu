@@ -10,7 +10,19 @@
 `include "rvv_backend_pmtrdt.svh"
 `endif
 
-module rvv_backend_pmtrdt_unit_permutation
+module rvv_backend_pmtrdt_unit_permutation#(
+  parameter int unsigned VLEN = `VLEN,
+  parameter type RegDataT=logic [31:0],
+  localparam int unsigned XLEN = $bits(RegDataT),
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type PMT_RDT_RS_t = `PMT_RDT_RS_t(VLEN, XLEN, PC_WIDTH),
+  localparam type PU2ROB_t = `PU2ROB_t(VLEN, PC_WIDTH),
+  localparam type PMT_INFO_t = `PMT_INFO_t(VLEN),
+  localparam type PMT_CTRL_t = `PMT_CTRL_t(XLEN, PC_WIDTH),
+
+// ---parameter definition--------------------------------------------
+  localparam int unsigned VLENB_WIDTH = $clog2(`VLENB(VLEN))
+)
 (
   clk,
   rst_n,
@@ -47,57 +59,54 @@ module rvv_backend_pmtrdt_unit_permutation
 
 // vrf read
   output logic [`REGIDX_WIDTH-1:0]            rd_index_pmt2vrf;
-  input  logic [`VLENB-1:0][`BYTE_WIDTH-1:0]  rd_data_vrf2pmt;
+  input  logic [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0]  rd_data_vrf2pmt;
 
 // MISC
   input  logic [`ROB_DEPTH_WIDTH-1:0]         rob_rptr;
 // trap-flush
   input             trap_flush_rvv;
 
-// ---parameter definition--------------------------------------------
-  localparam VLENB_WIDTH = $clog2(`VLENB);
-
 // ---internal signal definition--------------------------------------
   PMT_CTRL_t                pmt_ctrl_t0, pmt_ctrl_t1, pmt_ctrl_t2;
-  PMT_INFO_t  [`VLENB-1:0]  pmt_info_t0, pmt_info_t1;
-  logic [`VLENB-1:0]        pmt_info_valid;
+  PMT_INFO_t  [`VLENB(VLEN)-1:0]  pmt_info_t0, pmt_info_t1;
+  logic [`VLENB(VLEN)-1:0]        pmt_info_valid;
   logic                     pmt_info_ready;
-  PMT_DATA_t  [`VLENB-1:0]  pmt_data_t1, pmt_data_t2;
-  logic       [`VLENB-1:0]  pmt_t0_valid, pmt_t1_valid, pmt_t2_valid;
-  logic       [`VLENB-1:0]  pmt_t0_ready, pmt_t1_ready, pmt_t2_ready;
+  PMT_DATA_t  [`VLENB(VLEN)-1:0]  pmt_data_t1, pmt_data_t2;
+  logic       [`VLENB(VLEN)-1:0]  pmt_t0_valid, pmt_t1_valid, pmt_t2_valid;
+  logic       [`VLENB(VLEN)-1:0]  pmt_t0_ready, pmt_t1_ready, pmt_t2_ready;
   logic                     pmt_go;
 
-  PMT_INFO_t  [`VLENB-1:0]  slideup_info_t0;
-  PMT_INFO_t  [`VLENB-1:0]  slidedown_info_t0;
-  PMT_INFO_t  [`VLENB-1:0]  rgather_info_t0;
-  PMT_INFO_t  [`VLENB-1:0]  compress_info_t0;
+  PMT_INFO_t  [`VLENB(VLEN)-1:0]  slideup_info_t0;
+  PMT_INFO_t  [`VLENB(VLEN)-1:0]  slidedown_info_t0;
+  PMT_INFO_t  [`VLENB(VLEN)-1:0]  rgather_info_t0;
+  PMT_INFO_t  [`VLENB(VLEN)-1:0]  compress_info_t0;
 
-  logic [`VLENB-1:0][`XLEN+1:0] slideup_offset;
-  logic [`VLENB-1:0]            slideup_overflow;
-  logic [`VLENB-1:0]            slideup_scalar_valid;
-  logic [`VLENB-1:0][`XLEN+2:0] slidedown_offset;
-  logic [`VLENB-1:0]            slidedown_overflow;
-  logic [`VLENB-1:0]            slidedown_scalar_valid;
-  logic [`VLENB-1:0][`XLEN-1:0] rgather_vs1;
-  logic [2*`VLEN-1:0]           double_vs1_data;
-  logic [`VLENB-1:0][`XLEN+2:0] rgather_offset;
-  logic [`VLENB-1:0]            rgather_overflow;
-  logic [`VLEN-1:0]             compress_vs1;
-  logic [`VLEN-1:0]             compress_vs1_d, compress_vs1_q;
-  logic [`VLEN-1:0]             compress_vmsof;
-  logic [`VL_WIDTH-1:0]         compress_vfirst;
+  logic [`VLENB(VLEN)-1:0][XLEN+1:0] slideup_offset;
+  logic [`VLENB(VLEN)-1:0]            slideup_overflow;
+  logic [`VLENB(VLEN)-1:0]            slideup_scalar_valid;
+  logic [`VLENB(VLEN)-1:0][XLEN+2:0] slidedown_offset;
+  logic [`VLENB(VLEN)-1:0]            slidedown_overflow;
+  logic [`VLENB(VLEN)-1:0]            slidedown_scalar_valid;
+  logic [`VLENB(VLEN)-1:0][XLEN-1:0] rgather_vs1;
+  logic [2*VLEN-1:0]           double_vs1_data;
+  logic [`VLENB(VLEN)-1:0][XLEN+2:0] rgather_offset;
+  logic [`VLENB(VLEN)-1:0]            rgather_overflow;
+  logic [VLEN-1:0]             compress_vs1;
+  logic [VLEN-1:0]             compress_vs1_d, compress_vs1_q;
+  logic [VLEN-1:0]             compress_vmsof;
+  logic [`VL_WIDTH(VLEN)-1:0]         compress_vfirst;
   logic                         compress_overflow;
-  logic [`VLENB-1:0][`VSTART_WIDTH-1:0]   compress_offset;
-  logic [`VLENB-1:0]            compress_info_enable;
+  logic [`VLENB(VLEN)-1:0][`VSTART_WIDTH(VLEN)-1:0]   compress_offset;
+  logic [`VLENB(VLEN)-1:0]            compress_info_enable;
   logic [VLENB_WIDTH-1:0]       compress_cnt_d, compress_cnt_q;
   logic                         compress_cnt_en;
 
-  logic [`VSTART_WIDTH-1:0]     last_element_index;
+  logic [`VSTART_WIDTH(VLEN)-1:0]     last_element_index;
 
-  logic [`VLENB-1:0]            data_valid;
-  logic [`VLENB-1:0]            data_valid_zsof; //zero set-only first
+  logic [`VLENB(VLEN)-1:0]            data_valid;
+  logic [`VLENB(VLEN)-1:0]            data_valid_zsof; //zero set-only first
   logic [VLENB_WIDTH-1:0]       data_valid_zfirst;
-  logic [`VLENB-1:0]            data_write_enable;
+  logic [`VLENB(VLEN)-1:0]            data_write_enable;
   logic                         data_clear; // clear data slots when all data are ready.
 
   genvar i;
@@ -112,14 +121,14 @@ module rvv_backend_pmtrdt_unit_permutation
       if (pmt_uop.first_uop_valid & (pmt_uop.uop_funct3==OPMVX)) // only slide1up
     `endif
         case (pmt_uop.vs2_eew)
-          EEW32:  slideup_scalar_valid = {{(`VLENB-4){1'h0}}, 4'hF};
-          EEW16:  slideup_scalar_valid = {{(`VLENB-2){1'h0}}, 2'h3};
-          default: slideup_scalar_valid = {{(`VLENB-1){1'h0}}, 1'h1}; // EEW8
+          EEW32:  slideup_scalar_valid = {{(`VLENB(VLEN)-4){1'h0}}, 4'hF};
+          EEW16:  slideup_scalar_valid = {{(`VLENB(VLEN)-2){1'h0}}, 2'h3};
+          default: slideup_scalar_valid = {{(`VLENB(VLEN)-1){1'h0}}, 1'h1}; // EEW8
         endcase
       else
         slideup_scalar_valid = '0;
     end
-    for (i=0; i<`VLENB; i++) begin: gen_slideup_info_t0 
+    for (i=0; i<`VLENB(VLEN); i++) begin: gen_slideup_info_t0
       always_comb begin
       `ifdef ZVE32F_ON
         if (pmt_uop.uop_funct3 == OPMVX || pmt_uop.uop_funct3 == OPFVF) begin
@@ -127,25 +136,25 @@ module rvv_backend_pmtrdt_unit_permutation
         if (pmt_uop.uop_funct3 == OPMVX) begin
       `endif
           case (pmt_uop.vs2_eew)
-            EEW32: slideup_offset[i] = (`VLENB * pmt_uop.uop_index) - ({{(`XLEN+1){1'b0}}, 1'b1} << 2) + i;
-            EEW16: slideup_offset[i] = (`VLENB * pmt_uop.uop_index) - ({{(`XLEN+1){1'b0}}, 1'b1} << 1) + i;
+            EEW32: slideup_offset[i] = (`VLENB(VLEN) * pmt_uop.uop_index) - ({{(XLEN+1){1'b0}}, 1'b1} << 2) + i;
+            EEW16: slideup_offset[i] = (`VLENB(VLEN) * pmt_uop.uop_index) - ({{(XLEN+1){1'b0}}, 1'b1} << 1) + i;
             default: //EEW8
-                   slideup_offset[i] = (`VLENB * pmt_uop.uop_index) - ({{(`XLEN+1){1'b0}}, 1'b1}) + i;
+                   slideup_offset[i] = (`VLENB(VLEN) * pmt_uop.uop_index) - ({{(XLEN+1){1'b0}}, 1'b1}) + i;
           endcase
         end else begin
           case (pmt_uop.vs2_eew)
-            EEW32: slideup_offset[i] = (`VLENB * pmt_uop.uop_index) - ({2'h0, pmt_uop.rs1_data} << 2)  + i;
-            EEW16: slideup_offset[i] = (`VLENB * pmt_uop.uop_index) - ({2'h0, pmt_uop.rs1_data} << 1)  + i;
+            EEW32: slideup_offset[i] = (`VLENB(VLEN) * pmt_uop.uop_index) - ({2'h0, pmt_uop.rs1_data} << 2)  + i;
+            EEW16: slideup_offset[i] = (`VLENB(VLEN) * pmt_uop.uop_index) - ({2'h0, pmt_uop.rs1_data} << 1)  + i;
             default: //EEW8
-                   slideup_offset[i] = (`VLENB * pmt_uop.uop_index) - ({2'h0, pmt_uop.rs1_data})  + i;
+                   slideup_offset[i] = (`VLENB(VLEN) * pmt_uop.uop_index) - ({2'h0, pmt_uop.rs1_data})  + i;
           endcase
         end
       end
       always_comb begin
         case (pmt_uop.vs2_eew)
-          EEW32: slideup_overflow[i] = (|slideup_offset[i][`XLEN+1:`VL_WIDTH+2]) | (slideup_offset[i][`VL_WIDTH+1:0] >= ({2'h0, pmt_uop.vlmax} << 2));
-          EEW16: slideup_overflow[i] = (|slideup_offset[i][`XLEN+1:`VL_WIDTH+1]) | (slideup_offset[i][`VL_WIDTH:0] >= ({1'b0, pmt_uop.vlmax} << 1));
-          default: slideup_overflow[i] = (|slideup_offset[i][`XLEN+1:`VL_WIDTH]) | (slideup_offset[i][`VL_WIDTH-1:0] >= pmt_uop.vlmax); //EEW8
+          EEW32: slideup_overflow[i] = (|slideup_offset[i][XLEN+1:`VL_WIDTH(VLEN)+2]) | (slideup_offset[i][`VL_WIDTH(VLEN)+1:0] >= ({2'h0, pmt_uop.vlmax} << 2));
+          EEW16: slideup_overflow[i] = (|slideup_offset[i][XLEN+1:`VL_WIDTH(VLEN)+1]) | (slideup_offset[i][`VL_WIDTH(VLEN):0] >= ({1'b0, pmt_uop.vlmax} << 1));
+          default: slideup_overflow[i] = (|slideup_offset[i][XLEN+1:`VL_WIDTH(VLEN)]) | (slideup_offset[i][`VL_WIDTH(VLEN)-1:0] >= pmt_uop.vlmax); //EEW8
         endcase
       end
       always_comb begin
@@ -165,14 +174,14 @@ module rvv_backend_pmtrdt_unit_permutation
       if (pmt_uop.uop_funct3==OPMVX) // vslide1down
     `endif
         case (pmt_uop.vs2_eew)
-          EEW32: slidedown_scalar_valid = last_element_index[`VSTART_WIDTH-3:VLENB_WIDTH-2] == pmt_uop.uop_index ? {{(`VLENB-4){1'b0}}, 4'hF} << 4*last_element_index[VLENB_WIDTH-3:0] : '0;
-          EEW16: slidedown_scalar_valid = last_element_index[`VSTART_WIDTH-2:VLENB_WIDTH-1] == pmt_uop.uop_index ? {{(`VLENB-2){1'b0}}, 2'h3} << 2*last_element_index[VLENB_WIDTH-2:0] : '0;
-          default: slidedown_scalar_valid = last_element_index[`VSTART_WIDTH-1:VLENB_WIDTH] == pmt_uop.uop_index ? {{(`VLENB-1){1'b0}}, 1'h1} << last_element_index[VLENB_WIDTH-1:0] : '0;// EEW8
+          EEW32: slidedown_scalar_valid = last_element_index[`VSTART_WIDTH(VLEN)-3:VLENB_WIDTH-2] == pmt_uop.uop_index ? {{(`VLENB(VLEN)-4){1'b0}}, 4'hF} << 4*last_element_index[VLENB_WIDTH-3:0] : '0;
+          EEW16: slidedown_scalar_valid = last_element_index[`VSTART_WIDTH(VLEN)-2:VLENB_WIDTH-1] == pmt_uop.uop_index ? {{(`VLENB(VLEN)-2){1'b0}}, 2'h3} << 2*last_element_index[VLENB_WIDTH-2:0] : '0;
+          default: slidedown_scalar_valid = last_element_index[`VSTART_WIDTH(VLEN)-1:VLENB_WIDTH] == pmt_uop.uop_index ? {{(`VLENB(VLEN)-1){1'b0}}, 1'h1} << last_element_index[VLENB_WIDTH-1:0] : '0;// EEW8
         endcase
       else
         slidedown_scalar_valid = '0;
     end
-    for (i=0; i<`VLENB; i++) begin : gen_slidedown_info_t0
+    for (i=0; i<`VLENB(VLEN); i++) begin : gen_slidedown_info_t0
       always_comb begin
       `ifdef ZVE32F_ON
         if (pmt_uop.uop_funct3 == OPMVX || pmt_uop.uop_funct3 == OPFVF) begin
@@ -180,25 +189,25 @@ module rvv_backend_pmtrdt_unit_permutation
         if (pmt_uop.uop_funct3 == OPMVX) begin
       `endif
           case (pmt_uop.vs2_eew)
-            EEW32: slidedown_offset[i] = (`VLENB * pmt_uop.uop_index) + ({{(`XLEN+2){1'b0}}, 1'b1} << 2) + i;
-            EEW16: slidedown_offset[i] = (`VLENB * pmt_uop.uop_index) + ({{(`XLEN+2){1'b0}}, 1'b1} << 1) + i;
+            EEW32: slidedown_offset[i] = (`VLENB(VLEN) * pmt_uop.uop_index) + ({{(XLEN+2){1'b0}}, 1'b1} << 2) + i;
+            EEW16: slidedown_offset[i] = (`VLENB(VLEN) * pmt_uop.uop_index) + ({{(XLEN+2){1'b0}}, 1'b1} << 1) + i;
             default: //EEW8
-                   slidedown_offset[i] = (`VLENB * pmt_uop.uop_index) + ({{(`XLEN+2){1'b0}}, 1'b1}) + i;
+                   slidedown_offset[i] = (`VLENB(VLEN) * pmt_uop.uop_index) + ({{(XLEN+2){1'b0}}, 1'b1}) + i;
           endcase
         end else begin
           case (pmt_uop.vs2_eew)
-            EEW32: slidedown_offset[i] = (`VLENB * pmt_uop.uop_index) + ({3'h0, pmt_uop.rs1_data} << 2)  + i;
-            EEW16: slidedown_offset[i] = (`VLENB * pmt_uop.uop_index) + ({3'h0, pmt_uop.rs1_data} << 1)  + i;
+            EEW32: slidedown_offset[i] = (`VLENB(VLEN) * pmt_uop.uop_index) + ({3'h0, pmt_uop.rs1_data} << 2)  + i;
+            EEW16: slidedown_offset[i] = (`VLENB(VLEN) * pmt_uop.uop_index) + ({3'h0, pmt_uop.rs1_data} << 1)  + i;
             default: //EEW8
-                   slidedown_offset[i] = (`VLENB * pmt_uop.uop_index) + ({3'h0, pmt_uop.rs1_data})  + i;
+                   slidedown_offset[i] = (`VLENB(VLEN) * pmt_uop.uop_index) + ({3'h0, pmt_uop.rs1_data})  + i;
           endcase
         end
       end
       always_comb begin
         case (pmt_uop.vs2_eew)
-          EEW32: slidedown_overflow[i] = (|slidedown_offset[i][`XLEN+2:`VL_WIDTH+2]) | (slidedown_offset[i][`VL_WIDTH+1:0] >= ({2'h0, pmt_uop.vlmax} << 2));
-          EEW16: slidedown_overflow[i] = (|slidedown_offset[i][`XLEN+2:`VL_WIDTH+1]) | (slidedown_offset[i][`VL_WIDTH:0] >= ({1'b0, pmt_uop.vlmax} << 1));
-          default: slidedown_overflow[i] = (|slidedown_offset[i][`XLEN+2:`VL_WIDTH]) | (slidedown_offset[i][`VL_WIDTH-1:0] >= pmt_uop.vlmax);
+          EEW32: slidedown_overflow[i] = (|slidedown_offset[i][XLEN+2:`VL_WIDTH(VLEN)+2]) | (slidedown_offset[i][`VL_WIDTH(VLEN)+1:0] >= ({2'h0, pmt_uop.vlmax} << 2));
+          EEW16: slidedown_overflow[i] = (|slidedown_offset[i][XLEN+2:`VL_WIDTH(VLEN)+1]) | (slidedown_offset[i][`VL_WIDTH(VLEN):0] >= ({1'b0, pmt_uop.vlmax} << 1));
+          default: slidedown_overflow[i] = (|slidedown_offset[i][XLEN+2:`VL_WIDTH(VLEN)]) | (slidedown_offset[i][`VL_WIDTH(VLEN)-1:0] >= pmt_uop.vlmax);
         endcase
       end
       always_comb begin
@@ -206,27 +215,27 @@ module rvv_backend_pmtrdt_unit_permutation
         slidedown_info_t0[i].rs_valid = slidedown_scalar_valid[i];
         slidedown_info_t0[i].index = pmt_uop.vs2_index + slidedown_offset[i][VLENB_WIDTH+:3];
         slidedown_info_t0[i].offset = slidedown_offset[i][0+:VLENB_WIDTH];
-        slidedown_info_t0[i].vs_valid = ~slidedown_scalar_valid[i] & ~slidedown_overflow[i] & 
+        slidedown_info_t0[i].vs_valid = ~slidedown_scalar_valid[i] & ~slidedown_overflow[i] &
                                    ((pmt_uop.uop_funct6 == VSLIDEDOWN) | (pmt_uop.uop_funct6 == VSLIDE1DOWN));
       end
     end
 
     assign double_vs1_data = {2{pmt_uop.vs1_data}};
-    for (i=0; i<`VLENB; i++) begin : gen_rgather_info_t0
+    for (i=0; i<`VLENB(VLEN); i++) begin : gen_rgather_info_t0
       //rgather_vs1
       always_comb begin
         if (pmt_uop.uop_funct6 == VSLIDEUP_RGATHEREI16) begin //vs1_eew = 16b
           case(pmt_uop.vs2_eew)
-            EEW32: rgather_vs1[i] = {{(`XLEN-16){1'b0}}, pmt_uop.uop_index[0] ? pmt_uop.vs1_data[(i/4+`VLENW)*16+:16] : pmt_uop.vs1_data[(i/4)*16+:16]};
-            EEW16: rgather_vs1[i] = {{(`XLEN-16){1'b0}}, pmt_uop.vs1_data[(i/2)*16+:16]};
-            default: rgather_vs1[i] = {{(`XLEN-16){1'b0}}, double_vs1_data[i*16+:16]}; //EEW8
+            EEW32: rgather_vs1[i] = {{(XLEN-16){1'b0}}, pmt_uop.uop_index[0] ? pmt_uop.vs1_data[(i/4+`VLENW(VLEN))*16+:16] : pmt_uop.vs1_data[(i/4)*16+:16]};
+            EEW16: rgather_vs1[i] = {{(XLEN-16){1'b0}}, pmt_uop.vs1_data[(i/2)*16+:16]};
+            default: rgather_vs1[i] = {{(XLEN-16){1'b0}}, double_vs1_data[i*16+:16]}; //EEW8
                                                                                        // uop_index[0] ? high part : low part; // based on valid
           endcase
         end else begin
           case(pmt_uop.vs2_eew)
-            EEW32: rgather_vs1[i] = {{(`XLEN-32){1'b0}}, pmt_uop.vs1_data[(i/4)*32+:32]};
-            EEW16: rgather_vs1[i] = {{(`XLEN-16){1'b0}}, pmt_uop.vs1_data[(i/2)*16+:16]};
-            default: rgather_vs1[i] = {{(`XLEN-8){1'b0}}, pmt_uop.vs1_data[i*8+:8]};// EEW8
+            EEW32: rgather_vs1[i] = {{(XLEN-32){1'b0}}, pmt_uop.vs1_data[(i/4)*32+:32]};
+            EEW16: rgather_vs1[i] = {{(XLEN-16){1'b0}}, pmt_uop.vs1_data[(i/2)*16+:16]};
+            default: rgather_vs1[i] = {{(XLEN-8){1'b0}}, pmt_uop.vs1_data[i*8+:8]};// EEW8
           endcase
         end
       end
@@ -243,7 +252,7 @@ module rvv_backend_pmtrdt_unit_permutation
           end
           default: begin // vrgather.vv and vrgatheri16.vv instructions
             case (pmt_uop.vs2_eew)
-              EEW32: rgather_offset[i] = ({3'b0, rgather_vs1[i]} << 2) + (i%4); 
+              EEW32: rgather_offset[i] = ({3'b0, rgather_vs1[i]} << 2) + (i%4);
               EEW16: rgather_offset[i] = ({3'b0, rgather_vs1[i]} << 1) + (i%2);
               default: rgather_offset[i] = ({3'b0, rgather_vs1[i]}) + (i%1); // EEW8
             endcase
@@ -252,9 +261,9 @@ module rvv_backend_pmtrdt_unit_permutation
       end
       always_comb begin
         case (pmt_uop.vs2_eew)
-          EEW32: rgather_overflow[i] = (|rgather_offset[i][`XLEN+2:`VL_WIDTH+2]) | (rgather_offset[i][`VL_WIDTH+1:0] >= ({2'h0, pmt_uop.vlmax} << 2));
-          EEW16: rgather_overflow[i] = (|rgather_offset[i][`XLEN+2:`VL_WIDTH+1]) | (rgather_offset[i][`VL_WIDTH:0] >= ({1'b0, pmt_uop.vlmax} << 1));
-          default: rgather_overflow[i] = (|rgather_offset[i][`XLEN+2:`VL_WIDTH]) | (rgather_offset[i][`VL_WIDTH-1:0] >= pmt_uop.vlmax);
+          EEW32: rgather_overflow[i] = (|rgather_offset[i][XLEN+2:`VL_WIDTH(VLEN)+2]) | (rgather_offset[i][`VL_WIDTH(VLEN)+1:0] >= ({2'h0, pmt_uop.vlmax} << 2));
+          EEW16: rgather_overflow[i] = (|rgather_offset[i][XLEN+2:`VL_WIDTH(VLEN)+1]) | (rgather_offset[i][`VL_WIDTH(VLEN):0] >= ({1'b0, pmt_uop.vlmax} << 1));
+          default: rgather_overflow[i] = (|rgather_offset[i][XLEN+2:`VL_WIDTH(VLEN)]) | (rgather_offset[i][`VL_WIDTH(VLEN)-1:0] >= pmt_uop.vlmax);
         endcase
       end
       always_comb begin
@@ -272,12 +281,12 @@ module rvv_backend_pmtrdt_unit_permutation
     // Structural 7-level Binary Tree Priority Encoder & Isolate-LSB
     // Replaces 128-bit ripple subtractor and 128-iteration linear loop.
     // Combinational depth <= 8 gates (vs 102 gates originally).
-    logic [`VLEN-1:0]              compress_vmsof_tree;
-    logic [$clog2(`VLEN)-1:0]      compress_vfirst_raw;
+    logic [VLEN-1:0]              compress_vmsof_tree;
+    logic [$clog2(VLEN)-1:0]      compress_vfirst_raw;
     logic                          compress_valid;
 
     priority_encoder_tree #(
-      .WIDTH (`VLEN)
+      .WIDTH (VLEN)
     ) u_compress_pe (
       .in_data    (compress_vs1),
       .out_onehot (compress_vmsof_tree),
@@ -287,21 +296,21 @@ module rvv_backend_pmtrdt_unit_permutation
 
     assign compress_vmsof    = compress_vmsof_tree;
     assign compress_vfirst   = compress_valid ?
-                               {{(`VL_WIDTH-$clog2(`VLEN)){1'b0}}, compress_vfirst_raw} :
-                               `VLMAX_MAX;
+                               {{(`VL_WIDTH(VLEN)-$clog2(VLEN)){1'b0}}, compress_vfirst_raw} :
+                               `VLMAX_MAX(VLEN);
     assign compress_overflow = compress_vfirst >= pmt_uop.vl;
     assign compress_vs1_d    = compress_vs1 & ~compress_vmsof;
 `else
     assign compress_vmsof = compress_vs1 & ~(compress_vs1 - 'b1);
     always_comb begin
-      compress_vfirst = `VLMAX_MAX;
-      for (int j=0; j<`VLEN; j++)
-        if (compress_vmsof[j]==1'b1) compress_vfirst = j[0+:`VL_WIDTH];
+      compress_vfirst = `VLMAX_MAX(VLEN);
+      for (int j=0; j<VLEN; j++)
+        if (compress_vmsof[j]==1'b1) compress_vfirst = j[0+:`VL_WIDTH(VLEN)];
     end
     assign compress_overflow = compress_vfirst >= pmt_uop.vl;
     assign compress_vs1_d = compress_vs1 & ~compress_vmsof;
 `endif
-    edff #(.T(logic[`VLEN-1:0])) compress_vs1_reg (.q(compress_vs1_q), .d(compress_vs1_d), .e((pmt_uop.uop_funct6==VCOMPRESS_VTMVTV) & |(pmt_t0_valid&pmt_t0_ready)), .clk(clk), .rst_n(rst_n));
+    edff #(.T(logic[VLEN-1:0])) compress_vs1_reg (.q(compress_vs1_q), .d(compress_vs1_d), .e((pmt_uop.uop_funct6==VCOMPRESS_VTMVTV) & |(pmt_t0_valid&pmt_t0_ready)), .clk(clk), .rst_n(rst_n));
     always_comb begin
       if (compress_overflow)
         compress_cnt_d = '0;
@@ -312,10 +321,10 @@ module rvv_backend_pmtrdt_unit_permutation
           default: compress_cnt_d = compress_cnt_q + 'b1; // EEW8
         endcase
     end
-    assign compress_cnt_en = compress_overflow | 
+    assign compress_cnt_en = compress_overflow |
                              ((pmt_uop.uop_funct6==VCOMPRESS_VTMVTV) & |(pmt_t0_valid&pmt_t0_ready));
     edff #(.T(logic[VLENB_WIDTH-1:0])) compress_cnt_reg (.q(compress_cnt_q), .d(compress_cnt_d), .e(compress_cnt_en), .clk(clk), .rst_n(rst_n));
-    for (i=0; i<`VLENB; i++) begin : gen_compress_info_t0
+    for (i=0; i<`VLENB(VLEN); i++) begin : gen_compress_info_t0
       always_comb begin
         if (compress_overflow)
           compress_info_enable[i] = i>=compress_cnt_q;
@@ -329,9 +338,9 @@ module rvv_backend_pmtrdt_unit_permutation
       end
       always_comb begin
         case (pmt_uop.vs2_eew)
-          EEW32: compress_offset[i] = (compress_vfirst[`VSTART_WIDTH-1:0] << 2) + i%4;
-          EEW16: compress_offset[i] = (compress_vfirst[`VSTART_WIDTH-1:0] << 1) + i%2;
-          default: compress_offset[i] = compress_vfirst[`VSTART_WIDTH-1:0] + i%1; //EEW8
+          EEW32: compress_offset[i] = (compress_vfirst[`VSTART_WIDTH(VLEN)-1:0] << 2) + i%4;
+          EEW16: compress_offset[i] = (compress_vfirst[`VSTART_WIDTH(VLEN)-1:0] << 1) + i%2;
+          default: compress_offset[i] = compress_vfirst[`VSTART_WIDTH(VLEN)-1:0] + i%1; //EEW8
         endcase
       end
       always_comb begin
@@ -344,7 +353,7 @@ module rvv_backend_pmtrdt_unit_permutation
     end
 
     assign pmt_info_ready = (&(data_write_enable|data_valid))&(~(&data_valid));
-    for (i=0; i<`VLENB; i++) begin : gen_pmt_info
+    for (i=0; i<`VLENB(VLEN); i++) begin : gen_pmt_info
       always_comb begin
         case (pmt_uop.uop_funct6)
           //VSLIDE1UP == VSLIDEUP_RGATHEREI16
@@ -358,7 +367,7 @@ module rvv_backend_pmtrdt_unit_permutation
       always_comb begin
         case (pmt_uop.uop_funct6)
           VCOMPRESS_VTMVTV: pmt_info_valid[i] =  compress_info_enable[i] & pmt_go;
-          //VSLIDE1UP, 
+          //VSLIDE1UP,
           //VSLIDE1DOWN,
           //VSLIDEDOWN,
           //VSLIDEUP_RGATHEREI16,
@@ -368,7 +377,7 @@ module rvv_backend_pmtrdt_unit_permutation
       end
       assign pmt_t0_valid[i] = pmt_uop_valid & pmt_info_valid[i];
 
-      handshake_ff #(.T(PMT_INFO_t)) pmt_info_reg (.outdata(pmt_info_t1[i]), .outvalid(pmt_t1_valid[i]), .outready(pmt_info_ready), 
+      handshake_ff #(.T(PMT_INFO_t)) pmt_info_reg (.outdata(pmt_info_t1[i]), .outvalid(pmt_t1_valid[i]), .outready(pmt_info_ready),
                                                    .indata(pmt_info_t0[i]),  .invalid(pmt_t0_valid[i]),  .inready(pmt_t0_ready[i]),
                                                    .c(trap_flush_rvv), .clk(clk), .rst_n(rst_n));
     end
@@ -385,24 +394,31 @@ module rvv_backend_pmtrdt_unit_permutation
 
   // vrd read
   generate
-    for (i=0; i<`VLENB; i++) assign data_valid[i] = pmt_data_t2[i].valid;
+    for (i=0; i<`VLENB(VLEN); i++) assign data_valid[i] = pmt_data_t2[i].valid;
   endgenerate
   assign data_valid_zsof = ~data_valid & ~(~data_valid - 'b1);
   always_comb begin
     data_valid_zfirst = '0;
-    for (int j=0; j<`VLENB; j++)
+    for (int j=0; j<`VLENB(VLEN); j++)
       if (data_valid_zsof[j]==1'b1) data_valid_zfirst = j;
   end
   assign rd_index_pmt2vrf = pmt_info_t1[data_valid_zfirst].index;
 
   generate
-    for (i=0; i<`VLENB; i++) assign data_write_enable[i] = ~pmt_data_t2[i].valid & 
-                                                           (pmt_info_t1[i].zero_valid | pmt_info_t1[i].rs_valid | (pmt_info_t1[i].vs_valid & (pmt_info_t1[i].index == rd_index_pmt2vrf)));
+    for (i=0; i<`VLENB(VLEN); i++)
+      assign data_write_enable[i] = ~pmt_data_t2[i].valid & (
+        pmt_info_t1[i].zero_valid |
+        pmt_info_t1[i].rs_valid |
+        (
+          pmt_info_t1[i].vs_valid &
+          (pmt_info_t1[i].index == rd_index_pmt2vrf)
+        )
+      );
   endgenerate
 
-  assign data_clear = pmt_res_valid & pmt_res_ready; 
+  assign data_clear = pmt_res_valid & pmt_res_ready;
   generate
-    for (i=0; i<`VLENB; i++) begin : gen_pmt_data
+    for (i=0; i<`VLENB(VLEN); i++) begin : gen_pmt_data
       always_comb begin
         if (pmt_info_t1[i].rs_valid)
           case (pmt_ctrl_t1.vs2_eew)
@@ -414,24 +430,45 @@ module rvv_backend_pmtrdt_unit_permutation
           pmt_data_t1[i].data = rd_data_vrf2pmt[pmt_info_t1[i].offset];
         else
           pmt_data_t1[i].data = '0;
-        
+
         if (data_clear) pmt_data_t1[i].valid = 1'b0;
         else pmt_data_t1[i].valid = pmt_info_t1[i].rs_valid | pmt_info_t1[i].vs_valid | pmt_info_t1[i].zero_valid;
       end
 
-      handshake_ff #(.T(logic[`BYTE_WIDTH-1:0])) pmt_data_value_reg (.outdata(pmt_data_t2[i].data), .outvalid(pmt_t2_valid[i]),                      .outready(pmt_t2_ready[i]), 
-                                                                    .indata(pmt_data_t1[i].data),   .invalid(pmt_t1_valid[i]&data_write_enable[i]),  .inready(pmt_t1_ready[i]),
-                                                                    .c(trap_flush_rvv), .clk(clk), .rst_n(rst_n));
-      edff #(.T(logic)) pmt_data_valid_reg (.q(pmt_data_t2[i].valid), .d(pmt_data_t1[i].valid), .e(data_clear|(pmt_t1_valid[i]&data_write_enable[i]&pmt_t1_ready[i])), .clk(clk), .rst_n(rst_n));
-      assign pmt_t2_ready[i] = pmt_res_ready; 
+      handshake_ff #(.T(logic[`BYTE_WIDTH-1:0])) pmt_data_value_reg (
+        .outdata(pmt_data_t2[i].data),
+        .outvalid(pmt_t2_valid[i]),
+        .outready(pmt_t2_ready[i]),
+        .indata(pmt_data_t1[i].data),
+        .invalid(pmt_t1_valid[i]&data_write_enable[i]),
+        .inready(pmt_t1_ready[i]),
+        .c(trap_flush_rvv),
+        .clk(clk),
+        .rst_n(rst_n)
+      );
+
+      edff #(.T(logic)) pmt_data_valid_reg (
+        .q(pmt_data_t2[i].valid),
+        .d(pmt_data_t1[i].valid),
+        .e(data_clear|(pmt_t1_valid[i]&data_write_enable[i]&pmt_t1_ready[i])),
+        .clk(clk),
+        .rst_n(rst_n)
+      );
+      assign pmt_t2_ready[i] = pmt_res_ready;
     end
   endgenerate
 
-  edff #(.T(PMT_CTRL_t)) pmt_ctrl_t1_reg (.q(pmt_ctrl_t2), .d(pmt_ctrl_t1), .e(pmt_t1_valid[0]&pmt_t1_ready[0]), .clk(clk), .rst_n(rst_n));
+  edff #(.T(PMT_CTRL_t)) pmt_ctrl_t1_reg (
+    .q(pmt_ctrl_t2),
+    .d(pmt_ctrl_t1),
+    .e(pmt_t1_valid[0]&pmt_t1_ready[0]),
+    .clk(clk),
+    .rst_n(rst_n)
+  );
 
 // pmt_uop_ready
   assign pmt_go = ((rob_rptr==pmt_uop.rob_entry) | ~pmt_uop.first_uop_valid);
-  assign pmt_uop_ready = pmt_uop.uop_funct6 == VCOMPRESS_VTMVTV ? (compress_cnt_d == '0) & pmt_t0_ready[`VLENB-1] & pmt_go
+  assign pmt_uop_ready = pmt_uop.uop_funct6 == VCOMPRESS_VTMVTV ? (compress_cnt_d == '0) & pmt_t0_ready[`VLENB(VLEN)-1] & pmt_go
                                                                 : (&pmt_t0_ready) & pmt_go;
 
 // pmt_res
@@ -440,7 +477,7 @@ module rvv_backend_pmtrdt_unit_permutation
     pmt_res.uop_pc = pmt_ctrl_t2.uop_pc;
   `endif
     pmt_res.rob_entry = pmt_ctrl_t2.rob_entry;
-    for (int j=0; j<`VLENB; j++) pmt_res.w_data[j*8+:8] = pmt_data_t2[j].data; 
+    for (int j=0; j<`VLENB(VLEN); j++) pmt_res.w_data[j*8+:8] = pmt_data_t2[j].data;
     pmt_res.w_valid = &data_valid;
     pmt_res.vsaturate = '0;
   `ifdef ZVE32F_ON

@@ -1,5 +1,5 @@
 /*
-description: 
+description:
 1. the ROB module receives uop information from Dispatch unit and uop result from Processor Unit (PU).
 2. the ROB module provides all status for dispatch unit to foreward operand from ROB.
 3. the ROB module send retire request to retire unit.
@@ -17,7 +17,15 @@ feature list:
 `include "rvv_backend.svh"
 `endif
 
-module rvv_backend_rob
+module rvv_backend_rob#(
+  parameter int unsigned VLEN = `VLEN,
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type PU2ROB_t = `PU2ROB_t(VLEN, PC_WIDTH),
+  localparam type RES_ROB_t = `RES_ROB_t(VLEN, PC_WIDTH),
+  localparam type DP2ROB_t = `DP2ROB_t(VLEN, PC_WIDTH),
+  localparam type ROB2DP_t = `ROB2DP_t(VLEN, PC_WIDTH),
+  localparam type ROB2RT_t = `ROB2RT_t(VLEN, PC_WIDTH)
+)
 (
     clk,
     rst_n,
@@ -45,8 +53,8 @@ module rvv_backend_rob
     trap_valid_rvs2rvv,
 `endif
     trap_ready_rvv2rvs,
-    trap_flush_rvv    
-);  
+    trap_flush_rvv
+);
 // global signal
     input   logic                             clk;
     input   logic                             rst_n;
@@ -63,7 +71,7 @@ module rvv_backend_rob
 // PU to ROB
     input   logic     [`NUM_SMPORT-1:0]                   wr_valid_pu2rob;
     input   PU2ROB_t  [`NUM_SMPORT-1:0]                   wr_pu2rob;
-    input   logic     [`NUM_SMPORT-1:0][$clog2(`VLENB):0] ff_tail_index;  
+    input   logic     [`NUM_SMPORT-1:0][$clog2(`VLENB(VLEN)):0] ff_tail_index;
 
 // retire uops
 // pop vd_data from ROB and write to VRF
@@ -87,8 +95,8 @@ module rvv_backend_rob
 `ifndef PRECISE_RVVTRAP
     input   logic                             trap_valid_rvs2rvv;
 `endif
-    output  logic                             trap_ready_rvv2rvs;    
-    output  logic                             trap_flush_rvv;        
+    output  logic                             trap_ready_rvv2rvs;
+    output  logic                             trap_flush_rvv;
 
 // ---internal signal definition--------------------------------------
     logic                               trap_in;
@@ -194,7 +202,7 @@ module rvv_backend_rob
                 if (wr_valid_pu2rob[k]) begin
                   `ifdef TB_SUPPORT
                     res_mem[wr_pu2rob[k].rob_entry].uop_pc        <= wr_pu2rob[k].uop_pc;
-                  `endif                
+                  `endif
                     res_mem[wr_pu2rob[k].rob_entry].w_valid       <= wr_pu2rob[k].w_valid;
                     res_mem[wr_pu2rob[k].rob_entry].w_data        <= wr_pu2rob[k].w_data;
                     res_mem[wr_pu2rob[k].rob_entry].ff_tail_index <= ff_tail_index[k];
@@ -217,7 +225,7 @@ module rvv_backend_rob
        assign wind_uop_rptr[i] = uop_rptr+i;
        assign wind_uop_wptr[i] = uop_wptr+i;
      end
-    
+
      always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n)
             uop_done <= '0;
@@ -235,14 +243,14 @@ module rvv_backend_rob
         end
     end
 
-  `ifdef ASSERT_ON 
+  `ifdef ASSERT_ON
     logic [`ROB_DEPTH-1:0][`NUM_SMPORT-1:0] res_sel; // one hot code for each entry
     for (genvar i=0; i<`ROB_DEPTH; i++) begin : gen_res_sel
-        for (genvar j=0; j<`NUM_SMPORT; j++) begin : gen_smport    
+        for (genvar j=0; j<`NUM_SMPORT; j++) begin : gen_smport
             assign res_sel[i][j] = wr_valid_pu2rob[j] && (wr_pu2rob[j].rob_entry == i);
         end
 
-        `rvv_expect($onehot0(res_sel[i])) 
+        `rvv_expect($onehot0(res_sel[i]))
         else $error("ROB: Multiple PU results write same entry: index %d, PU %d\n", i, $sampled(res_sel[i]));
 
     end
@@ -276,15 +284,15 @@ module rvv_backend_rob
   assign trap_ready_rob2rmp = 1'b1;
 
   // retire uop(s)
-  logic [`ROB_DEPTH-1:0][$clog2(`VLENB):0] rt_ff_tail_index;
-  logic [`ROB_DEPTH-1:0][`VLENB-1:0]       rt_ff_strobe;
+  logic [`ROB_DEPTH-1:0][$clog2(`VLENB(VLEN)):0] rt_ff_tail_index;
+  logic [`ROB_DEPTH-1:0][`VLENB(VLEN)-1:0]       rt_ff_strobe;
   logic [`ROB_DEPTH-1:0]                   is_ff;
 
   for (genvar i=0; i<`ROB_DEPTH; i++) begin
     // write strobe
       assign rt_ff_tail_index[i] = res_mem[wind_uop_rptr[i]].ff_tail_index;
       assign is_ff[i]            = alluop_info[i].is_ff;
-      assign rt_ff_strobe[i]     = ~((`VLENB)'('1)<<rt_ff_tail_index[i]);
+      assign rt_ff_strobe[i]     = ~((`VLENB(VLEN))'('1)<<rt_ff_tail_index[i]);
   end
 
   for (genvar i=0; i<`NUM_RT_UOP; i++) begin : gen_rob2rt
@@ -295,9 +303,9 @@ module rvv_backend_rob
         assign rd_valid_rob2rt[i] = uop_valid_rob2rt[i] & uop_done[wind_uop_rptr[i]] & rd_valid_rob2rt[i-1] & ~trap_flag[wind_uop_rptr[i]-1'b1];
       end
     // retire_uop data
-    `ifdef TB_SUPPORT          
+    `ifdef TB_SUPPORT
       assign rd_rob2rt[i].uop_pc           = uop_rob2rt[i].uop_pc;
-    `endif          
+    `endif
       assign rd_rob2rt[i].rob_tag          = uop_rob2rt[i].rob_tag;
       assign rd_rob2rt[i].res_updating_end = uop_rob2rt[i].res_updating_end;
       assign rd_rob2rt[i].last_uop_valid   = uop_rob2rt[i].last_uop_valid;
@@ -313,14 +321,14 @@ module rvv_backend_rob
     `endif
 
       always_comb begin
-          for(int j=0;j<`VLENB;j++) begin
+          for(int j=0;j<`VLENB(VLEN);j++) begin
               rd_rob2rt[i].vd_type[j] = (is_ff[i] && !rt_ff_strobe[i][j]) ? TAIL : uop_rob2rt[i].byte_type[j];
           end
       end
   end
 
   assign rob_entry_rob2rt = uop_rptr;
-  
+
   // trap handle ready and flush signal
   assign trap_in = uop_valid_rob2rt[0] & rd_rob2rt[0].trap_flag & rd_ready_rt2rob[0]
                   `ifdef ZVT_ON
@@ -353,10 +361,10 @@ module rvv_backend_rob
       assign uop_rob2dp[i].vector_csr = alluop_info[i].vector_csr;
 
       always_comb begin
-          for(int j=0;j<`VLENB;j++) begin
+          for(int j=0;j<`VLENB(VLEN);j++) begin
               uop_rob2dp[i].byte_type[j] = (is_ff[i] && !rt_ff_strobe[i][j]) ? TAIL : alluop_info[i].byte_type[j];
           end
       end
   end
-  
+
 endmodule

@@ -1,9 +1,9 @@
-// description: 
+// description:
 // 1. Instantiate rvv_backend_alu_unit and connect to ALU Reservation Station and ROB.
 //
 // feature list:
 // 1. The number of ALU units (`NUM_ALU) is configurable.
-// 2. The size of vector length (`VLEN) is configurable.
+// 2. The size of vector length (VLEN) is configurable.
 
 `ifndef HDL_VERILOG_RVV_DESIGN_RVV_SVH
 `include "rvv_backend.svh"
@@ -12,7 +12,14 @@
 `include "rvv_backend_sva.svh"
 `endif
 
-module rvv_backend_alu
+module rvv_backend_alu#(
+  parameter int unsigned VLEN = `VLEN,
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  parameter type RegDataT=logic [31:0],
+  localparam int unsigned XLEN = $bits(RegDataT),
+  localparam type ALU_RS_t = `ALU_RS_t(VLEN, PC_WIDTH),
+  localparam type PU2ROB_t = `PU2ROB_t(VLEN, PC_WIDTH)
+)
 (
   clk,
   rst_n,
@@ -33,14 +40,14 @@ module rvv_backend_alu
   input   logic                         rst_n;
   // ALU RS to ALU unit
   output  logic       [`NUM_ALU-1:0]    pop;
-  input   logic       [`NUM_ALU-1:0]    uop_valid;    
+  input   logic       [`NUM_ALU-1:0]    uop_valid;
   input   ALU_RS_t    [`NUM_ALU-1:0]    uop;
   // submit ALU result to ROB
   output  logic       [`NUM_ALU-1:0]    result_valid;
   output  PU2ROB_t    [`NUM_ALU-1:0]    result;
   input   logic       [`NUM_ALU-1:0]    result_ready;
   // trap-flush
-  input   logic                         trap_flush_rvv; 
+  input   logic                         trap_flush_rvv;
 
 //
 // internal signals
@@ -58,41 +65,44 @@ module rvv_backend_alu
   always_comb begin
     case(result_ready)
       2'b01: begin
-        alu_valid[0]  = uop_valid[0]; 
-        alu_valid[1]  = 'b0; 
+        alu_valid[0]  = uop_valid[0];
+        alu_valid[1]  = 'b0;
         alu_uop[0]    = uop[0];
         alu_uop[1]    = 'b0;
-        pop[0]        = alu_pop[0]; 
-        pop[1]        = 'b0; 
+        pop[0]        = alu_pop[0];
+        pop[1]        = 'b0;
       end
       2'b10: begin
-        alu_valid[0]  = 'b0; 
-        alu_valid[1]  = uop_valid[0] & (!uop[0].is_cmp); 
+        alu_valid[0]  = 'b0;
+        alu_valid[1]  = uop_valid[0] & (!uop[0].is_cmp);
         alu_uop[0]    = 'b0;
         alu_uop[1]    = uop[0];
-        pop[0]        = alu_pop[1]; 
-        pop[1]        = 'b0; 
+        pop[0]        = alu_pop[1];
+        pop[1]        = 'b0;
       end
       2'b11: begin
-        alu_valid[0]  = uop_valid[0]; 
-        alu_valid[1]  = uop_valid[1] & (!uop[1].is_cmp); 
+        alu_valid[0]  = uop_valid[0];
+        alu_valid[1]  = uop_valid[1] & (!uop[1].is_cmp);
         alu_uop[0]    = uop[0];
         alu_uop[1]    = uop[1];
-        pop[0]        = alu_pop[0]; 
-        pop[1]        = alu_pop[1]; 
+        pop[0]        = alu_pop[0];
+        pop[1]        = alu_pop[1];
       end
       default: begin
-        alu_valid[0]  = 'b0; 
-        alu_valid[1]  = 'b0; 
+        alu_valid[0]  = 'b0;
+        alu_valid[1]  = 'b0;
         alu_uop[0]    = 'b0;
         alu_uop[1]    = 'b0;
-        pop[0]        = 'b0; 
-        pop[1]        = 'b0; 
+        pop[0]        = 'b0;
+        pop[1]        = 'b0;
       end
     endcase
   end
-  
+
   rvv_backend_alu_unit #(
+    .VLEN(VLEN),
+    .RegDataT(RegDataT),
+    .PC_WIDTH(PC_WIDTH),
     .CMP_SUPPORT    (1'b1)
   ) u_alu_cmp_unit (
     // inputs
@@ -112,21 +122,24 @@ module rvv_backend_alu
   // instantiate
   generate
     for (i=1;i<`NUM_ALU;i=i+1) begin: ALU_UNIT
-      rvv_backend_alu_unit u_alu_unit
-        (
-          // inputs
-          .clk            (clk),
-          .rst_n          (rst_n),
-          .alu_uop_valid  (alu_valid[i]),
-          .alu_uop        (alu_uop[i]),
-          .result_ready   (result_ready[i]),
-          // outputs
-          .pop_rs         (alu_pop[i]),
-          .result_valid   (result_valid[i]),
-          .result         (result[i]),
-          // trap-flush
-          .trap_flush_rvv (trap_flush_rvv)
-        );
+      rvv_backend_alu_unit#(
+            .VLEN(VLEN),
+            .RegDataT(RegDataT),
+            .PC_WIDTH(PC_WIDTH)
+      ) u_alu_unit (
+        // inputs
+        .clk            (clk),
+        .rst_n          (rst_n),
+        .alu_uop_valid  (alu_valid[i]),
+        .alu_uop        (alu_uop[i]),
+        .result_ready   (result_ready[i]),
+        // outputs
+        .pop_rs         (alu_pop[i]),
+        .result_valid   (result_valid[i]),
+        .result         (result[i]),
+        // trap-flush
+        .trap_flush_rvv (trap_flush_rvv)
+      );
     end
   endgenerate
 

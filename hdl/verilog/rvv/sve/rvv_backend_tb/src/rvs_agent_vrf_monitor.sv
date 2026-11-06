@@ -21,7 +21,7 @@ class vrf_monitor extends uvm_monitor;
   extern virtual function void connect_phase(uvm_phase phase);
   extern virtual task configure_phase(uvm_phase phase);
   extern virtual task run_phase(uvm_phase phase);
-  extern protected virtual task vrf_monitor();
+  extern protected virtual task vrf_wr_monitor();
   extern protected virtual task vrf_write_zero_monitor();
   extern protected virtual task vrf_all_zero_monitor();
 
@@ -55,13 +55,13 @@ endtask:configure_phase
 task vrf_monitor::run_phase(uvm_phase phase);
   super.run_phase(phase);
   fork
-     vrf_monitor();
+     vrf_wr_monitor();
      vrf_write_zero_monitor();
      vrf_all_zero_monitor();
   join
 endtask: run_phase
 
-task vrf_monitor::vrf_monitor();
+task vrf_monitor::vrf_wr_monitor();
   vrf_transaction tr;
   int last_uop_idx_max, uop_idx_max;
   tr = new();
@@ -82,7 +82,7 @@ task vrf_monitor::vrf_monitor();
       end
     end
   end
-endtask: vrf_monitor
+endtask: vrf_wr_monitor
 
 task vrf_monitor::vrf_write_zero_monitor();
   int write_zero_to_vrf [31:0];

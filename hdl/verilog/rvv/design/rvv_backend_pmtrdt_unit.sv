@@ -22,7 +22,19 @@
 `include "rvv_backend_pmtrdt.svh"
 `endif
 
-module rvv_backend_pmtrdt_unit
+module rvv_backend_pmtrdt_unit#(
+  parameter int unsigned VLEN = `VLEN,
+  parameter type RegDataT=logic [31:0],
+  localparam int unsigned XLEN = $bits(RegDataT),
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type PMT_RDT_RS_t = `PMT_RDT_RS_t(VLEN, XLEN, PC_WIDTH),
+  localparam type PU2ROB_t = `PU2ROB_t(VLEN, PC_WIDTH),
+
+// ---parameter definition--------------------------------------------
+  parameter GEN_RDT = 1'b0, // by default, NO Reduction unit
+  parameter GEN_PMT = 1'b0, // by default, NO PERMUTATION unit
+  parameter GEN_FRDT= 1'b0
+)
 (
   clk,
   rst_n,
@@ -41,10 +53,7 @@ module rvv_backend_pmtrdt_unit
   rob_rptr,
   trap_flush_rvv
 );
-// ---parameter definition--------------------------------------------
-  parameter GEN_RDT = 1'b0; // by default, NO Reduction unit
-  parameter GEN_PMT = 1'b0; // by default, NO PERMUTATION unit
-  parameter GEN_FRDT= 1'b0;
+
 
 // ---port definition-------------------------------------------------
 // global signal
@@ -63,7 +72,7 @@ module rvv_backend_pmtrdt_unit
 
 // read vrf for permutation
   output logic [`REGIDX_WIDTH-1:0]    rd_index_pmt2vrf;
-  input  logic [`VLEN-1:0]            rd_data_vrf2pmt;
+  input  logic [VLEN-1:0]            rd_data_vrf2pmt;
 
 // MISC
   input  logic [`ROB_DEPTH_WIDTH-1:0] rob_rptr;
@@ -130,7 +139,11 @@ module rvv_backend_pmtrdt_unit
 // Reduction unit
   generate
     if (GEN_RDT == 1'b1) begin
-      rvv_backend_pmtrdt_unit_reduction u_rdt (
+      rvv_backend_pmtrdt_unit_reduction#(
+        .VLEN(VLEN),
+        .RegDataT(RegDataT),
+        .PC_WIDTH(PC_WIDTH)
+      ) u_rdt (
         .clk      (clk),
         .rst_n    (rst_n),
         .rdt_uop_valid  (rdt_uop_valid),
@@ -152,7 +165,11 @@ module rvv_backend_pmtrdt_unit
 // Float Reduction unit
   generate
     if (GEN_FRDT == 1'b1) begin
-      rvv_backend_freduction u_frdt (
+      rvv_backend_freduction#(
+        .VLEN(VLEN),
+        .RegDataT(RegDataT),
+        .PC_WIDTH(PC_WIDTH)
+      ) u_frdt (
         .clk      (clk),
         .rst_n    (rst_n),
         .uop_valid      (frdt_uop_valid),
@@ -172,10 +189,14 @@ module rvv_backend_pmtrdt_unit
   endgenerate
 `endif
 
-// Permutation unit 
+// Permutation unit
   generate
     if (GEN_PMT == 1'b1) begin
-      rvv_backend_pmtrdt_unit_permutation u_pmt (
+      rvv_backend_pmtrdt_unit_permutation#(
+        .VLEN(VLEN),
+        .RegDataT(RegDataT),
+        .PC_WIDTH(PC_WIDTH)
+      ) u_pmt (
         .clk      (clk),
         .rst_n    (rst_n),
         .pmt_uop_valid  (pmt_uop_valid),
@@ -219,7 +240,7 @@ module rvv_backend_pmtrdt_unit
     .grant    (pmtrdt_grant),
     .grantData(pmtrdt_res)
   );
-  
+
   assign pmtrdt_res_valid = |pmtrdt_req;
 
   always_comb begin

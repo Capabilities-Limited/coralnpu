@@ -1,4 +1,4 @@
-// description: 
+// description:
 // This is the top module of MUL/MAC wrapper
 // Contains instantiation of MUL_ex and MAC_ex
 // Contains ex arbiter
@@ -6,7 +6,7 @@
 // feature list:
 // 1. Instantiation of MUL ex and MAC ex
 // 2. Arbitration to uop0/1 to use MUL or MAC
-// 3. Pop MUL_RS 
+// 3. Pop MUL_RS
 
 
 `ifndef HDL_VERILOG_RVV_DESIGN_RVV_SVH
@@ -16,7 +16,14 @@
 `include "rvv_backend_sva.svh"
 `endif
 
-module rvv_backend_mulmac (
+module rvv_backend_mulmac#(
+  parameter int unsigned VLEN = `VLEN,
+  parameter type RegDataT=logic [31:0],
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type MUL_RS_t = `MUL_RS_t(VLEN, PC_WIDTH),
+  localparam type PU2ROB_t = `PU2ROB_t(VLEN, PC_WIDTH)
+)
+(
   clk,
   rst_n,
   trap_flush_rvv,
@@ -33,7 +40,7 @@ input   logic                     clk;
 input   logic                     rst_n;
 input   logic                     trap_flush_rvv;
 
-//MUL_RS to MUL_EX 
+//MUL_RS to MUL_EX
 input   logic     [`NUM_MUL-1:0]  uop_valid_rs2ex;
 input   MUL_RS_t  [`NUM_MUL-1:0]  mac_uop_rs2ex;
 output  logic     [`NUM_MUL-1:0]  pop;
@@ -100,14 +107,17 @@ assign mac_pipe_data_en = mac_valid;                                      // ena
 generate
   for(i=0;i<`NUM_MUL;i++) begin: INST_MAC
     rvv_backend_mac_unit #(
+      .VLEN(VLEN),
+      .RegDataT(RegDataT),
+      .PC_WIDTH(PC_WIDTH)
     ) u_mac (
       // Outputs
       .mac2rob_uop_valid  (res_valid_ex2rob[i]),
       .mac2rob_uop_data   (res_ex2rob[i]),
       // Inputs
-      .clk                (clk), 
-      .rst_n              (rst_n), 
-      .rs2mac_uop_valid   (mac_valid[i]), 
+      .clk                (clk),
+      .rst_n              (rst_n),
+      .rs2mac_uop_valid   (mac_valid[i]),
       .rs2mac_uop_data    (mac_uop[i]),
       .mac_pipe_vld_en    (mac_pipe_vld_en[i]),
       .mac_pipe_data_en   (mac_pipe_data_en[i]),

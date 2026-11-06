@@ -2016,12 +2016,12 @@ class coralnpu_rvvi_monitor extends uvm_monitor;
     end
       else if(tr.inst_type == ALU_Type &&tr. alu_inst inside {VMSEQ, VMSNE, VMSLTU, VMSLT, VMSLEU, VMSLE, VMSGTU, VMSGT, VMADC, VMSBC}) begin
       if (tr.vlmul[2])  // fraction_lmul
-        tr.vlmax = (`VLENB >> tr.vsew);
-      else tr.vlmax = ((`VLENB << tr.vlmul) >> tr.vsew);
+        tr.vlmax = (`VLENB(VLEN) >> tr.vsew);
+      else tr.vlmax = ((`VLENB(VLEN) << tr.vlmul) >> tr.vsew);
     end else begin
       if (tr.vlmul[2])  // fraction_lmul
-        tr.vlmax = ((`VLENB >> (~tr.vlmul + 3'b1)) >> tr.vsew);
-      else tr.vlmax = ((`VLENB << tr.vlmul) >> tr.vsew);
+        tr.vlmax = ((`VLENB(VLEN) >> (~tr.vlmul + 3'b1)) >> tr.vsew);
+      else tr.vlmax = ((`VLENB(VLEN) << tr.vlmul) >> tr.vsew);
     end
 
   endfunction : decode_vtype

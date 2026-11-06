@@ -3,9 +3,19 @@
 `endif
 `ifdef ASSERT_ON
 `include "rvv_backend_sva.svh"
-`endif 
+`endif
 
-module zvt (
+module zvt#(
+  parameter int unsigned VLEN = `VLEN,
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type PU2ROB_t = `PU2ROB_t(VLEN, PC_WIDTH),
+  localparam type ZVT_RS_t = `ZVT_RS_t(VLEN, PC_WIDTH),
+  localparam type VME_RTCMD_t = `VME_RTCMD_t(VLEN, PC_WIDTH),
+  localparam type MT_INFO_t = `MT_INFO_t(VLEN, PC_WIDTH),
+  localparam type MISC_RTINFO_t = `MISC_RTINFO_t(PC_WIDTH),
+  localparam type PE_RTINFO_t = `PE_RTINFO_t(PC_WIDTH)
+)
+(
   clk,
   rst_n,
   uopVld,
@@ -34,9 +44,9 @@ module zvt (
   input  logic                    clk;
   input  logic                    rst_n;
   // uops
-  input  logic    [`ZVT_LMUL-1:0] uopVld;
-  input  ZVT_RS_t [`ZVT_LMUL-1:0] uop;
-  output logic    [`ZVT_LMUL-1:0] uopRdy;
+  input  logic    [`ZVT_LMUL(VLEN)-1:0] uopVld;
+  input  ZVT_RS_t [`ZVT_LMUL(VLEN)-1:0] uop;
+  output logic    [`ZVT_LMUL(VLEN)-1:0] uopRdy;
   // VME2RVV
   output logic                    res_vme2rvv_vld;
   output PU2ROB_t                 res_vme2rvv;
@@ -57,7 +67,7 @@ module zvt (
   output logic                    fpexpVld;
   output RVFEXP_t                 fpexp;
   input  logic                    fpexpRdy;
-  // control&status  
+  // control&status
   input  logic                    flush;
   output logic                    zvtBusy;
 
@@ -75,27 +85,27 @@ module zvt (
   logic                 vmelsuresAfull;
   logic                 vmelsuresAempty;
   // PE array
-  logic [`ZVT_LMUL-1:0] peCmdVld;
-  logic [`ZVT_LMUL-1:0] peCmdRdy;
-  logic                 peBusy;  
+  logic [`ZVT_LMUL(VLEN)-1:0] peCmdVld;
+  logic [`ZVT_LMUL(VLEN)-1:0] peCmdRdy;
+  logic                 peBusy;
 `ifdef TB_SUPPORT
-  logic [`NUM_BLK-1:0][`PC_WIDTH-1:0]                               peReadPc;
-  logic [`NUM_BLK-1:0][`PC_WIDTH-1:0]                               peWritePc;
+  logic [`NUM_BLK-1:0][PC_WIDTH-1:0]                               peReadPc;
+  logic [`NUM_BLK-1:0][PC_WIDTH-1:0]                               peWritePc;
 `endif
   logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][$clog2(`NUM_MT)-1:0]       peReadMtIdx;
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][$clog2(`NUM_SUBTILE)-1:0]  peReadSubIdx;
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][`SUBTILE_SIZE-1:0]         peWriteEn;  
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0]  peReadSubIdx;
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][`SUBTILE_SIZE-1:0]         peWriteEn;
   logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][$clog2(`NUM_MT)-1:0]       peWriteMtIdx;
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][$clog2(`NUM_SUBTILE)-1:0]  peWriteSubIdx;
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][`SUBTILE_SIZE*8-1:0]       peWriteData;  
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0]  peWriteSubIdx;
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][`SUBTILE_SIZE*8-1:0]       peWriteData;
   // MT
   logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][$clog2(`NUM_MT)-1:0]       readMtIdx;
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][$clog2(`NUM_SUBTILE)-1:0]  readSubIdx;
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][`SUBTILE_SIZE*8-1:0]       readData;  
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][`SUBTILE_SIZE-1:0]         writeEn;  
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0]  readSubIdx;
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][`SUBTILE_SIZE*8-1:0]       readData;
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][`SUBTILE_SIZE-1:0]         writeEn;
   logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][$clog2(`NUM_MT)-1:0]       writeMtIdx;
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][$clog2(`NUM_SUBTILE)-1:0]  writeSubIdx;
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][`SUBTILE_SIZE*8-1:0]       writeData;  
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0]  writeSubIdx;
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT-1:0][`SUBTILE_SIZE*8-1:0]       writeData;
   // Retire Info
   logic                 rtCmdVld;
   VME_RTCMD_t           rtCmd;
@@ -110,7 +120,10 @@ module zvt (
 `endif
 
   // Controller
-  zvt_ctrl zvtCtrl (
+  zvt_ctrl#(
+    .VLEN(VLEN),
+    .PC_WIDTH(PC_WIDTH)
+  ) zvtCtrl (
     .clk              (clk),
     .rst_n            (rst_n),
     .uopVld           (uopVld),
@@ -134,14 +147,14 @@ module zvt (
     .peReadPc         (peReadPc),
     .peWritePc        (peWritePc),
   `endif
-    .peWriteEn        (peWriteEn),  
+    .peWriteEn        (peWriteEn),
     .peWriteMtIdx     (peWriteMtIdx),
     .peWriteSubIdx    (peWriteSubIdx),
-    .peWriteData      (peWriteData),  
+    .peWriteData      (peWriteData),
     .readMtIdx        (readMtIdx),
     .readSubIdx       (readSubIdx),
     .readData         (readData),
-    .writeEn          (writeEn), 
+    .writeEn          (writeEn),
     .writeMtIdx       (writeMtIdx),
     .writeSubIdx      (writeSubIdx),
     .writeData        (writeData),
@@ -211,7 +224,10 @@ module zvt (
   );
 
   // pe array
-  zvt_pe_array zvtPeArray (
+  zvt_pe_array#(
+    .VLEN(VLEN),
+    .PC_WIDTH(PC_WIDTH)
+  ) zvtPeArray (
     .clk          (clk),
     .rst_n        (rst_n),
     .peCmdVld     (peCmdVld),
@@ -224,7 +240,7 @@ module zvt (
     .readPc       (peReadPc),
     .writePc      (peWritePc),
   `endif
-    .writeEn      (peWriteEn),  
+    .writeEn      (peWriteEn),
     .writeMtIdx   (peWriteMtIdx),
     .writeSubIdx  (peWriteSubIdx),
     .writeData    (peWriteData),
@@ -241,7 +257,10 @@ module zvt (
 
 // Retire Cmd
   logic         vmeRtCmdVld;
+  logic         vmeRtCmdVldD1;
   VME_RTCMD_t   vmeRtCmd;
+  VME_RTCMD_t   vmeRtCmdD1;
+  logic         vmeRtCmdPop;
   logic         rtCmdAempty;
 
   // cmd queue
@@ -249,7 +268,7 @@ module zvt (
     .T            (VME_RTCMD_t),
     .M            (1),
     .N            (1),
-    .DEPTH        (8),       
+    .DEPTH        (8),
     .ASYNC_RSTN   (1'b1)
   ) rtCmdRs (
     .clk          (clk),
@@ -257,7 +276,7 @@ module zvt (
     .push         (rtCmdVld),
     .datain       (rtCmd),
     .pushRdy      (rtCmdRdy),
-    .pop          (vmeRtVld&vmeRtRdy),   
+    .pop          (vmeRtCmdPop),
     .dataout      (vmeRtCmd),
     .full         (),
     .almost_full  (),
@@ -272,6 +291,17 @@ module zvt (
 
   assign vmeRtCmdVld = ~rtCmdAempty;
 
+  always_comb begin
+    if(vmeRtCmdVld)
+      vmeRtCmdPop = vmeRtCmd.isPe ? blkRtVld[3] : miscRtVldD1;
+    else
+      vmeRtCmdPop = 'b0;
+  end
+
+  // delay 1 cycle for retiring.
+  dff                     regVmeRtCmdVldD1 (.q(vmeRtCmdVldD1), .d(vmeRtCmdPop), .clk(clk), .rst_n(rst_n));
+  edff #(.T(VME_RTCMD_t)) regVmeRtCmdD1    (.q(vmeRtCmdD1), .d(vmeRtCmd), .e(vmeRtCmdPop), .clk(clk), .rst_n(rst_n));
+
   // register rt valid
   dff regMiscRtVld (.q(miscRtVldD1), .clk(clk), .rst_n(rst_n), .d(miscRtVld));
   dff regBlk0RtVld (.q(blkRtVld[0]), .clk(clk), .rst_n(rst_n), .d(peRtVld[0]));
@@ -282,9 +312,13 @@ module zvt (
 
 `ifdef RVVI_ON
   // Block pc
-  logic [`NUM_BLK-1:0][`PC_WIDTH-1:0] pcBlkD1;
+  logic [PC_WIDTH-1:0]               miscRtInfoPcD1;
+  logic [`NUM_BLK-1:0][PC_WIDTH-1:0] pcBlkD1;
+
+  dff #(.WIDTH(PC_WIDTH)) regMiscRtInfoPc (.q(miscRtInfoPcD1), .clk(clk), .rst_n(rst_n), .d(miscRtInfo.uop_pc));
+
   for(genvar i=0; i<`NUM_BLK; i++) begin
-      dff #(.WIDTH(`PC_WIDTH)) regBlk0Pc (.q(pcBlkD1[i]), .clk(clk), .rst_n(rst_n), .d(peRtInfo[i].uop_pc));
+      dff #(.WIDTH(PC_WIDTH)) regBlk0Pc (.q(pcBlkD1[i]), .clk(clk), .rst_n(rst_n), .d(peRtInfo[i].uop_pc));
   end
 
   // Block fp exception
@@ -320,111 +354,111 @@ module zvt (
 
   // MT accessing
   logic [`NUM_BLK-1:0][3:0][$clog2(`NUM_MT)-1:0]                          rvviMtIdx;
-  logic [`NUM_BLK-1:0][3:0][`NUM_SUBTILE/2-1:0]                           rvviSubVld;
-  logic [`NUM_BLK-1:0][3:0][`NUM_SUBTILE/2-1:0][$clog2(`NUM_SUBTILE)-1:0] rvviSubIdx;
-  logic [`NUM_BLK-1:0][3:0][`NUM_SUBTILE/2-1:0][`SUBTILE_SIZE*8-1:0]      rvviMtData;
-  
+  logic [`NUM_BLK-1:0][3:0][`NUM_SUBTILE(VLEN)/2-1:0]                           rvviSubVld;
+  logic [`NUM_BLK-1:0][3:0][`NUM_SUBTILE(VLEN)/2-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] rvviSubIdx;
+  logic [`NUM_BLK-1:0][3:0][`NUM_SUBTILE(VLEN)/2-1:0][`SUBTILE_SIZE*8-1:0]      rvviMtData;
+
   localparam BLKID0 = 0;
   localparam BLKID1 = 1;
   localparam BLKID2 = 2;
   localparam BLKID3 = 3;
 
   always_comb begin
-    rvviMtIdx = 'x;
+    rvviMtIdx  = 'x;
     rvviSubVld = 'b0;
     rvviSubIdx = 'x;
 
     if(miscRtVldD1) begin
       case(vmeRtCmd.eew_mt)
         EEW8: begin
-          rvviMtIdx[BLKID0][0] = miscRtMtIdxD1; 
-          rvviMtIdx[BLKID1][0] = miscRtMtIdxD1; 
-          rvviMtIdx[BLKID2][0] = miscRtMtIdxD1; 
-          rvviMtIdx[BLKID3][0] = miscRtMtIdxD1; 
+          rvviMtIdx[BLKID0][0] = miscRtMtIdxD1;
+          rvviMtIdx[BLKID1][0] = miscRtMtIdxD1;
+          rvviMtIdx[BLKID2][0] = miscRtMtIdxD1;
+          rvviMtIdx[BLKID3][0] = miscRtMtIdxD1;
 
-          for(int i=0;i<`TE/8;i++) begin
-            for(int j=0;j<`TE/8;j++) begin
-              rvviSubVld[BLKID0][0][i*`TE/8+j] = 1'b1;
-              rvviSubVld[BLKID1][0][i*`TE/8+j] = 1'b1;
-              rvviSubVld[BLKID2][0][i*`TE/8+j] = 1'b1;
-              rvviSubVld[BLKID3][0][i*`TE/8+j] = 1'b1;
+          for(int i=0;i<`TE(VLEN)/8;i++) begin
+            for(int j=0;j<`TE(VLEN)/8;j++) begin
+              rvviSubVld[BLKID0][0][i*`TE(VLEN)/8+j] = 1'b1;
+              rvviSubVld[BLKID1][0][i*`TE(VLEN)/8+j] = 1'b1;
+              rvviSubVld[BLKID2][0][i*`TE(VLEN)/8+j] = 1'b1;
+              rvviSubVld[BLKID3][0][i*`TE(VLEN)/8+j] = 1'b1;
 
-              rvviSubIdx[BLKID0][0][i*`TE/8+j] = i*`TE/4 + j;
-              rvviSubIdx[BLKID1][0][i*`TE/8+j] = i*`TE/4 + `TE/8 + j;
-              rvviSubIdx[BLKID2][0][i*`TE/8+j] = i*`TE/4 + `TE*`TE/32 + j;
-              rvviSubIdx[BLKID3][0][i*`TE/8+j] = i*`TE/4 + `TE*`TE/32 + `TE/8 + j;
+              rvviSubIdx[BLKID0][0][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + j;
+              rvviSubIdx[BLKID1][0][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + `TE(VLEN)/8 + j;
+              rvviSubIdx[BLKID2][0][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + `TE(VLEN)*`TE(VLEN)/32 + j;
+              rvviSubIdx[BLKID3][0][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + `TE(VLEN)*`TE(VLEN)/32 + `TE(VLEN)/8 + j;
             end
-          end 
+          end
         end
         EEW16: begin
-          rvviMtIdx[BLKID0][0] = miscRtMtIdxD1; 
-          rvviMtIdx[BLKID0][1] = miscRtMtIdxD1 + 'd1; 
-          rvviMtIdx[BLKID1][0] = miscRtMtIdxD1; 
-          rvviMtIdx[BLKID1][1] = miscRtMtIdxD1 + 'd1; 
-          rvviMtIdx[BLKID2][0] = miscRtMtIdxD1; 
-          rvviMtIdx[BLKID2][1] = miscRtMtIdxD1 + 'd1; 
-          rvviMtIdx[BLKID3][0] = miscRtMtIdxD1; 
-          rvviMtIdx[BLKID3][1] = miscRtMtIdxD1 + 'd1; 
+          rvviMtIdx[BLKID0][0] = miscRtMtIdxD1;
+          rvviMtIdx[BLKID0][1] = miscRtMtIdxD1 + 'd1;
+          rvviMtIdx[BLKID1][0] = miscRtMtIdxD1;
+          rvviMtIdx[BLKID1][1] = miscRtMtIdxD1 + 'd1;
+          rvviMtIdx[BLKID2][0] = miscRtMtIdxD1;
+          rvviMtIdx[BLKID2][1] = miscRtMtIdxD1 + 'd1;
+          rvviMtIdx[BLKID3][0] = miscRtMtIdxD1;
+          rvviMtIdx[BLKID3][1] = miscRtMtIdxD1 + 'd1;
 
-          for(int i=0;i<`TE/8;i++) begin
-            for(int j=0;j<`TE/8;j++) begin
-              rvviSubVld[BLKID0][0][i*`TE/8+j] = 1'b1;
-              rvviSubVld[BLKID0][1][i*`TE/8+j] = 1'b1;
-              rvviSubVld[BLKID1][0][i*`TE/8+j] = 1'b1;
-              rvviSubVld[BLKID1][1][i*`TE/8+j] = 1'b1;
-              rvviSubVld[BLKID2][0][i*`TE/8+j] = 1'b1;
-              rvviSubVld[BLKID2][1][i*`TE/8+j] = 1'b1;
-              rvviSubVld[BLKID3][0][i*`TE/8+j] = 1'b1;
-              rvviSubVld[BLKID3][1][i*`TE/8+j] = 1'b1;
+          for(int i=0;i<`TE(VLEN)/8;i++) begin
+            for(int j=0;j<`TE(VLEN)/8;j++) begin
+              rvviSubVld[BLKID0][0][i*`TE(VLEN)/8+j] = 1'b1;
+              rvviSubVld[BLKID0][1][i*`TE(VLEN)/8+j] = 1'b1;
+              rvviSubVld[BLKID1][0][i*`TE(VLEN)/8+j] = 1'b1;
+              rvviSubVld[BLKID1][1][i*`TE(VLEN)/8+j] = 1'b1;
+              rvviSubVld[BLKID2][0][i*`TE(VLEN)/8+j] = 1'b1;
+              rvviSubVld[BLKID2][1][i*`TE(VLEN)/8+j] = 1'b1;
+              rvviSubVld[BLKID3][0][i*`TE(VLEN)/8+j] = 1'b1;
+              rvviSubVld[BLKID3][1][i*`TE(VLEN)/8+j] = 1'b1;
 
-              rvviSubIdx[BLKID0][0][i*`TE/8+j] = i*`TE/4 + j;
-              rvviSubIdx[BLKID0][1][i*`TE/8+j] = i*`TE/4 + j;
-              rvviSubIdx[BLKID1][0][i*`TE/8+j] = i*`TE/4 + `TE/8 + j;
-              rvviSubIdx[BLKID1][1][i*`TE/8+j] = i*`TE/4 + `TE/8 + j;
-              rvviSubIdx[BLKID2][0][i*`TE/8+j] = i*`TE/4 + `TE*`TE/32 + j;
-              rvviSubIdx[BLKID2][1][i*`TE/8+j] = i*`TE/4 + `TE*`TE/32 + j;
-              rvviSubIdx[BLKID3][0][i*`TE/8+j] = i*`TE/4 + `TE*`TE/32 + `TE/8 + j;
-              rvviSubIdx[BLKID3][1][i*`TE/8+j] = i*`TE/4 + `TE*`TE/32 + `TE/8 + j;
+              rvviSubIdx[BLKID0][0][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + j;
+              rvviSubIdx[BLKID0][1][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + j;
+              rvviSubIdx[BLKID1][0][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + `TE(VLEN)/8 + j;
+              rvviSubIdx[BLKID1][1][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + `TE(VLEN)/8 + j;
+              rvviSubIdx[BLKID2][0][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + `TE(VLEN)*`TE(VLEN)/32 + j;
+              rvviSubIdx[BLKID2][1][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + `TE(VLEN)*`TE(VLEN)/32 + j;
+              rvviSubIdx[BLKID3][0][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + `TE(VLEN)*`TE(VLEN)/32 + `TE(VLEN)/8 + j;
+              rvviSubIdx[BLKID3][1][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + `TE(VLEN)*`TE(VLEN)/32 + `TE(VLEN)/8 + j;
             end
-          end        
+          end
         end
         default: begin // EEW32
-          rvviMtIdx[BLKID0][0] = miscRtMtIdxD1; 
-          rvviMtIdx[BLKID0][1] = miscRtMtIdxD1 + 'd1; 
-          rvviMtIdx[BLKID0][2] = miscRtMtIdxD1 + 'd2; 
-          rvviMtIdx[BLKID0][3] = miscRtMtIdxD1 + 'd3; 
-          rvviMtIdx[BLKID1][0] = miscRtMtIdxD1; 
-          rvviMtIdx[BLKID1][1] = miscRtMtIdxD1 + 'd1; 
-          rvviMtIdx[BLKID1][2] = miscRtMtIdxD1 + 'd2; 
-          rvviMtIdx[BLKID1][3] = miscRtMtIdxD1 + 'd3; 
-          rvviMtIdx[BLKID2][0] = miscRtMtIdxD1; 
-          rvviMtIdx[BLKID2][1] = miscRtMtIdxD1 + 'd1; 
-          rvviMtIdx[BLKID2][2] = miscRtMtIdxD1 + 'd2; 
-          rvviMtIdx[BLKID2][3] = miscRtMtIdxD1 + 'd3; 
-          rvviMtIdx[BLKID3][0] = miscRtMtIdxD1; 
-          rvviMtIdx[BLKID3][1] = miscRtMtIdxD1 + 'd1; 
-          rvviMtIdx[BLKID3][2] = miscRtMtIdxD1 + 'd2; 
-          rvviMtIdx[BLKID3][3] = miscRtMtIdxD1 + 'd3; 
+          rvviMtIdx[BLKID0][0] = miscRtMtIdxD1;
+          rvviMtIdx[BLKID0][1] = miscRtMtIdxD1 + 'd1;
+          rvviMtIdx[BLKID0][2] = miscRtMtIdxD1 + 'd2;
+          rvviMtIdx[BLKID0][3] = miscRtMtIdxD1 + 'd3;
+          rvviMtIdx[BLKID1][0] = miscRtMtIdxD1;
+          rvviMtIdx[BLKID1][1] = miscRtMtIdxD1 + 'd1;
+          rvviMtIdx[BLKID1][2] = miscRtMtIdxD1 + 'd2;
+          rvviMtIdx[BLKID1][3] = miscRtMtIdxD1 + 'd3;
+          rvviMtIdx[BLKID2][0] = miscRtMtIdxD1;
+          rvviMtIdx[BLKID2][1] = miscRtMtIdxD1 + 'd1;
+          rvviMtIdx[BLKID2][2] = miscRtMtIdxD1 + 'd2;
+          rvviMtIdx[BLKID2][3] = miscRtMtIdxD1 + 'd3;
+          rvviMtIdx[BLKID3][0] = miscRtMtIdxD1;
+          rvviMtIdx[BLKID3][1] = miscRtMtIdxD1 + 'd1;
+          rvviMtIdx[BLKID3][2] = miscRtMtIdxD1 + 'd2;
+          rvviMtIdx[BLKID3][3] = miscRtMtIdxD1 + 'd3;
 
-          for(int i=0;i<`TE/4;i++) begin
-            for(int j=0;j<`TE/8;j++) begin
-              rvviSubVld[BLKID0][0][i*`TE/8+j] = 1'b1;
-              rvviSubVld[BLKID0][1][i*`TE/8+j] = 1'b1;
-              rvviSubVld[BLKID1][0][i*`TE/8+j] = 1'b1;
-              rvviSubVld[BLKID1][1][i*`TE/8+j] = 1'b1;
-              rvviSubVld[BLKID2][2][i*`TE/8+j] = 1'b1;
-              rvviSubVld[BLKID2][3][i*`TE/8+j] = 1'b1;
-              rvviSubVld[BLKID3][2][i*`TE/8+j] = 1'b1;
-              rvviSubVld[BLKID3][3][i*`TE/8+j] = 1'b1;
+          for(int i=0;i<`TE(VLEN)/4;i++) begin
+            for(int j=0;j<`TE(VLEN)/8;j++) begin
+              rvviSubVld[BLKID0][0][i*`TE(VLEN)/8+j] = 1'b1;
+              rvviSubVld[BLKID0][1][i*`TE(VLEN)/8+j] = 1'b1;
+              rvviSubVld[BLKID1][0][i*`TE(VLEN)/8+j] = 1'b1;
+              rvviSubVld[BLKID1][1][i*`TE(VLEN)/8+j] = 1'b1;
+              rvviSubVld[BLKID2][2][i*`TE(VLEN)/8+j] = 1'b1;
+              rvviSubVld[BLKID2][3][i*`TE(VLEN)/8+j] = 1'b1;
+              rvviSubVld[BLKID3][2][i*`TE(VLEN)/8+j] = 1'b1;
+              rvviSubVld[BLKID3][3][i*`TE(VLEN)/8+j] = 1'b1;
 
-              rvviSubIdx[BLKID0][0][i*`TE/8+j] = i*`TE/4 + j;
-              rvviSubIdx[BLKID0][1][i*`TE/8+j] = i*`TE/4 + j;
-              rvviSubIdx[BLKID1][0][i*`TE/8+j] = i*`TE/4 + `TE/8 + j;
-              rvviSubIdx[BLKID1][1][i*`TE/8+j] = i*`TE/4 + `TE/8 + j;
-              rvviSubIdx[BLKID2][2][i*`TE/8+j] = i*`TE/4 + j;
-              rvviSubIdx[BLKID2][3][i*`TE/8+j] = i*`TE/4 + j;
-              rvviSubIdx[BLKID3][2][i*`TE/8+j] = i*`TE/4 + `TE/8 + j;
-              rvviSubIdx[BLKID3][3][i*`TE/8+j] = i*`TE/4 + `TE/8 + j;
+              rvviSubIdx[BLKID0][0][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + j;
+              rvviSubIdx[BLKID0][1][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + j;
+              rvviSubIdx[BLKID1][0][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + `TE(VLEN)/8 + j;
+              rvviSubIdx[BLKID1][1][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + `TE(VLEN)/8 + j;
+              rvviSubIdx[BLKID2][2][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + j;
+              rvviSubIdx[BLKID2][3][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + j;
+              rvviSubIdx[BLKID3][2][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + `TE(VLEN)/8 + j;
+              rvviSubIdx[BLKID3][3][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + `TE(VLEN)/8 + j;
             end
           end
         end
@@ -433,62 +467,62 @@ module zvt (
     else begin
       if(blkRtVld[0]) begin
         // default: EEW32
-        rvviMtIdx[BLKID0][0] = blk0RtMtIdx; 
-        rvviMtIdx[BLKID0][1] = blk0RtMtIdx + 'd1; 
-        rvviMtIdx[BLKID0][2] = blk0RtMtIdx + 'd2; 
-        rvviMtIdx[BLKID0][3] = blk0RtMtIdx + 'd3; 
+        rvviMtIdx[BLKID0][0] = blk0RtMtIdx;
+        rvviMtIdx[BLKID0][1] = blk0RtMtIdx + 'd1;
+        rvviMtIdx[BLKID0][2] = blk0RtMtIdx + 'd2;
+        rvviMtIdx[BLKID0][3] = blk0RtMtIdx + 'd3;
 
-        for(int i=0;i<`TE/4;i++) begin
-          for(int j=0;j<`TE/8;j++) begin
-            rvviSubVld[BLKID0][0][i*`TE/8+j] = 1'b1;
-            rvviSubVld[BLKID0][1][i*`TE/8+j] = 1'b1;
+        for(int i=0;i<`TE(VLEN)/4;i++) begin
+          for(int j=0;j<`TE(VLEN)/8;j++) begin
+            rvviSubVld[BLKID0][0][i*`TE(VLEN)/8+j] = 1'b1;
+            rvviSubVld[BLKID0][1][i*`TE(VLEN)/8+j] = 1'b1;
 
-            rvviSubIdx[BLKID0][0][i*`TE/8+j] = i*`TE/4 + j;
-            rvviSubIdx[BLKID0][1][i*`TE/8+j] = i*`TE/4 + j;
+            rvviSubIdx[BLKID0][0][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + j;
+            rvviSubIdx[BLKID0][1][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + j;
           end
         end
       end
 
       if(blkRtVld[1] || blkRtVld[2]) begin
         // default: EEW32
-        rvviMtIdx[BLKID1][0] = blk1RtMtIdx; 
-        rvviMtIdx[BLKID1][1] = blk1RtMtIdx + 'd1; 
-        rvviMtIdx[BLKID1][2] = blk1RtMtIdx + 'd2; 
-        rvviMtIdx[BLKID1][3] = blk1RtMtIdx + 'd3; 
-        rvviMtIdx[BLKID2][0] = blk1RtMtIdx; 
-        rvviMtIdx[BLKID2][1] = blk1RtMtIdx + 'd1; 
-        rvviMtIdx[BLKID2][2] = blk1RtMtIdx + 'd2; 
-        rvviMtIdx[BLKID2][3] = blk1RtMtIdx + 'd3; 
+        rvviMtIdx[BLKID1][0] = blk1RtMtIdx;
+        rvviMtIdx[BLKID1][1] = blk1RtMtIdx + 'd1;
+        rvviMtIdx[BLKID1][2] = blk1RtMtIdx + 'd2;
+        rvviMtIdx[BLKID1][3] = blk1RtMtIdx + 'd3;
+        rvviMtIdx[BLKID2][0] = blk1RtMtIdx;
+        rvviMtIdx[BLKID2][1] = blk1RtMtIdx + 'd1;
+        rvviMtIdx[BLKID2][2] = blk1RtMtIdx + 'd2;
+        rvviMtIdx[BLKID2][3] = blk1RtMtIdx + 'd3;
 
-        for(int i=0;i<`TE/4;i++) begin
-          for(int j=0;j<`TE/8;j++) begin
-            rvviSubVld[BLKID1][0][i*`TE/8+j] = 1'b1;
-            rvviSubVld[BLKID1][1][i*`TE/8+j] = 1'b1;
-            rvviSubVld[BLKID2][2][i*`TE/8+j] = 1'b1;
-            rvviSubVld[BLKID2][3][i*`TE/8+j] = 1'b1;
+        for(int i=0;i<`TE(VLEN)/4;i++) begin
+          for(int j=0;j<`TE(VLEN)/8;j++) begin
+            rvviSubVld[BLKID1][0][i*`TE(VLEN)/8+j] = 1'b1;
+            rvviSubVld[BLKID1][1][i*`TE(VLEN)/8+j] = 1'b1;
+            rvviSubVld[BLKID2][2][i*`TE(VLEN)/8+j] = 1'b1;
+            rvviSubVld[BLKID2][3][i*`TE(VLEN)/8+j] = 1'b1;
 
-            rvviSubIdx[BLKID1][0][i*`TE/8+j] = i*`TE/4 + `TE/8 + j;
-            rvviSubIdx[BLKID1][1][i*`TE/8+j] = i*`TE/4 + `TE/8 + j;
-            rvviSubIdx[BLKID2][2][i*`TE/8+j] = i*`TE/4 + j;
-            rvviSubIdx[BLKID2][3][i*`TE/8+j] = i*`TE/4 + j;
+            rvviSubIdx[BLKID1][0][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + `TE(VLEN)/8 + j;
+            rvviSubIdx[BLKID1][1][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + `TE(VLEN)/8 + j;
+            rvviSubIdx[BLKID2][2][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + j;
+            rvviSubIdx[BLKID2][3][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + j;
           end
         end
       end
 
       if(blkRtVld[3]) begin
         // default: EEW32
-        rvviMtIdx[BLKID3][0] = blk3RtMtIdx; 
-        rvviMtIdx[BLKID3][1] = blk3RtMtIdx + 'd1; 
-        rvviMtIdx[BLKID3][2] = blk3RtMtIdx + 'd2; 
-        rvviMtIdx[BLKID3][3] = blk3RtMtIdx + 'd3; 
+        rvviMtIdx[BLKID3][0] = blk3RtMtIdx;
+        rvviMtIdx[BLKID3][1] = blk3RtMtIdx + 'd1;
+        rvviMtIdx[BLKID3][2] = blk3RtMtIdx + 'd2;
+        rvviMtIdx[BLKID3][3] = blk3RtMtIdx + 'd3;
 
-        for(int i=0;i<`TE/4;i++) begin
-          for(int j=0;j<`TE/8;j++) begin
-            rvviSubVld[BLKID3][2][i*`TE/8+j] = 1'b1;
-            rvviSubVld[BLKID3][3][i*`TE/8+j] = 1'b1;
+        for(int i=0;i<`TE(VLEN)/4;i++) begin
+          for(int j=0;j<`TE(VLEN)/8;j++) begin
+            rvviSubVld[BLKID3][2][i*`TE(VLEN)/8+j] = 1'b1;
+            rvviSubVld[BLKID3][3][i*`TE(VLEN)/8+j] = 1'b1;
 
-            rvviSubIdx[BLKID3][2][i*`TE/8+j] = i*`TE/4 + `TE/8 + j;
-            rvviSubIdx[BLKID3][3][i*`TE/8+j] = i*`TE/4 + `TE/8 + j;
+            rvviSubIdx[BLKID3][2][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + `TE(VLEN)/8 + j;
+            rvviSubIdx[BLKID3][3][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + `TE(VLEN)/8 + j;
           end
         end
       end
@@ -496,7 +530,9 @@ module zvt (
   end
 `endif
 
-  zvt_mt zvtMt(
+  zvt_mt#(
+    .VLEN(VLEN)
+  ) zvtMt (
     .clk            (clk),
     .rst_n          (rst_n),
     .readMtIdx      (readMtIdx),
@@ -506,17 +542,17 @@ module zvt (
     .rvviMtIdx      (rvviMtIdx),
     .rvviSubIdx     (rvviSubIdx),
     .rvviReadData   (rvviMtData),
-  `endif 
-    .writeEn        (writeEn), 
+  `endif
+    .writeEn        (writeEn),
     .writeMtIdx     (writeMtIdx),
     .writeSubIdx    (writeSubIdx),
-    .writeData      (writeData) 
+    .writeData      (writeData)
   );
-  
+
   // res info queue of each block
   MT_INFO_t [`NUM_BLK-1:0] mtInfo;
   logic     [`NUM_BLK-1:0] mtInfoRdy;
-  logic     [`NUM_BLK-1:0] mtRtInfoVld;  
+  logic     [`NUM_BLK-1:0] mtRtInfoVld;
   MT_INFO_t [`NUM_BLK-1:0] mtRtInfo;
   logic     [`NUM_BLK-1:0] mtInfoAempty;
 
@@ -524,7 +560,7 @@ module zvt (
     assign mtInfo[i].Vld        = blkRtVld[i] || miscRtVldD1;
 
   `ifdef RVVI_ON
-    assign mtInfo[i].inst_pc    = miscRtVldD1 ? miscRtInfo.uop_pc : pcBlkD1[i];
+    assign mtInfo[i].inst_pc    = miscRtVldD1 ? miscRtInfoPcD1 : pcBlkD1[i];
     assign mtInfo[i].status     = statusBlkD1[i];
     assign mtInfo[i].rvviMtIdx  = rvviMtIdx[i];
     assign mtInfo[i].rvviSubVld = rvviSubVld[i];
@@ -545,8 +581,8 @@ module zvt (
       .rst_n        (rst_n),
       .push         (mtInfo[i].Vld),
       .datain       (mtInfo[i]),
-      .pushRdy      (mtInfoRdy[i]),      
-      .pop          (vmeRtVld&vmeRtRdy),  
+      .pushRdy      (mtInfoRdy[i]),
+      .pop          (vmeRtVld&vmeRtRdy),
       .dataout      (mtRtInfo[i]),
       .full         (),
       .almost_full  (),
@@ -567,41 +603,41 @@ module zvt (
   end
 
   // all info is ready
-  assign vmeRtVld = vmeRtCmdVld && (&mtRtInfoVld);
+  assign vmeRtVld = vmeRtCmdVldD1 && (&mtRtInfoVld);
 
 `ifdef TB_SUPPORT
-  assign vmeRt.inst_pc = vmeRtCmd.inst_pc;
+  assign vmeRt.inst_pc = vmeRtCmdD1.inst_pc;
 `endif
-  assign vmeRt.rob_tag = vmeRtCmd.rob_tag;
-  assign vmeRt.isStore = vmeRtCmd.isStore;
+  assign vmeRt.rob_tag = vmeRtCmdD1.rob_tag;
+  assign vmeRt.isStore = vmeRtCmdD1.isStore;
   // mt_index
   always_comb begin
-    case(vmeRtCmd.eew_mt)
-      EEW8: begin   
-        vmeRt.mtIdxVld = vmeRtCmd.isStore ? 'b0 : 4'b0001;
+    case(vmeRtCmdD1.eew_mt)
+      EEW8: begin
+        vmeRt.mtIdxVld = vmeRtCmdD1.isStore ? 'b0 : 4'b0001;
       end
-      EEW16: begin  
-        if(vmeRtCmd.isStore)
+      EEW16: begin
+        if(vmeRtCmdD1.isStore)
           vmeRt.mtIdxVld = 'b0;
-        else if(vmeRtCmd.isMv2Vme && !vmeRtCmd.tssPattern)
-          vmeRt.mtIdxVld = vmeRtCmd.tssIndex[1] ? 4'b0010 : 4'b0001;
-        else 
+        else if(vmeRtCmdD1.isMv2Vme && !vmeRtCmdD1.tssPattern)
+          vmeRt.mtIdxVld = vmeRtCmdD1.tssIndex[1] ? 4'b0010 : 4'b0001;
+        else
           vmeRt.mtIdxVld = 4'b0011;
       end
       default: begin
-        if(vmeRtCmd.isStore)
+        if(vmeRtCmdD1.isStore)
           vmeRt.mtIdxVld = 'b0;
-        else if(vmeRtCmd.isMv2Vme && !vmeRtCmd.tssPattern)
-          vmeRt.mtIdxVld = vmeRtCmd.tssIndex[$clog2(`TE/2)] ? 4'b1100 : 4'b0011;
-        else if(vmeRtCmd.isMv2Vme && vmeRtCmd.tssPattern)
-          vmeRt.mtIdxVld = vmeRtCmd.tssIndex[1] ? 4'b1010 : 4'b0101;
+        else if(vmeRtCmdD1.isMv2Vme && !vmeRtCmdD1.tssPattern)
+          vmeRt.mtIdxVld = vmeRtCmdD1.tssIndex[$clog2(`TE(VLEN)/2)] ? 4'b1100 : 4'b0011;
+        else if(vmeRtCmdD1.isMv2Vme && vmeRtCmdD1.tssPattern)
+          vmeRt.mtIdxVld = vmeRtCmdD1.tssIndex[1] ? 4'b1010 : 4'b0101;
         else
           vmeRt.mtIdxVld = 4'b1111;
       end
     endcase
   end
 
-  assign vmeRt.mtIdx = vmeRtCmd.mtIdx;
+  assign vmeRt.mtIdx = vmeRtCmdD1.mtIdx;
 
 `ifdef RVVI_ON
   // status
@@ -615,10 +651,10 @@ module zvt (
   // data remap
   always_comb begin
     vmeRt.mtData = 'x;
-    
+
     for (int i=0;i<4;i++) begin: retire_each_mt
       for (int j=0;j<`NUM_BLK;j++) begin: retire_each_block
-        for (int h=0;h<`NUM_SUBTILE/2;h++) begin: retire_block_each_port
+        for (int h=0;h<`NUM_SUBTILE(VLEN)/2;h++) begin: retire_block_each_port
           if(vmeRtVld && mtRtInfo[j].rvviSubVld[i][h]) begin
             vmeRt.mtData[i][mtRtInfo[j].rvviSubIdx[i][h]] = mtRtInfo[j].rvviData[i][h];
           end
@@ -629,9 +665,9 @@ module zvt (
 
   `ifdef ASSERT_ON
   for(genvar i=0;i<4;i++) begin
-    for(genvar j=0;j<`NUM_SUBTILE;j++) begin
+    for(genvar j=0;j<`NUM_SUBTILE(VLEN);j++) begin
       `rvv_forbid(vmeRtVld && vmeRt.mtIdxVld[i] && ($isunknown(vmeRt.mtData[i][j])))
-      else $error("Pc(%0d) retiring Mt[%0d][%0d] is undriven.\n", vmeRt.inst_pc, i, j);
+      else $error("Pc(0x%0h) retiring Mt[%0d][%0d] is undriven.\n", vmeRt.inst_pc, i, j);
     end
   end
   `endif

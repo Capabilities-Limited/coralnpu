@@ -265,14 +265,14 @@ object GenerateCoreShimSource {
     }
 
     // Inst data
-    coreInstantiation += "  RVVInstruction [GENN-1:0] inst_data;\n".replaceAll(
+    coreInstantiation += "  `INSTRUCTION_t(PC_WIDTH) [GENN-1:0] inst_data;\n".replaceAll(
       "GENN",
       instructionLanes.toString
-    )
+    ).replaceAll("PC_WIDTH", p.programCounterBits.toString)
     for (i <- 0 until instructionLanes) {
       coreInstantiation += s"  assign inst_data[$i].rob_tag = inst_${i}_bits_rob_tag;\n"
       coreInstantiation += s"  assign inst_data[$i].pc = inst_${i}_bits_pc;\n"
-      coreInstantiation += "  assign inst_data[GENI].opcode = RVVOpCode'(inst_GENI_bits_opcode);\n"
+      coreInstantiation += "  assign inst_data[GENI].opcode = OPCODE_t'(inst_GENI_bits_opcode);\n"
         .replaceAll(
           "GENI",
           i.toString
@@ -389,18 +389,27 @@ object GenerateCoreShimSource {
         |""".stripMargin
 
     // VCSR temp output
-    coreInstantiation += """  RVVConfigState vector_csr;
+    coreInstantiation += """  `CONFIG_STATE_t(RVV_VLEN) vector_csr;
         |  assign vcsr_vstart = vector_csr.vstart;
         |  assign vcsr_xrm = vector_csr.xrm;
         |  assign vcsr_vxsat = vector_csr.xsat;
-        |""".stripMargin
+        |""".stripMargin.replaceAll("RVV_VLEN", vlen.toString)
     // RVV Config State temp output
-    coreInstantiation += """  RVVConfigState config_state;
-        |""".stripMargin
+    coreInstantiation += """  `CONFIG_STATE_t(RVV_VLEN) config_state;
+        |""".stripMargin.replaceAll("RVV_VLEN", vlen.toString)
 
-    coreInstantiation += s"  ROB2RT_t [${numRetireLanes - 1}:0] rd_rob2rt_o;\n"
+    coreInstantiation += s"  `ROB2RT_t(RVV_VLEN, PC_WIDTH) [${numRetireLanes - 1}:0] rd_rob2rt_o;\n".replaceAll(
+      "RVV_VLEN",
+      vlen.toString
+    ).replaceAll(
+      "PC_WIDTH",
+      p.programCounterBits
+    )
     coreInstantiation += s"  logic [${numRetireLanes - 1}:0] rd_valid_rob2rt_o;\n"
-    coreInstantiation += "  RVVInstruction trap_data;\n"
+    coreInstantiation += "  `INSTRUCTION_t(PC_WIDTH) trap_data;\n".stripMargin.replaceAll(
+      "PC_WIDTH",
+      p.programCounterBits
+    )
     coreInstantiation +=
       s"""  logic [${instructionLanes}-1:0] vme_mtype_valid_o;
          |  logic [${instructionLanes}-1:0][${xlenMinus1}:0] vme_mtype_data_o;
@@ -417,6 +426,7 @@ object GenerateCoreShimSource {
 
     coreInstantiation += """  RvvCore#(
         |      .N (GENN),
+        |      .VLEN (RVV_VLEN),
         |      .RegDataT(logic [XLEN_MINUS_1:0])
         |  ) core(
         |      .clk(clk),
