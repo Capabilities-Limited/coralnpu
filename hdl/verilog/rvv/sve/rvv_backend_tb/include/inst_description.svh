@@ -48,6 +48,43 @@ package mask_tail_pkg;
   localparam mask_tail_policy_e MASK_TAIL_POLICY_CARRY = mask_tail_policy_e'(`RVV_TB_MASK_TAIL_CARRY);
 endpackage: mask_tail_pkg
 
+// Fault-only-first policies --------------------------------
+// RVV spec, unit-stride fault-only-first loads. These are the choices the spec leaves to the
+// implementation that the testbench can model. Each is selected at compile time
+// (+define+RVV_TB_FOF_<NAME>=<n>; Makefile: FOF_POST_FAULT, FOF_SEGMENT) and the defaults match
+// this DUT.
+//
+// POST_FAULT - active elements between the faulting element k and the original vl, when the load
+//   faults on an element k > 0 (vl is trimmed to k and no trap is taken). The spec says such loads
+//   "may update active destination elements past the element that causes trimming of the vector
+//   length (but not past the original vector length)", with values that need not match memory.
+//   0 not_updated: they are treated as tail elements and not written (default).
+//   1 loaded:      they are loaded from memory as if the load had not faulted.
+//
+// SEGMENT - a fault inside a segment of vlseg<nf>e<eew>ff.v. The spec says "it is
+//   implementation-defined whether a subset of the segment is loaded".
+//   0 whole:   no field of the faulting segment is loaded (default).
+//   1 partial: the fields before the faulting field are loaded, the rest are not.
+//
+// Not configurable, because the testbench acts as the LSU and the DUT decides them:
+// - Whether a load that traps overwrites active elements past the trapping element (the spec
+//   allows it; the DUT flushes the later uops, so it never does).
+// - Whether an implementation trims vl without a fault ("permitted to process fewer than vl
+//   elements ... if vstart=0 and vl>0 then at least one element must be processed"). To the backend
+//   that is the same as a fault on element k > 0, so lsu_fof_gen_fault covers it.
+`ifndef RVV_TB_FOF_POST_FAULT
+  `define RVV_TB_FOF_POST_FAULT 0
+`endif
+`ifndef RVV_TB_FOF_SEGMENT
+  `define RVV_TB_FOF_SEGMENT 0
+`endif
+package fof_policy_pkg;
+  typedef enum {FOF_POST_FAULT_NOT_UPDATED, FOF_POST_FAULT_LOADED} fof_post_fault_e;
+  typedef enum {FOF_SEGMENT_WHOLE, FOF_SEGMENT_PARTIAL}            fof_segment_e;
+  localparam fof_post_fault_e FOF_POST_FAULT = fof_post_fault_e'(`RVV_TB_FOF_POST_FAULT);
+  localparam fof_segment_e    FOF_SEGMENT    = fof_segment_e'(`RVV_TB_FOF_SEGMENT);
+endpackage: fof_policy_pkg
+
 package rvv_tb_pkg;
 import vrf_mon_pkg::*;
 import rvv_state_pkg::*;
