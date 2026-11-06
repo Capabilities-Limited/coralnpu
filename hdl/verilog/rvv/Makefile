@@ -54,6 +54,13 @@ MASK_TAIL_SET   ?= $(or $(MASK_TAIL),undisturbed)
 MASK_TAIL_CMP   ?= $(or $(MASK_TAIL),undisturbed)
 MASK_TAIL_CARRY ?= $(or $(MASK_TAIL),undisturbed)
 MASK_TAIL_TAG   := $(MASK_TAIL_LOGIC)-$(MASK_TAIL_SET)-$(MASK_TAIL_CMP)-$(MASK_TAIL_CARRY)
+# Fault-only-first behaviour the model follows where the RVV spec leaves it open (see
+# fof_policy_pkg in sve/rvv_backend_tb/include/inst_description.svh). Defaults match the DUT.
+#   FOF_POST_FAULT: active elements after the faulting one, up to the original vl:
+#                   not_updated | loaded
+#   FOF_SEGMENT:    a fault inside a segment of a segment load: whole | partial
+FOF_POST_FAULT  ?= not_updated
+FOF_SEGMENT     ?= whole
 UVM_HOME  ?=
 UVM_VERBOSITY ?= UVM_LOW
 timeout   ?= 1000000000ns
@@ -81,7 +88,7 @@ DESIGN_PATH := $(RVV_ROOT)/design
 STD_PATH    := $(RVV_ROOT)/common
 RTL_INC_DIR := $(RVV_ROOT)/inc
 TB_PATH     := $(RVV_ROOT)/sve/rvv_backend_tb
-BUILD_PATH  := $(RVV_ROOT)/build/$(scfg)$(if $(filter-out VLEN_128,$(VLEN_DEFINE)),_vlen$(VLEN_DEFINE:VLEN_%=%))$(if $(filter 1,$(TRACE)),_trace)$(if $(filter-out calculated-undisturbed-undisturbed-undisturbed,$(MASK_TAIL_TAG)),_tail_$(MASK_TAIL_TAG))
+BUILD_PATH  := $(RVV_ROOT)/build/$(scfg)$(if $(filter-out VLEN_128,$(VLEN_DEFINE)),_vlen$(VLEN_DEFINE:VLEN_%=%))$(if $(filter 1,$(TRACE)),_trace)$(if $(filter-out calculated-undisturbed-undisturbed-undisturbed,$(MASK_TAIL_TAG)),_tail_$(MASK_TAIL_TAG))$(if $(filter-out not_updated-whole,$(FOF_POST_FAULT)-$(FOF_SEGMENT)),_fof_$(FOF_POST_FAULT)-$(FOF_SEGMENT))
 TB_TOP      := rvv_backend_top
 
 # ------------------------------------------------------------------
@@ -131,7 +138,11 @@ MASK_TAIL_DEFINES := RVV_TB_MASK_TAIL_LOGIC=$(call mask_tail_num,$(MASK_TAIL_LOG
                      RVV_TB_MASK_TAIL_SET=$(call mask_tail_num,$(MASK_TAIL_SET)) \
                      RVV_TB_MASK_TAIL_CMP=$(call mask_tail_num,$(MASK_TAIL_CMP)) \
                      RVV_TB_MASK_TAIL_CARRY=$(call mask_tail_num,$(MASK_TAIL_CARRY))
-DEFINES := $(RTL_DEFINES) $(VLEN_DEFINE) $(MASK_TAIL_DEFINES)
+$(if $(filter $(FOF_POST_FAULT),not_updated loaded),,$(error FOF_POST_FAULT must be not_updated or loaded, got '$(FOF_POST_FAULT)'))
+$(if $(filter $(FOF_SEGMENT),whole partial),,$(error FOF_SEGMENT must be whole or partial, got '$(FOF_SEGMENT)'))
+FOF_DEFINES := RVV_TB_FOF_POST_FAULT=$(if $(filter $(FOF_POST_FAULT),loaded),1,0) \
+               RVV_TB_FOF_SEGMENT=$(if $(filter $(FOF_SEGMENT),partial),1,0)
+DEFINES := $(RTL_DEFINES) $(VLEN_DEFINE) $(MASK_TAIL_DEFINES) $(FOF_DEFINES)
 
 # ------------------------------------------------------------------
 # Verilator invocation
@@ -171,13 +182,13 @@ $(BUILD_PATH):
 	@mkdir -p $@
 
 # Regenerate whenever the Makefile, scfg or source set changes.
-$(BUILD_PATH)/rtl.f: Makefile | $(BUILD_PATH) $(wildcard $(RTL_FILES)/%) $(foreach incdir,$(RTL_INCDIRS),$(wildcard $(incdir)/%))
+$(BUILD_PATH)/rtl.f: Makefile | $(BUILD_PATH) $(RTL_FILES) $(foreach incdir,$(RTL_INCDIRS),$(wildcard $(incdir)/*))
 	@echo "generating $@"
 	@{ for i in $(RTL_INCDIRS); do echo "+incdir+$$i"; done; \
 	   for d in $(DEFINES); do echo "+define+$$d"; done; \
 	   for f in $(RTL_FILES); do echo "$$f"; done; } > $@
 
-$(BUILD_PATH)/tb.f: Makefile | $(BUILD_PATH) $(wildcard $(TB_FILES)/%) $(foreach incdir,$(TB_INCDIRS),$(wildcard $(incdir)/%))
+$(BUILD_PATH)/tb.f: Makefile | $(BUILD_PATH) $(TB_FILES) $(foreach incdir,$(TB_INCDIRS),$(wildcard $(incdir)/*))
 	@echo "generating $@"
 	@{ for i in $(TB_INCDIRS); do echo "+incdir+$$i"; done; \
 	   for f in $(TB_FILES); do echo "$$f"; done; } > $@

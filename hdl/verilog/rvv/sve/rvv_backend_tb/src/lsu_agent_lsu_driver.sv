@@ -15,6 +15,7 @@ class lsu_driver extends uvm_driver # (lsu_transaction);
   uvm_analysis_imp_lsu_inst #(rvs_transaction,lsu_driver) inst_imp;
   uvm_analysis_port #(lsu_transaction) lsu_ap;
   uvm_analysis_port #(trap_info_transaction) trap_ap;
+  uvm_analysis_port #(fof_trim_transaction) fof_ap;
 
   rvs_transaction inst_queue[$];
   lsu_transaction uops_rx_queue[$];
@@ -24,6 +25,9 @@ class lsu_driver extends uvm_driver # (lsu_transaction);
 
   bit trap_en = 0;
   bit always_trap = 0;
+  // Inject faults on fault-only-first loads (see lsu_fof_gen_fault). A fault on element 0 traps (only
+  // when trap_en is also set); a fault on a later element trims vl and does not trap.
+  bit fof_fault_en = 0;
   delay_mode_pkg::delay_mode_e       delay_mode_rvv2lsu;
   delay_mode_pkg::delay_mode_e       delay_mode_lsu2rvv;
 
@@ -45,6 +49,7 @@ class lsu_driver extends uvm_driver # (lsu_transaction);
   extern function int lsu_uop_decode(ref rvs_transaction inst_tr);
   extern protected function void lsu_uop_gen_delay(ref lsu_transaction uop_tr);
   extern protected function void lsu_uop_gen_trap(ref lsu_transaction uop_tr);
+  extern protected function int lsu_fof_gen_fault(rvs_transaction inst_tr);
 
 endclass: lsu_driver
 
@@ -57,6 +62,7 @@ function void lsu_driver::build_phase(uvm_phase phase);
   inst_imp = new("inst_imp", this);
   lsu_ap = new("lsu_ap", this);
   trap_ap = new("trap_ap", this);
+  fof_ap = new("fof_ap", this);
   mem = new("lsu_mem", this);
 
   if(uvm_config_db#(delay_mode_pkg::delay_mode_e)::get(this, "", "delay_mode_rvv2lsu", delay_mode_rvv2lsu)) begin
@@ -85,6 +91,10 @@ function void lsu_driver::build_phase(uvm_phase phase);
     always_trap = 0;
     `uvm_info(get_type_name(), $sformatf("Trap_en of lsu_driver is set to %0d.", always_trap), UVM_LOW)
   end
+  if(!uvm_config_db#(bit)::get(this, "", "fof_fault_en", fof_fault_en)) begin
+    fof_fault_en = 0;
+  end
+  `uvm_info(get_type_name(), $sformatf("fof_fault_en of lsu_driver is set to %0d.", fof_fault_en), UVM_LOW)
 
 endfunction: build_phase
 
@@ -403,12 +413,14 @@ task lsu_driver::tx_driver();
               lsu_if.uop_lsu_lsu2rvv[i].vregfile_write_valid  <= 1'b1;
               lsu_if.uop_lsu_lsu2rvv[i].vregfile_write_addr   <= uops_tx_queue[i].data_vreg_idx;
               lsu_if.uop_lsu_lsu2rvv[i].vregfile_write_data   <= uops_tx_queue[i].lsu_slot_data;
+              lsu_if.uop_lsu_lsu2rvv[i].ff_tail_index        <= uops_tx_queue[i].ff_tail_index;
               lsu_if.uop_lsu_lsu2rvv[i].lsu_vstore_last       <= 1'bx;
             end
             if(uops_tx_queue[i].kind == lsu_transaction::STORE) begin
               lsu_if.uop_lsu_lsu2rvv[i].vregfile_write_valid  <= 1'bx;
               lsu_if.uop_lsu_lsu2rvv[i].vregfile_write_addr   <= 'x;
               lsu_if.uop_lsu_lsu2rvv[i].vregfile_write_data   <= 'x;
+              lsu_if.uop_lsu_lsu2rvv[i].ff_tail_index        <= 'x;
               lsu_if.uop_lsu_lsu2rvv[i].lsu_vstore_last       <= 1'b1;
             end
           end else begin
@@ -490,6 +502,14 @@ function int lsu_driver::lsu_uop_decode(ref rvs_transaction inst_tr);
   int addr;
   int addr_base, const_stride;
 
+  // fault-only-first
+  bit is_fof;
+  int fof_elm; // element that faults, -1 if none
+  int fof_field; // field of the faulting segment that faults (segment loads)
+  int fof_limit; // elements of the current uop's field that were loaded: element index < fof_limit
+  int fof_valid_bytes; // valid leading bytes of one uop's register data
+  fof_trim_transaction fof_tr;
+
 // Decode ----------------------------------------------------------------------
   `uvm_info("LSU_DRV","Start decode vtype",UVM_HIGH)
 
@@ -521,6 +541,18 @@ function int lsu_driver::lsu_uop_decode(ref rvs_transaction inst_tr);
 
   uops_num    = int'($ceil(emul_max)) * (seg_num);
   elm_per_uop = `VLEN / eew_max;
+
+  // Fault-only-first loads: pick the element that faults (if any), see lsu_fof_gen_fault.
+  is_fof  = (inst_tr.inst_type == LD) && (inst_tr.lsu_inst inside {VLFF, VLSEGFF});
+  fof_elm   = -1;
+  fof_field = 0;
+  if(is_fof && fof_fault_en) begin
+    fof_elm = lsu_fof_gen_fault(inst_tr);
+    // With fof_policy_pkg::FOF_SEGMENT_PARTIAL the fault can be on any field of the segment.
+    if(fof_elm > 0 && seg_num > 1 && fof_policy_pkg::FOF_SEGMENT == fof_policy_pkg::FOF_SEGMENT_PARTIAL) begin
+      fof_field = $urandom_range(0, seg_num-1);
+    end
+  end
 
   case(inst_tr.lsu_mop)
     LSU_US   : begin
@@ -586,6 +618,15 @@ function int lsu_driver::lsu_uop_decode(ref rvs_transaction inst_tr);
 
     lsu_uop_gen_delay(uop_tr);
     lsu_uop_gen_trap(uop_tr);
+    if(is_fof) begin
+      // RVV spec: a fault-only-first load only takes a trap for a fault on element 0, which is in the
+      // first uop. A fault on any later element trims vl instead (handled with ff_tail_index below).
+      if(uops_idx != 0) begin
+        uop_tr.trap_occured = 0;
+      end else if(fof_elm == 0) begin
+        uop_tr.trap_occured = 1;
+      end
+    end
 
     uop_tr.inst_string = inst_tr.asm_string;
     if(inst_tr.inst_type == LD) begin
@@ -640,6 +681,29 @@ function int lsu_driver::lsu_uop_decode(ref rvs_transaction inst_tr);
     uop_tr.data_vreg_byte_tail = data_byte_idx[seg_idx];
     uop_tr.vidx_vreg_byte_tail = vidx_byte_idx[seg_idx];
 
+    // ff_tail_index: leading bytes of this uop's register data that were loaded. The backend treats
+    // bytes from ff_tail_index up as TAIL (UOP_LSU2RVV_t). With a fault on element fof_elm, fof_limit is
+    // the number of leading elements of this uop's field that were loaded (see fof_policy_pkg):
+    // - FOF_POST_FAULT_NOT_UPDATED: elements before fof_elm. FOF_POST_FAULT_LOADED: all of them.
+    // - FOF_SEGMENT_PARTIAL: in the faulting segment the fields before the faulting one are loaded too.
+    if(is_fof && fof_elm > 0) begin
+      if(fof_policy_pkg::FOF_POST_FAULT == fof_policy_pkg::FOF_POST_FAULT_LOADED) begin
+        fof_limit = evl;
+      end else if(fof_policy_pkg::FOF_SEGMENT == fof_policy_pkg::FOF_SEGMENT_PARTIAL && seg_idx < fof_field) begin
+        fof_limit = fof_elm + 1;
+      end else begin
+        fof_limit = fof_elm;
+      end
+      if(fof_limit >= elm_idx_tail[seg_idx]) begin
+        fof_valid_bytes = `VLENB(VLEN);                       // every element of this uop was loaded
+      end else if(fof_limit <= elm_idx_head[seg_idx]) begin
+        fof_valid_bytes = 0;                                  // none of this uop's elements were loaded
+      end else begin
+        fof_valid_bytes = uop_tr.data_vreg_byte_head + (fof_limit - elm_idx_head[seg_idx]) * (data_eew/8);
+      end
+      uop_tr.ff_tail_index = (fof_valid_bytes > `VLENB(VLEN)) ? `VLENB(VLEN) : fof_valid_bytes;
+    end
+
     if(inst_tr.lsu_mop inside {LSU_US, LSU_CS} && inst_tr.vm == 1) begin
       uop_tr.lsu_slot_addr_valid = 1;
     end
@@ -664,8 +728,62 @@ function int lsu_driver::lsu_uop_decode(ref rvs_transaction inst_tr);
       end
     end
   end // uop-loop
+
+  // Tell the model that vl is trimmed to the faulting element (no trap for elements after the first).
+  if(is_fof && fof_elm > 0) begin
+    fof_tr = new("fof_tr");
+    fof_tr.pc      = inst_tr.pc;
+    fof_tr.elm_idx = fof_elm;
+    fof_tr.field   = fof_field;
+    `uvm_info("LSU_DRV", $sformatf("Fault-only-first %s faults on element %0d (field %0d): vl is trimmed.", inst_tr.asm_string, fof_elm, fof_field), UVM_HIGH)
+    fof_ap.write(fof_tr);
+  end
   `uvm_info("LSU_DRV","Decode done",UVM_HIGH)
 endfunction: lsu_uop_decode
+
+// Pick the element of a fault-only-first load that faults, or -1 for none.
+// Only unmasked loads are faulted: a masked-off element cannot fault, so the effective faulting element
+// would depend on v0, which the driver only learns when each uop reaches the LSU.
+// A fault on element 0 traps (the load is not performed and vl is unchanged), so it is only used when
+// traps are enabled. Any other element trims vl to that element without a trap.
+function int lsu_driver::lsu_fof_gen_fault(rvs_transaction inst_tr);
+  int evl;
+  int vstart;
+  int lo;
+  int elm_per_reg;
+  int pick;
+
+  lsu_fof_gen_fault = -1;
+  evl         = inst_tr.evl;
+  vstart      = inst_tr.vstart;
+  elm_per_reg = `VLEN / inst_tr.dest_eew;
+
+  if(inst_tr.vm != 1 || evl <= vstart) begin
+    return -1;
+  end
+  if($urandom_range(0, 99) >= 60) begin
+    return -1; // no fault
+  end
+
+  // fault on element 0 (trap)
+  if(trap_en && vstart == 0 && $urandom_range(0, 3) == 0) begin
+    return 0;
+  end
+
+  // fault on a later element: vl is trimmed
+  lo = (vstart > 1) ? vstart : 1;
+  if(lo >= evl) begin
+    return -1;
+  end
+  // favour the first element of a register, where the trimming boundary falls on a uop edge
+  if($urandom_range(0, 3) == 0) begin
+    pick = ((lo + elm_per_reg - 1) / elm_per_reg) * elm_per_reg;
+    if(pick >= lo && pick < evl) begin
+      return pick;
+    end
+  end
+  return $urandom_range(lo, evl-1);
+endfunction: lsu_fof_gen_fault
 
 function void lsu_driver::lsu_uop_gen_delay(ref lsu_transaction uop_tr);        // Gen delay
   case(delay_mode_rvv2lsu)

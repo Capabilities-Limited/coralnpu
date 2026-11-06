@@ -2759,4 +2759,35 @@ class lsu_fof_test_trap_en extends lsu_fof_test;
     super.final_phase(phase);
   endfunction
 endclass: lsu_fof_test_trap_en
+
+//==========================================================
+// Fault-only-first fault tests
+//==========================================================
+// Faults on an element after the first trim vl and do not trap.
+class lsu_fof_fault_test extends lsu_fof_test;
+  `uvm_component_utils(lsu_fof_fault_test)
+
+  function new(string name, uvm_component parent);
+    super.new(name, parent);
+  endfunction
+
+  function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    uvm_config_db#(bit)::set(uvm_root::get(), "*", "fof_fault_en", 1'b1);
+  endfunction
+endclass: lsu_fof_fault_test
+
+// As above, and a fault on element 0 takes a trap.
+class lsu_fof_fault_test_trap_en extends lsu_fof_fault_test;
+  `uvm_component_utils(lsu_fof_fault_test_trap_en)
+
+  function new(string name, uvm_component parent);
+    super.new(name, parent);
+  endfunction
+
+  function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    uvm_config_db#(bit)::set(uvm_root::get(), "*", "trap_en", 1'b1);
+  endfunction
+endclass: lsu_fof_fault_test_trap_en
 `endif // RVV_BACKEND_TEST__SV

@@ -19,6 +19,7 @@
 //------------------------------------------------------------------------------
   `uvm_analysis_imp_decl(_inst)
   `uvm_analysis_imp_decl(_trap_mdl)
+  `uvm_analysis_imp_decl(_fof_mdl)
 
 class rvv_behavior_model extends uvm_component;
 // Members ------------------------------------------------
@@ -99,6 +100,11 @@ class rvv_behavior_model extends uvm_component;
   bit trap_occured;
   int trap_occured_uop;
 
+  // fault-only-first loads that fault after element 0: vl is trimmed to this element (keyed by pc),
+  // and for segment loads the field of that segment that faults
+  int unsigned fof_trim       [int unsigned];
+  int unsigned fof_trim_field [int unsigned];
+
   // inst trace
   int total_inst = 0;
   int executed_inst = 0;
@@ -106,6 +112,7 @@ class rvv_behavior_model extends uvm_component;
 // TLM -----------------------------------------------------
   uvm_analysis_imp_inst #(rvs_transaction,rvv_behavior_model) inst_imp;
   uvm_analysis_imp_trap_mdl #(trap_info_transaction,rvv_behavior_model) trap_imp;
+  uvm_analysis_imp_fof_mdl #(fof_trim_transaction,rvv_behavior_model) fof_imp;
   uvm_analysis_port #(rvs_transaction) rt_ap;
   uvm_analysis_port #(vrf_transaction) vrf_ap;
 
@@ -123,6 +130,7 @@ class rvv_behavior_model extends uvm_component;
 // TLM Methods ---------------------------------------------
   extern virtual function void write_inst(rvs_transaction inst_tr);
   extern virtual function void write_trap_mdl(trap_info_transaction trap_tr);
+  extern virtual function void write_fof_mdl(fof_trim_transaction fof_tr);
 
 // Methods -------------------------------------------------
   extern virtual task rx_mdl();
@@ -144,6 +152,7 @@ endclass: rvv_behavior_model
     // TLM ports
     inst_imp = new("inst_imp", this);
     trap_imp = new("trap_imp", this);
+    fof_imp  = new("fof_imp", this);
     rt_ap    = new("rt_ap", this);
     vrf_ap   = new("vrf_ap", this);
 
@@ -258,6 +267,12 @@ endclass: rvv_behavior_model
     `uvm_info("MDL", "get a trap", UVM_HIGH)
     `uvm_info("MDL", trap_tr.sprint(), UVM_HIGH)
     trap_queue.push_back(trap_tr);
+  endfunction
+
+  function void rvv_behavior_model::write_fof_mdl(fof_trim_transaction fof_tr);
+    `uvm_info("MDL", $sformatf("get a fault-only-first trim: pc=0x%0x, vl trimmed to %0d", fof_tr.pc, fof_tr.elm_idx), UVM_HIGH)
+    fof_trim[fof_tr.pc]       = fof_tr.elm_idx;
+    fof_trim_field[fof_tr.pc] = fof_tr.field;
   endfunction
 
 // Methods -------------------------------------------------
@@ -1863,10 +1878,28 @@ class lsu_processor extends uvm_component;
   function void exe(rvv_behavior_model rvm, ref rvs_transaction inst_tr);
     int seg_switch_gap = 0;
     int switch_seg = 0;
+    int fof_k = -1; // fault-only-first: element the load faulted on after element 0, -1 if none
+    int fof_f = 0;  // fault-only-first: field of that segment that faulted
+    int evl_field;  // elements of the current field that were loaded
 
     decode(inst_tr);
     `uvm_info("MDL/LSU", "LSU decode done", UVM_HIGH)
     `uvm_info("MDL/LSU", $sformatf("\n%s", inst_tr.sprint()), UVM_HIGH);
+
+    // Fault-only-first load that faulted after element 0 (RVV spec, unit-stride fault-only-first loads):
+    // no trap, and vl is reduced to the faulting element. What is loaded past it is a choice the spec
+    // leaves open, selected by fof_policy_pkg (the same one the LSU driver uses for ff_tail_index):
+    // - FOF_POST_FAULT_NOT_UPDATED: elements from the faulting one are tail elements and not written.
+    //   FOF_POST_FAULT_LOADED: they are still loaded.
+    // - FOF_SEGMENT_PARTIAL: for segment loads the fields before the faulting field are also loaded
+    //   for the faulting segment (the element index is a segment index).
+    if(inst_tr.inst_type == LD && inst_tr.lsu_inst inside {VLFF, VLSEGFF} && rvm.fof_trim.exists(inst_tr.pc)) begin
+      fof_k = rvm.fof_trim[inst_tr.pc];
+      fof_f = rvm.fof_trim_field[inst_tr.pc];
+      `uvm_info("MDL/LSU", $sformatf("Fault-only-first faults on element %0d (field %0d)", fof_k, fof_f), UVM_HIGH)
+      rvm.fof_trim.delete(inst_tr.pc);
+      rvm.fof_trim_field.delete(inst_tr.pc);
+    end
 
     if(data_emul < 1) begin
       seg_switch_gap = data_emul * `VLENB(VLEN);
@@ -1897,6 +1930,16 @@ class lsu_processor extends uvm_component;
       `uvm_info("MDL/LSU", $sformatf("elm_idx_head[%0d] = %0d\n", seg_idx, elm_idx_head[seg_idx]), UVM_HIGH)
       `uvm_info("MDL/LSU", $sformatf("elm_idx_tail[%0d] = %0d\n", seg_idx, elm_idx_tail[seg_idx]), UVM_HIGH)
 
+      // Elements of this field that were loaded (seg_idx is the field of a segment load).
+      evl_field = evl;
+      if(fof_k >= 0 && fof_policy_pkg::FOF_POST_FAULT == fof_policy_pkg::FOF_POST_FAULT_NOT_UPDATED) begin
+        evl_field = fof_k;
+        if(fof_policy_pkg::FOF_SEGMENT == fof_policy_pkg::FOF_SEGMENT_PARTIAL && seg_idx < fof_f) begin
+          evl_field = fof_k + 1;
+        end
+        if(evl_field > evl) evl_field = evl;
+      end
+
       for(int elm_idx=elm_idx_head[seg_idx]; elm_idx<elm_idx_tail[seg_idx]; elm_idx++) begin
         // fetch
         dest = rvm.elm_fetch(inst_tr.dest_type, dest_reg_idx_base, elm_idx, dest_eew);
@@ -1918,8 +1961,8 @@ class lsu_processor extends uvm_component;
                 rvm.elm_writeback(dest, inst_tr.dest_type, dest_reg_idx_base, elm_idx, dest_eew, 0);
               end
             endcase
-          end else if(elm_idx >= evl) begin
-            // tail
+          end else if(elm_idx >= evl_field) begin
+            // tail (for a trimmed fault-only-first load, also the elements that were not loaded)
             case(inst_tr.inst_type)
               LD: begin
                 rvm.elm_writeback(dest, inst_tr.dest_type, dest_reg_idx_base, elm_idx, dest_eew, 0);

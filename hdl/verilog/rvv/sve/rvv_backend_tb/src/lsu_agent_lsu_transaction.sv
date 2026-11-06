@@ -47,6 +47,10 @@ class lsu_transaction extends uvm_sequence_item;
   /* uop status */
   bit uop_rx_sent;
   bit uop_done;
+  // Number of leading bytes of this uop's register data that were loaded. The RVV backend treats
+  // bytes from ff_tail_index up as TAIL for fault-only-first loads (see UOP_LSU2RVV_t). With no
+  // fault the whole register is valid, so the default is VLENB.
+  int  ff_tail_index;
   rand bit trap_occured;
 
   /* LSU delay */
@@ -105,6 +109,7 @@ class lsu_transaction extends uvm_sequence_item;
 
     `uvm_field_int(uop_rx_sent,UVM_ALL_ON)
     `uvm_field_int(uop_done,UVM_ALL_ON)
+    `uvm_field_int(ff_tail_index,UVM_ALL_ON)
     `uvm_field_int(trap_occured,UVM_ALL_ON)
     `uvm_field_int(rvv2lsu_delay,UVM_ALL_ON)
     `uvm_field_int(lsu2rvv_delay,UVM_ALL_ON)
@@ -149,6 +154,7 @@ function lsu_transaction::new(string name = "Trans");
 
   uop_rx_sent = 1'b0;
   uop_done = 1'b0;
+  ff_tail_index = `VLENB(VLEN);
 
 endfunction: new
 
@@ -185,4 +191,26 @@ class trap_info_transaction extends uvm_sequence_item;
   endfunction
 
 endclass: trap_info_transaction
+
+// A fault-only-first load that faults on an element after the first does not trap:
+// vl is reduced to the index of the faulting element (RVV spec, unit-stride fault-only-first loads).
+class fof_trim_transaction extends uvm_sequence_item;
+  int unsigned pc;
+  int unsigned elm_idx; // the faulting element (segment), which becomes the new vl
+  int unsigned field;   // for segment loads, the field of the faulting segment that faults
+
+  `uvm_object_utils_begin(fof_trim_transaction)
+    `uvm_field_int(pc,UVM_ALL_ON)
+    `uvm_field_int(elm_idx,UVM_ALL_ON)
+    `uvm_field_int(field,UVM_ALL_ON)
+  `uvm_object_utils_end
+
+  function new(string name = "fof_trim");
+    super.new(name);
+    pc      = 0;
+    elm_idx = 0;
+    field   = 0;
+  endfunction
+
+endclass: fof_trim_transaction
 `endif // LSU_TRANSACTION__SV
