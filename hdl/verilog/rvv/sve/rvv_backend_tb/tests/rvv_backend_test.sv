@@ -130,6 +130,18 @@ class rvv_backend_test extends uvm_test;
     end
   endtask: rand_vrf
 
+  // Vector registers filled with floating point values (see rvv_softfloat_pkg::rand_fp32)
+  virtual task rand_vrf_fp();
+    logic [`VLEN-1:0] value;
+    for(int reg_idx=0; reg_idx<32; reg_idx++) begin
+      for(int j=0; j<`VLEN/32; j++) begin
+        value[j*32+:32] = rvv_softfloat_pkg::rand_fp32();
+      end
+      set_mdl_vrf(reg_idx, value);
+      vrf_if.set_dut_vrf(reg_idx, value);
+    end
+  endtask: rand_vrf_fp
+
   virtual task rand_mem(int unsigned mem_base, int unsigned mem_size);
     byte value;
     env.lsu_agt.lsu_drv.mem.set_mem_range(mem_base, mem_size);

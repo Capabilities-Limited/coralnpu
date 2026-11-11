@@ -177,6 +177,9 @@ task rvs_monitor::tx_monitor();
               rvs_if.insts_rvs2cq[i].arch_state.vstart,
               rvs_if.insts_rvs2cq[i].arch_state.xrm
             );
+`ifdef ZVE32F_ON
+            inst_tr.frm = rvs_if.insts_rvs2cq[i].arch_state.frm;
+`endif
             inst_32[31:7] = rvs_if.insts_rvs2cq[i].bits;
             case(rvs_if.insts_rvs2cq[i].opcode)
               2'b00: inst_32[6:0] = 7'b000_0111; // LOAD
@@ -233,6 +236,7 @@ task rvs_monitor::rx_monitor();
   logic [`VLEN-1:0] rt_vrf_bit_strobe;
   bit vrf_overlap;
   bit ready_to_new_inst;
+  bit discard_found;
   int uop_cnt = 0;
   tr = new("tr");
   forever begin
@@ -257,6 +261,9 @@ task rvs_monitor::rx_monitor();
             rvs_if.inst_pkg_cq2de[i].arch_state.vstart,
             rvs_if.inst_pkg_cq2de[i].arch_state.xrm
           );
+`ifdef ZVE32F_ON
+          inst_tr.frm = rvs_if.inst_pkg_cq2de[i].arch_state.frm;
+`endif
           inst_32[31:7] = rvs_if.inst_pkg_cq2de[i].bits;
           case(rvs_if.inst_pkg_cq2de[i].opcode)
             2'b00: inst_32[6:0] = 7'b000_0111; // LOAD
@@ -265,16 +272,24 @@ task rvs_monitor::rx_monitor();
           endcase
           inst_tr.bin2tr(inst_32, rvs_if.inst_pkg_cq2de[i].rs1);
 `ifdef TB_SUPPORT
-          inst_tr.pc = rvs_if.insts_rvs2cq[i].inst_pc;
+          inst_tr.pc = rvs_if.inst_pkg_cq2de[i].inst_pc;
 `else
           inst_tr.pc = '0;
 `endif
+          discard_found = 0;
           foreach(inst_rx_queue[idx]) begin
             if(inst_rx_queue[idx].compare_inst(inst_tr)) begin
               `uvm_info(get_type_name(), $sformatf("DUT discarded inst:\n%s", inst_rx_queue[idx].sprint()), UVM_HIGH)
               inst_rx_queue.delete(idx);
+              discard_found = 1;
               break;
             end
+          end
+          if(!discard_found) begin
+            foreach(inst_rx_queue[q]) begin
+              `uvm_info(get_type_name(), $sformatf("  queued[%0d]: pc=0x%08x bin=0x%08x rs1=0x%08x vl=%0d vstart=%0d frm=%0d", q, inst_rx_queue[q].pc, inst_rx_queue[q].bin_inst, inst_rx_queue[q].rs1_data, inst_rx_queue[q].vl, inst_rx_queue[q].vstart, inst_rx_queue[q].frm), UVM_NONE)
+            end
+            `uvm_warning(get_type_name(), $sformatf("DUT discarded an instruction that matches nothing in inst_rx_queue (bin=0x%08x rs1=0x%08x):\n%s", inst_tr.bin_inst, inst_tr.rs1_data, inst_tr.sprint()))
           end
         end
       end
@@ -332,6 +347,19 @@ task rvs_monitor::rx_monitor();
             tr.rt_xrf_index.push_back(rvs_if.rt_xrf_rvv2rvs[rt_idx].rt_index);
             tr.rt_xrf_data.push_back(rvs_if.rt_xrf_rvv2rvs[rt_idx].rt_data);
           end
+
+`ifdef ZVE32F_ON
+          // FRF (vfmv.f.s)
+          if(rvs_if.async_frd_valid[rt_idx] && rvs_if.async_frd_ready[rt_idx]) begin
+            tr.rt_frf_index.push_back(rvs_if.async_frd_addr[rt_idx]);
+            tr.rt_frf_data.push_back(rvs_if.async_frd_data[rt_idx]);
+          end
+
+          // FFLAGS: OR of every retiring uop of the instruction
+          if(rvs_if.rt_fflags_valid[rt_idx]) begin
+            tr.fflags |= rvs_if.rt_fflags[rt_idx];
+          end
+`endif
 
           // VXSAT
           if((tr.vxsat !== 1) && rvs_if.wr_vxsat_valid[rt_idx]) begin

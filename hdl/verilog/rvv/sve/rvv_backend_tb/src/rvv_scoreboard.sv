@@ -163,6 +163,8 @@ task rvv_scoreboard::rt_checker();
   int        rt_xrf_num;
   reg_idx_t  rvs_rt_xrf_index, mdl_rt_xrf_index;
   xrf_t      rvs_rt_xrf_data , mdl_rt_xrf_data ;
+  reg_idx_t  rvs_rt_frf_index, mdl_rt_frf_index;
+  xrf_t      rvs_rt_frf_data , mdl_rt_frf_data ;
   forever begin
     @(negedge rvs_if.clk);
     if(rt_queue_mdl.size() != rt_queue_rvs.size()) begin
@@ -292,6 +294,38 @@ task rvv_scoreboard::rt_checker();
             `uvm_info("RT_CHECKER", $sformatf("Retire xrf[%0d] check pass.",rvs_rt_xrf_index), UVM_LOW)
           end
         end
+      end
+
+      // FRF check (vfmv.f.s)
+      if(rvs_tr.rt_frf_index.size() != mdl_tr.rt_frf_index.size()) begin
+        `uvm_error("RT_CHECKER", $sformatf("Retire FRF quantity mismatch:\nDUT retired %0d fregs,\nMDL retired %0d fregs.",
+                                            rvs_tr.rt_frf_index.size(),
+                                            mdl_tr.rt_frf_index.size()))
+      end else begin
+        while(rvs_tr.rt_frf_index.size() > 0) begin
+          rvs_rt_frf_index  = rvs_tr.rt_frf_index.pop_front();
+          rvs_rt_frf_data   = rvs_tr.rt_frf_data.pop_front();
+          mdl_rt_frf_index  = mdl_tr.rt_frf_index.pop_front();
+          mdl_rt_frf_data   = mdl_tr.rt_frf_data.pop_front();
+          if(rvs_rt_frf_index !== mdl_rt_frf_index) begin
+            `uvm_error("RT_CHECKER", $sformatf("Retire FRF index mismatch:\nDUT retired frf[%0d],\nMDL retired frf[%0d].",
+                                                rvs_rt_frf_index, mdl_rt_frf_index));
+          end else if(rvs_rt_frf_data !== mdl_rt_frf_data) begin
+            `uvm_error("RT_CHECKER", $sformatf("Retire FRF mismatch:\nDUT retired frf[%0d] = 0x%8x,\nMDL retired frf[%0d] = 0x%8x.",
+                                                rvs_rt_frf_index, rvs_rt_frf_data,
+                                                mdl_rt_frf_index, mdl_rt_frf_data));
+          end else begin
+            `uvm_info("RT_CHECKER", $sformatf("Retire frf[%0d] check pass.",rvs_rt_frf_index), UVM_LOW)
+          end
+        end
+      end
+
+      // FFLAGS check: the DUT reports the flags per retiring uop, so the instruction's flags are the OR.
+      if(rvs_tr.fflags !== mdl_tr.fflags) begin
+        `uvm_error("RT_CHECKER", $sformatf("Retire fflags mismatch {NV,DZ,OF,UF,NX}:\nDUT fflags = 5'b%05b\nMDL fflags = 5'b%05b",
+                                            rvs_tr.fflags, mdl_tr.fflags));
+      end else if(mdl_tr.fflags !== 5'b0) begin
+        `uvm_info("RT_CHECKER", $sformatf("Retire fflags check pass (5'b%05b).", mdl_tr.fflags), UVM_LOW)
       end
 
       // VXSAT check
