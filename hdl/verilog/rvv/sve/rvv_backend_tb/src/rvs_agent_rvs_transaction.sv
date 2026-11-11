@@ -10,6 +10,11 @@ class rvs_transaction extends uvm_sequence_item;
   static bit reserve_vtype_en     = 0;
   static bit overlap_unalign_en   = 0;
 
+  /* Floating point (Zve32f) */
+  static bit fp_en             = 0;  // generate OPF instructions at all
+  static bit reserve_frm_en    = 0;  // allow reserved frm values 5..7 (the DUT discards OPF with them)
+  static bit fp_special_data   = 1;  // bias scalar FP operands towards special values (NaN, inf, 0, ...)
+
   /* VCSR sets */
   static sew_e  vsew_set[]   = '{SEW8, SEW16, SEW32};
   static lmul_e vlmul_set[]  = '{LMUL1_4, LMUL1_2, LMUL1, LMUL2, LMUL4, LMUL8};
@@ -43,6 +48,7 @@ class rvs_transaction extends uvm_sequence_item;
   rand int               evl;
   rand logic [`XLEN-1:0] vstart;
   rand vxrm_e            vxrm;
+  rand logic [2:0]       frm;      // rounding mode of the OPF instruction (CSR frm)
 
   /* Instruction description field */
   rand inst_type_e  inst_type;// opcode
@@ -145,6 +151,12 @@ class rvs_transaction extends uvm_sequence_item;
        int          trap_vl;
        int          trap_vstart;
        vxrm_e       trap_vxrm;
+
+  /* Floating point retire info */
+       logic [4:0]  fflags = 5'b0;              // OR of the exception flags of every active element: {NV,DZ,OF,UF,NX}
+       reg_idx_t    rt_frf_index [$];     // vfmv.f.s
+       xrf_t        rt_frf_data  [$];
+       bit          is_fp_inst;
 
 // Constrain -------------------------------------------------------------------
   constraint c_solve_order {
@@ -304,6 +316,9 @@ class rvs_transaction extends uvm_sequence_item;
         // for vmv.s.x, vl == 0 will be discarded in backend
         vl > 0;
       }
+      if(inst_type == ALU && alu_inst == VWFUNARY0 && alu_type == OPFVF) {
+        vl > 0;
+      }
 
       // vstart
       if(inst_type == ALU && alu_inst == VSMUL_VMVNRR && alu_type == OPIVI) {
@@ -329,6 +344,16 @@ class rvs_transaction extends uvm_sequence_item;
       } else if(inst_type == ALU && alu_inst inside {VWREDSUM, VWREDSUMU}) {
         vstart == 0;
         vstart < vl;
+      } else if(inst_type == ALU && alu_inst inside {VFREDOSUM, VFREDUSUM, VFREDMAX, VFREDMIN}) {
+        vstart == 0;
+        vstart < vl;
+      } else if(inst_type == ALU && alu_inst == VWFUNARY0 && alu_type == OPFVV) {
+        // vfmv.f.s: vstart >= vl is allowed and will not be discarded
+        vstart inside {[0:vlmax_max-1]};
+      } else if(inst_type == ALU && alu_inst == VWFUNARY0 && alu_type == OPFVF) {
+        // vfmv.s.f, like vmv.s.x: vstart != 0 or vl == 0 is discarded in the backend
+        vstart == 0;
+        vstart < vl;
       } else if(inst_type == ALU && alu_inst inside {VCOMPRESS}) {
         vstart == 0;
         vstart < vl;
@@ -343,7 +368,7 @@ class rvs_transaction extends uvm_sequence_item;
   }
 
   constraint c_operand {
-    alu_type inside {OPIVV, OPIVX, OPIVI, OPMVV, OPMVX};
+    alu_type inside {OPIVV, OPIVX, OPIVI, OPMVV, OPMVX, OPFVV, OPFVF};
 
     vm inside {0, 1};
     (inst_type == ALU) -> (src3_type == UNUSE);
@@ -838,6 +863,13 @@ class rvs_transaction extends uvm_sequence_item;
         (alu_inst == VXUNARY0 && src1_idx inside {VSEXT_VF4, VZEXT_VF4})
         ->  (vsew inside {SEW32} && vlmul inside {LMUL1,LMUL2,LMUL4,LMUL8});
 
+        // floating point: Zve32f only has SEW=32, apart from the int16 <-> fp32 conversions
+        (alu_type inside {OPFVV, OPFVF} && !(alu_inst == VFUNARY0 && src1_idx inside {VFWCVT_F_XU, VFWCVT_F_X, VFNCVT_XU_F, VFNCVT_X_F, VFNCVT_RTZ_XU_F, VFNCVT_RTZ_X_F}))
+        ->  (vsew == SEW32);
+
+        (alu_inst == VFUNARY0 && src1_idx inside {VFWCVT_F_XU, VFWCVT_F_X, VFNCVT_XU_F, VFNCVT_X_F, VFNCVT_RTZ_XU_F, VFNCVT_RTZ_X_F})
+        ->  (vsew == SEW16 && vlmul inside {LMUL1_4,LMUL1_2,LMUL1,LMUL2,LMUL4});
+
         // vrgatherei16.vv
         (alu_inst == VSLIDEUP_RGATHEREI16 && alu_type inside {OPIVV})
         ->  ((vlmul inside {LMUL1_2,LMUL1,LMUL2,LMUL4,LMUL8} && vsew inside {SEW16,SEW32}) ||
@@ -1014,6 +1046,60 @@ class rvs_transaction extends uvm_sequence_item;
     -> (rs1_data dist {[0:49] :/ 80, [50:200] :/ 20});
   }
 
+  // Floating point (OPF*, Zve32f). The DUT decodes a subset of RVV 1.0 (see the legality rules in
+  // reserve_inst_check): SEW=32 arithmetic and mask compares, fp32<->int32 conversions, int16 <-> fp32
+  // widening/narrowing conversions, fp32 reductions, and the scalar moves.
+  constraint c_fp {
+    // OPF encodings only exist when asked for
+    if(!fp_en) {
+      !(alu_type inside {OPFVV, OPFVF});
+      (inst_type == ALU) -> (alu_inst[7:6] != 2'b10);
+    }
+    // frm: 5, 6 and 7 are reserved (and the DUT does not take the dynamic mode)
+    if(!reserve_frm_en) {
+      frm inside {[0:4]};
+    }
+    if(!reserve_inst_en && fp_en) {
+      (inst_type == ALU && alu_inst[7:6] == 2'b10) <-> (alu_type inside {OPFVV, OPFVF});
+
+      if(inst_type == ALU && alu_inst[7:6] == 2'b10) {
+        // vector-vector or vector-scalar forms
+        if(alu_inst inside {VFADD, VFSUB, VFMUL, VFDIV,
+                            VFMACC, VFNMACC, VFMSAC, VFNMSAC, VFMADD, VFNMADD, VFMSUB, VFNMSUB,
+                            VFMIN, VFMAX, VFSGNJ, VFSGNJN, VFSGNJX,
+                            VMFEQ, VMFNE, VMFLT, VMFLE}) {
+          (alu_type == OPFVV && dest_type == VRF && src2_type == VRF && src1_type == VRF) ||
+          (alu_type == OPFVF && dest_type == VRF && src2_type == VRF && src1_type == FRF);
+        }
+        // vector-scalar only
+        if(alu_inst inside {VFRSUB, VFRDIV, VMFGT, VMFGE, VFSLIDE1UP, VFSLIDE1DOWN}) {
+          (alu_type == OPFVF && dest_type == VRF && src2_type == VRF && src1_type == FRF);
+        }
+        if(alu_inst == VFMERGE_VFMV) {
+          (alu_type == OPFVF && dest_type == VRF && src2_type == VRF   && src1_type == FRF && vm == 0) ||                  // vfmerge.vfm
+          (alu_type == OPFVF && dest_type == VRF && src2_type == UNUSE && src1_type == FRF && vm == 1 && src2_idx == 0);   // vfmv.v.f
+        }
+        if(alu_inst == VFUNARY0) {
+          (alu_type == OPFVV && dest_type == VRF && src2_type == VRF && src1_type == FUNC &&
+           src1_idx inside {VFCVT_XU_F, VFCVT_X_F, VFCVT_F_XU, VFCVT_F_X, VFCVT_RTZ_XU_F, VFCVT_RTZ_X_F,
+                            VFWCVT_F_XU, VFWCVT_F_X,
+                            VFNCVT_XU_F, VFNCVT_X_F, VFNCVT_RTZ_XU_F, VFNCVT_RTZ_X_F});
+        }
+        if(alu_inst == VFUNARY1) {
+          (alu_type == OPFVV && dest_type == VRF && src2_type == VRF && src1_type == FUNC &&
+           src1_idx inside {VFSQRT, VFRSQRT7, VFREC7, VFCLASS});
+        }
+        if(alu_inst inside {VFREDOSUM, VFREDUSUM, VFREDMIN, VFREDMAX}) {
+          (alu_type == OPFVV && dest_type == SCALAR && src2_type == VRF && src1_type == SCALAR);
+        }
+        if(alu_inst == VWFUNARY0) {
+          (alu_type == OPFVV && dest_type == FRF    && src2_type == SCALAR && src1_type == FUNC && vm == 1 && src1_idx == VFMV_F_S) || // vfmv.f.s
+          (alu_type == OPFVF && dest_type == SCALAR && src2_type == FUNC   && src1_type == FRF  && vm == 1 && src2_idx == VFMV_S_F);  // vfmv.s.f
+        }
+      }
+    }
+  }
+
 // UVM Marocs ------------------------------------------------------------------
   string __t_config    = "-- CONFIG ----------";
   string __t_inst      = "-- INST ------------";
@@ -1048,6 +1134,7 @@ class rvs_transaction extends uvm_sequence_item;
     `uvm_field_enum(agnostic_e,vma,UVM_ALL_ON)
     `uvm_field_enum(agnostic_e,vta,UVM_ALL_ON)
     `uvm_field_enum(vxrm_e,vxrm,UVM_ALL_ON)
+    `uvm_field_int(frm,UVM_ALL_ON)
 
     `uvm_field_string(__t_vl_vstart, UVM_ALL_ON)
     `uvm_field_int(vlmax,UVM_ALL_ON)
@@ -1117,7 +1204,7 @@ class rvs_transaction extends uvm_sequence_item;
       `uvm_field_enum(operand_type_e,src1_type,UVM_ALL_ON)
       `uvm_field_int(src1_idx,UVM_ALL_ON)
     end
-    if(src1_type == XRF) begin
+    if(src1_type == XRF || src1_type == FRF) begin
       `uvm_field_int(rs1_data,UVM_ALL_ON)
     end
     
@@ -1148,6 +1235,7 @@ class rvs_transaction extends uvm_sequence_item;
     `uvm_field_int(is_mask_producing_inst, UVM_ALL_ON)
     `uvm_field_int(is_reduction_inst, UVM_ALL_ON)
     `uvm_field_int(is_permutation_inst, UVM_ALL_ON)
+    `uvm_field_int(is_fp_inst, UVM_ALL_ON)
 
     // retire info
     if(is_rt) begin
@@ -1165,6 +1253,11 @@ class rvs_transaction extends uvm_sequence_item;
         `uvm_field_int(rt_xrf_index[idx],UVM_ALL_ON)
         `uvm_field_int(rt_xrf_data[idx] ,UVM_ALL_ON)
       end
+      foreach(rt_frf_index[idx]) begin
+        `uvm_field_int(rt_frf_index[idx],UVM_ALL_ON)
+        `uvm_field_int(rt_frf_data[idx] ,UVM_ALL_ON)
+      end
+      `uvm_field_int(fflags,UVM_ALL_ON)
       `uvm_field_int(vxsat_valid,UVM_ALL_ON)
       `uvm_field_int(vxsat,UVM_ALL_ON)
     end
@@ -1241,7 +1334,8 @@ function void rvs_transaction::post_randomize();
     
   // rs random data
   if(src2_type != XRF) rs2_data = 'x;
-  if(src1_type != XRF) rs1_data = 'x;
+  if(src1_type != XRF && src1_type != FRF) rs1_data = 'x;
+  if(src1_type == FRF && fp_special_data) rs1_data = rvv_softfloat_pkg::rand_fp32();
 
   // constraint vl
   if(use_vlmax) begin
@@ -1433,6 +1527,35 @@ function bit rvs_transaction::bin2tr(logic [31:0] inst_in, logic [`XLEN-1:0] rs_
         end
       end
     end
+
+    // OPF
+    if(alu_type inside {OPFVV, OPFVF}) begin
+      alu_inst[7:6] = 2'b10;
+      dest_type = VRF;
+      src2_type = VRF;
+      src1_type = (alu_type == OPFVV) ? VRF : FRF;
+      if(alu_inst == VFMERGE_VFMV && vm == 1) begin
+        src2_type = UNUSE;
+      end
+      if(alu_inst inside {VFUNARY0, VFUNARY1}) begin
+        src1_type = FUNC;
+      end
+      if(alu_inst inside {VFREDOSUM, VFREDUSUM, VFREDMIN, VFREDMAX}) begin
+        dest_type = SCALAR;
+        src1_type = SCALAR;
+      end
+      if(alu_inst == VWFUNARY0) begin
+        if(alu_type == OPFVV) begin // vfmv.f.s
+          dest_type = FRF;
+          src2_type = SCALAR;
+          src1_type = FUNC;
+        end else begin              // vfmv.s.f
+          dest_type = SCALAR;
+          src2_type = FUNC;
+          src1_type = FRF;
+        end
+      end
+    end
   end // ALU
 
   if(inst_type == LD) begin
@@ -1502,7 +1625,7 @@ function bit rvs_transaction::bin2tr(logic [31:0] inst_in, logic [`XLEN-1:0] rs_
   end
     
   if(src2_type == XRF) rs2_data = rs_data; else rs2_data = 'x;
-  if(src1_type == XRF) rs1_data = rs_data; else rs1_data = 'x;
+  if(src1_type == XRF || src1_type == FRF) rs1_data = rs_data; else rs1_data = 'x;
 
   decode_vtype(1, 1);
   get_vec_group_range();
@@ -1531,25 +1654,31 @@ endfunction: set_config_state
 
 function void rvs_transaction::decode_vtype(bit dec_evl, bit dec_vlmax);      
   // Calculate eew/emul
-  if(inst_type == ALU && (alu_inst inside {VADC, VSBC, VMADC, VMSBC, VMERGE_VMVV}))
+  if(inst_type == ALU && (alu_inst inside {VADC, VSBC, VMADC, VMSBC, VMERGE_VMVV, VFMERGE_VFMV}))
     use_vm_to_cal = 1;
   else
     use_vm_to_cal = 0;
 
-  is_widen_inst           = inst_type == ALU &&  (alu_inst inside {VWADDU, VWADD, VWADDU_W, VWADD_W, VWSUBU, VWSUB, VWSUBU_W, VWSUB_W, 
-                                                                   VWMUL, VWMULU, VWMULSU, VWMACCU, VWMACC, VWMACCUS, VWMACCSU});
+  is_fp_inst              = inst_type == ALU &&  (alu_inst[7:6] == 2'b10);
+  is_widen_inst           = inst_type == ALU && ((alu_inst inside {VWADDU, VWADD, VWADDU_W, VWADD_W, VWSUBU, VWSUB, VWSUBU_W, VWSUB_W, 
+                                                                   VWMUL, VWMULU, VWMULSU, VWMACCU, VWMACC, VWMACCUS, VWMACCSU}) ||
+                                                 (alu_inst == VFUNARY0 && src1_idx inside {VFWCVT_F_XU, VFWCVT_F_X}));
   is_widen_vs2_inst       = inst_type == ALU &&  (alu_inst inside {VWADD_W, VWADDU_W, VWSUBU_W, VWSUB_W});
-  is_narrow_inst          = inst_type == ALU &&  (alu_inst inside {VNSRL, VNSRA, VNCLIPU, VNCLIP});
+  is_narrow_inst          = inst_type == ALU && ((alu_inst inside {VNSRL, VNSRA, VNCLIPU, VNCLIP}) ||
+                                                 (alu_inst == VFUNARY0 && src1_idx inside {VFNCVT_XU_F, VFNCVT_X_F, VFNCVT_RTZ_XU_F, VFNCVT_RTZ_X_F}));
   is_mask_producing_inst  = inst_type == ALU && ((alu_inst inside {VMAND, VMOR, VMXOR, VMORN, VMNAND, VMNOR, VMANDN, VMXNOR,
                                                                    VMADC, VMSBC, 
-                                                                   VMSEQ, VMSNE, VMSLTU, VMSLT, VMSLEU, VMSLE, VMSGTU, VMSGT}) ||
+                                                                   VMSEQ, VMSNE, VMSLTU, VMSLT, VMSLEU, VMSLE, VMSGTU, VMSGT,
+                                                                   VMFEQ, VMFNE, VMFLT, VMFLE, VMFGT, VMFGE}) ||
                                                  (alu_inst inside {VMUNARY0} && src1_idx inside {VMSBF, VMSOF, VMSIF}));
   is_reduction_inst       = inst_type == ALU &&  (alu_inst inside {VREDSUM, VREDAND, VREDOR, VREDXOR, 
                                                                    VREDMINU,VREDMIN,VREDMAXU,VREDMAX,
-                                                                   VWREDSUMU, VWREDSUM});
+                                                                   VWREDSUMU, VWREDSUM,
+                                                                   VFREDOSUM, VFREDUSUM, VFREDMIN, VFREDMAX});
   is_permutation_inst     = inst_type == ALU && ((alu_inst inside {VSMUL_VMVNRR} && alu_type == OPIVI && vm == 1) ||
                                                  (alu_inst inside {VCOMPRESS}) ||
                                                  (alu_inst inside {VSLIDEUP_RGATHEREI16, VSLIDE1UP, VSLIDE1DOWN, VSLIDEDOWN, VRGATHER}) ||
+                                                 (alu_inst inside {VFSLIDE1UP, VFSLIDE1DOWN, VWFUNARY0}) ||
                                                  (alu_inst inside {VWXUNARY0} && src1_type == FUNC && src1_idx inside {VMV_X_S}) ||
                                                  (alu_inst inside {VWXUNARY0} && src2_type == FUNC && src2_idx inside {VMV_X_S}));
   eew       = 8 << vsew;
@@ -1742,7 +1871,8 @@ function void rvs_transaction::decode_vtype(bit dec_evl, bit dec_vlmax);
         src1_emul = src1_emul * src1_eew / eew;
       end
       if(alu_inst inside {VMADC, VMSBC, VMSEQ, VMSNE, VMSLTU, 
-                          VMSLT, VMSLEU, VMSLE, VMSGTU, VMSGT}) begin
+                          VMSLT, VMSLEU, VMSLE, VMSGTU, VMSGT,
+                          VMFEQ, VMFNE, VMFLT, VMFLE, VMFGT, VMFGE}) begin
         dest_eew = EEW1;
         dest_emul = dest_emul * dest_eew / eew;
       end
@@ -1778,6 +1908,18 @@ function void rvs_transaction::decode_vtype(bit dec_evl, bit dec_vlmax);
         src1_eew = EEW1;
         src1_emul = src1_emul * src1_eew / eew;
       end
+      if(alu_inst == VWFUNARY0 && alu_type == OPFVV && vm == 1) begin // vfmv.f.s
+        src2_eew = EEW1;
+        src2_emul = src2_emul * src2_eew / eew;
+        src1_eew = EEW1;
+        src1_emul = src1_emul * src1_eew / eew;
+      end
+      if(alu_inst == VWFUNARY0 && alu_type == OPFVF && vm == 1) begin // vfmv.s.f
+        dest_eew = EEW1;
+        dest_emul = dest_emul * dest_eew / eew;
+        src1_eew = EEW1;
+        src1_emul = src1_emul * src1_eew / eew;
+      end
       // Reduction inst
       if(is_reduction_inst) begin
         dest_emul = EMUL1;
@@ -1808,8 +1950,8 @@ function void rvs_transaction::decode_vtype(bit dec_evl, bit dec_vlmax);
     end // ALU
   endcase
 
-  // dest is xrf
-  if(dest_type == XRF) begin
+  // dest is xrf / frf
+  if(dest_type == XRF || dest_type == FRF) begin
     dest_eew = EEW32;
     dest_emul = EMUL1; 
   end
@@ -1969,7 +2111,7 @@ function void rvs_transaction::overlap_unalign_correct();
     end
   end
   // For vcompress/vrgather/vslideup, vd cannot overlap vector source reg-group 
-  if(inst_type == ALU && alu_inst inside {VCOMPRESS,VSLIDEUP_RGATHEREI16,VRGATHER,VSLIDE1UP}) begin
+  if(inst_type == ALU && alu_inst inside {VCOMPRESS,VSLIDEUP_RGATHEREI16,VRGATHER,VSLIDE1UP,VFSLIDE1UP}) begin
     // vd overlap vs2
     if(dest_type == VRF && src2_type == VRF && 
       ((dest_idx >= src2_idx) && (dest_idx <= src2_idx+int'($ceil(src2_emul))-1) ||
@@ -2039,6 +2181,12 @@ function bit rvs_transaction::reserve_inst_check();
     return FAIL;
   end
 
+  if((vl == 0) && (inst_type == ALU && alu_inst == VWFUNARY0 && alu_type == OPFVF)) begin
+    // for vfmv.s.f, vl == 0 will be discarded in backend
+    `uvm_warning("TR/INST_CHECK", $sformatf("pc=0x%8x: vl(%0d) == 0 of vfmv.s.f.", pc, vl));
+    return FAIL;
+  end
+
   if((vl == 0) && (inst_type == ALU && alu_inst inside {VWXUNARY0} && alu_type == OPMVX && src2_idx inside {VMV_S_X})) begin
     // for vmv.s.x, vl == 0 will be discarded in backend
     `uvm_warning("TR/INST_CHECK", $sformatf("pc=0x%8x: vl(%0d) >= vlmax(%0d).", pc, vl, vlmax));
@@ -2054,6 +2202,8 @@ function bit rvs_transaction::reserve_inst_check();
       return FAIL;
     end
   end else if(
+     (inst_type == ALU && alu_inst == VWFUNARY0 && alu_type == OPFVF) ||
+     (inst_type == ALU && alu_inst inside {VFREDOSUM, VFREDUSUM, VFREDMIN, VFREDMAX}) ||
      (inst_type == ALU && alu_inst inside {VWXUNARY0} && alu_type == OPMVX && src2_idx inside {VMV_S_X}) ||
      (inst_type == ALU && alu_inst inside {VMUNARY0} && src1_idx inside {VMSBF, VMSOF, VMSIF, VIOTA}) ||
      (inst_type == ALU && alu_inst inside {VREDSUM, VREDAND, VREDOR, VREDXOR, VREDMINU, VREDMIN, VREDMAXU, VREDMAX}) || 
@@ -2077,7 +2227,8 @@ function bit rvs_transaction::reserve_inst_check();
     end
     // for vcpop, vfirst, vstart >= vl is allowed and will not be discarded
   end else if(
-     (inst_type == ALU && alu_inst inside {VWXUNARY0} && alu_type == OPMVV && src1_idx inside {VMV_X_S})
+     (inst_type == ALU && alu_inst inside {VWXUNARY0} && alu_type == OPMVV && src1_idx inside {VMV_X_S}) ||
+     (inst_type == ALU && alu_inst == VWFUNARY0 && alu_type == OPFVV) // vfmv.f.s
   ) begin
     // for vmv.x.s, vstart >= vl is allowed and will not be discarded
   end else begin
@@ -2294,6 +2445,78 @@ function bit rvs_transaction::reserve_inst_check();
     end
   end
 
+
+  // Floating point (OPF*, Zve32f) ---------------------------------------------------------
+  if(inst_type == ALU && alu_inst[7:6] == 2'b10) begin
+    // The DUT also traps reserved frm values (including the dynamic mode 7, which it does not take)
+    if(frm >= 5) begin
+      `uvm_warning("TR/INST_CHECK", $sformatf("pc=0x%8x: frm == %0d of %s is reserved.", pc, frm, alu_inst.name()));
+      return FAIL;
+    end
+    if(!(alu_type inside {OPFVV, OPFVF})) begin
+      `uvm_warning("TR/INST_CHECK", $sformatf("pc=0x%8x: alu_type == %s of %s is reserved.", pc, alu_type.name(), alu_inst.name()));
+      return FAIL;
+    end
+    // .vv only
+    if(alu_inst inside {VFUNARY0, VFUNARY1, VFREDOSUM, VFREDUSUM, VFREDMIN, VFREDMAX} && alu_type != OPFVV) begin
+      `uvm_warning("TR/INST_CHECK", $sformatf("pc=0x%8x: alu_type == %s of %s is reserved.", pc, alu_type.name(), alu_inst.name()));
+      return FAIL;
+    end
+    // .vf only
+    if(alu_inst inside {VFRSUB, VFRDIV, VMFGT, VMFGE, VFSLIDE1UP, VFSLIDE1DOWN, VFMERGE_VFMV} && alu_type != OPFVF) begin
+      `uvm_warning("TR/INST_CHECK", $sformatf("pc=0x%8x: alu_type == %s of %s is reserved.", pc, alu_type.name(), alu_inst.name()));
+      return FAIL;
+    end
+    // Only the arithmetic, compare, convert, reduction and move encodings exist
+    if(!(alu_inst inside {VFADD, VFSUB, VFRSUB, VFMUL, VFDIV, VFRDIV,
+                          VFMACC, VFNMACC, VFMSAC, VFNMSAC, VFMADD, VFNMADD, VFMSUB, VFNMSUB,
+                          VFMIN, VFMAX, VFSGNJ, VFSGNJN, VFSGNJX,
+                          VMFEQ, VMFNE, VMFLT, VMFLE, VMFGT, VMFGE,
+                          VFMERGE_VFMV, VFUNARY0, VFUNARY1,
+                          VFREDOSUM, VFREDUSUM, VFREDMIN, VFREDMAX,
+                          VWFUNARY0, VFSLIDE1UP, VFSLIDE1DOWN})) begin
+      `uvm_warning("TR/INST_CHECK", $sformatf("pc=0x%8x: OPF funct6 %s is reserved.", pc, alu_inst.name()));
+      return FAIL;
+    end
+    // SEW: 32 everywhere, except the int16 <-> fp32 widening/narrowing conversions that use 16
+    if(alu_inst == VFUNARY0 && src1_idx inside {VFWCVT_F_XU, VFWCVT_F_X, VFNCVT_XU_F, VFNCVT_X_F, VFNCVT_RTZ_XU_F, VFNCVT_RTZ_X_F}) begin
+      if(vsew != SEW16) begin
+        `uvm_warning("TR/INST_CHECK", $sformatf("pc=0x%8x: vsew == %s of %s is reserved.", pc, vsew.name(), asm_string));
+        return FAIL;
+      end
+      if(!(vlmul inside {LMUL1_4,LMUL1_2,LMUL1,LMUL2,LMUL4})) begin
+        `uvm_warning("TR/INST_CHECK", $sformatf("pc=0x%8x: vlmul == %s of %s is reserved.", pc, vlmul.name(), asm_string));
+        return FAIL;
+      end
+    end else if(vsew != SEW32) begin
+      `uvm_warning("TR/INST_CHECK", $sformatf("pc=0x%8x: vsew == %s of %s is reserved.", pc, vsew.name(), alu_inst.name()));
+      return FAIL;
+    end
+    if(alu_inst == VFUNARY0 && !(src1_idx inside {VFCVT_XU_F, VFCVT_X_F, VFCVT_F_XU, VFCVT_F_X, VFCVT_RTZ_XU_F, VFCVT_RTZ_X_F,
+                                                  VFWCVT_F_XU, VFWCVT_F_X,
+                                                  VFNCVT_XU_F, VFNCVT_X_F, VFNCVT_RTZ_XU_F, VFNCVT_RTZ_X_F})) begin
+      `uvm_warning("TR/INST_CHECK", $sformatf("pc=0x%8x: vfunary0 vs1 == %0d is reserved.", pc, src1_idx));
+      return FAIL;
+    end
+    if(alu_inst == VFUNARY1 && !(src1_idx inside {VFSQRT, VFRSQRT7, VFREC7, VFCLASS})) begin
+      `uvm_warning("TR/INST_CHECK", $sformatf("pc=0x%8x: vfunary1 vs1 == %0d is reserved.", pc, src1_idx));
+      return FAIL;
+    end
+    if(alu_inst == VFMERGE_VFMV && vm == 1 && src2_idx != 0) begin
+      `uvm_warning("TR/INST_CHECK", $sformatf("pc=0x%8x: vfmv.v.f with vs2 != 0 is reserved.", pc));
+      return FAIL;
+    end
+    if(alu_inst == VWFUNARY0) begin
+      if(vm != 1) begin
+        `uvm_warning("TR/INST_CHECK", $sformatf("pc=0x%8x: vm == 0 of vfmv.f.s/vfmv.s.f is reserved.", pc));
+        return FAIL;
+      end
+      if((alu_type == OPFVV && src1_idx != VFMV_F_S) || (alu_type == OPFVF && src2_idx != VFMV_S_F)) begin
+        `uvm_warning("TR/INST_CHECK", $sformatf("pc=0x%8x: vwfunary0 encoding is reserved.", pc));
+        return FAIL;
+      end
+    end
+  end
 // sew/lmul check ------------------------------------------
   if(inst_type == ALU) begin
     if(alu_inst inside {VWADDU, VWADD, VWADDU_W, VWADD_W, VWSUBU, VWSUB, VWSUBU_W, VWSUB_W, 
@@ -2687,7 +2910,7 @@ function bit rvs_transaction::reserve_inst_check();
     end
   end
   // For vcompress/vrgather/vslideup, vd cannot overlap vector source reg-group 
-  if(inst_type == ALU && alu_inst inside {VCOMPRESS,VSLIDEUP_RGATHEREI16,VRGATHER,VSLIDE1UP}) begin
+  if(inst_type == ALU && alu_inst inside {VCOMPRESS,VSLIDEUP_RGATHEREI16,VRGATHER,VSLIDE1UP,VFSLIDE1UP}) begin
     if(dest_type == VRF && src2_type == VRF && 
       ((src2_idx_base inside {[dest_idx_base:dest_idx_last]}) || 
        (dest_idx_base inside {[src2_idx_base:src2_idx_last]}))
@@ -2813,6 +3036,34 @@ function void rvs_transaction::asm_string_gen();
         end else if(alu_type inside {OPIVV, OPIVX}) begin
           inst = "vsmul";
         end
+      end else if(alu_inst == VFMERGE_VFMV) begin
+        inst = (vm == 1) ? "vfmv.v" : "vfmerge";
+      end else if(alu_inst == VWFUNARY0) begin
+        inst = (alu_type == OPFVV) ? "vfmv.f" : "vfmv.s";
+      end else if(alu_inst == VFUNARY0) begin
+        case(src1_idx)
+          VFCVT_XU_F:       inst = "vfcvt.xu.f";
+          VFCVT_X_F:        inst = "vfcvt.x.f";
+          VFCVT_F_XU:       inst = "vfcvt.f.xu";
+          VFCVT_F_X:        inst = "vfcvt.f.x";
+          VFCVT_RTZ_XU_F:   inst = "vfcvt.rtz.xu.f";
+          VFCVT_RTZ_X_F:    inst = "vfcvt.rtz.x.f";
+          VFWCVT_F_XU:      inst = "vfwcvt.f.xu";
+          VFWCVT_F_X:       inst = "vfwcvt.f.x";
+          VFNCVT_XU_F:      inst = "vfncvt.xu.f";
+          VFNCVT_X_F:       inst = "vfncvt.x.f";
+          VFNCVT_RTZ_XU_F:  inst = "vfncvt.rtz.xu.f";
+          VFNCVT_RTZ_X_F:   inst = "vfncvt.rtz.x.f";
+          default:          inst = "vfunary0?";
+        endcase
+      end else if(alu_inst == VFUNARY1) begin
+        case(src1_idx)
+          VFSQRT:   inst = "vfsqrt";
+          VFRSQRT7: inst = "vfrsqrt7";
+          VFREC7:   inst = "vfrec7";
+          VFCLASS:  inst = "vfclass";
+          default:  inst = "vfunary1?";
+        endcase
       end else if(alu_inst inside {VSLIDEUP_RGATHEREI16}) begin
         if(alu_type inside {OPIVX,OPIVI})
           inst = "vslideup";
@@ -2843,6 +3094,7 @@ function void rvs_transaction::asm_string_gen();
         end
         SCALAR: begin suf1 = "s"; src1 = $sformatf("v%0d",this.src1_idx); end
         XRF: begin suf1 = "x"; src1 = $sformatf("x%0d",this.src1_idx); end
+        FRF: begin suf1 = "f"; src1 = $sformatf("f%0d",this.src1_idx); end
         IMM: begin suf1 = "i"; src1 = $sformatf("%0d",$signed(this.src1_idx)); end
         UIMM: begin suf1 = "i"; src1 = $sformatf("%0d",$unsigned(this.src1_idx)); end
         FUNC: begin
@@ -2944,6 +3196,7 @@ function void rvs_transaction::asm_string_gen();
       case(this.dest_type)
         VRF: dest = $sformatf("v%0d",this.dest_idx);
         XRF: dest = $sformatf("x%0d",this.dest_idx);
+        FRF: dest = $sformatf("f%0d",this.dest_idx);
         SCALAR: dest = $sformatf("v%0d",this.dest_idx);
         default: dest = "?";
       endcase
@@ -2953,9 +3206,14 @@ function void rvs_transaction::asm_string_gen();
   endcase
 
   suff = $sformatf("%s%s%s%s%s",sufd,suf3,suf2,suf1,suf0);
+  if(inst_type == ALU && alu_inst == VFUNARY0 && src1_idx inside {VFNCVT_XU_F, VFNCVT_X_F, VFNCVT_RTZ_XU_F, VFNCVT_RTZ_X_F}) suff = $sformatf("w%s", suf0);
 
   // Comments
   comm = $sformatf("# vlmul=%0s, vsew=%0s, vstart=%0d, vl=%0d", vlmul.name(), vsew.name(), vstart, vl);
+  if(inst_type == ALU && alu_type inside {OPFVV, OPFVF}) begin
+    comm = $sformatf("%s, frm=%0d", comm, frm);
+    if(src1_type == FRF) comm = $sformatf("%s, f%0d=0x%8x", comm, src1_idx, rs1_data);
+  end
   if(inst_type inside {LD, ST} && src1_type == XRF) comm = $sformatf("%s, base=0x%8x", comm, rs1_data);
   if(inst_type inside {LD, ST} && lsu_mop == LSU_CS && src2_type == XRF) comm = $sformatf("%s, const_stride=%0d", comm, $signed(rs2_data));
 

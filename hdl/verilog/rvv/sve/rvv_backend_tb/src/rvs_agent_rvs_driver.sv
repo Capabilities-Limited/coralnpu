@@ -119,6 +119,10 @@ task rvs_driver::reset_phase(uvm_phase phase);
       rvs_if.rt_xrf_ready_rvs2rvv[i] <= '0;
     end
     rvs_if.wr_vxsat_ready <= '0;
+`ifdef ZVE32F_ON
+    rvs_if.async_frd_ready <= '0;
+    rvs_if.fcsr2rt_write_ready <= '0;
+`endif
     @(posedge rvs_if.clk);
   end
   phase.drop_objection( .obj( this ) );
@@ -190,6 +194,9 @@ task rvs_driver::inst_manage();
       assert($cast(inst[i].arch_state.lmul, inst_tx_queue[i].vlmul));
       // The LSU/ARI decode units read lmul_orig (the architectural vtype LMUL).
       assert($cast(inst[i].arch_state.lmul_orig, inst_tx_queue[i].vlmul));
+`ifdef ZVE32F_ON
+      inst[i].arch_state.frm        = RVFRM_e'(inst_tx_queue[i].frm);
+`endif
       inst_vld[i] = 1'b1;
     end else begin
       inst[i] = inst[i];
@@ -236,6 +243,10 @@ endtask: tx_driver
 task rvs_driver::rx_driver();
   logic rt_xrf_ready [`NUM_RT_UOP-1:0] ;
   logic wr_vxsat_ready;
+`ifdef ZVE32F_ON
+  logic rt_frf_ready [`NUM_RT_UOP-1:0];
+  logic fcsr_ready;
+`endif
   forever begin
     @(posedge rvs_if.clk);
     if(~rvs_if.rst_n) begin
@@ -243,6 +254,10 @@ task rvs_driver::rx_driver();
         rvs_if.rt_xrf_ready_rvs2rvv[i] <= '0;
       end
       rvs_if.wr_vxsat_ready <= '0;
+`ifdef ZVE32F_ON
+      rvs_if.async_frd_ready <= '0;
+      rvs_if.fcsr2rt_write_ready <= '0;
+`endif
       rvs_if.vcsr_ready <= 1'b0;
     end
     // trap handler
@@ -280,6 +295,24 @@ task rvs_driver::rx_driver();
     endcase
     rvs_if.wr_vxsat_ready <= wr_vxsat_ready;
 
+`ifdef ZVE32F_ON
+    // FRF write (vfmv.f.s) and fcsr.fflags update handshakes. They follow the xrf / vxsat delay modes.
+    for(int i=0; i<`NUM_RT_UOP; i++) begin
+      case(delay_mode_rt_xrf)
+        delay_mode_pkg::SLOW:   assert(std::randomize(rt_frf_ready[i]) with {rt_frf_ready[i] dist {0 := 90, 1 := 10};});
+        delay_mode_pkg::NORMAL: assert(std::randomize(rt_frf_ready[i]) with {rt_frf_ready[i] dist {0 := 20, 1 := 80};});
+        delay_mode_pkg::FAST:   assert(std::randomize(rt_frf_ready[i]) with {rt_frf_ready[i] dist {0 := 0, 1 := 100};});
+      endcase
+      rvs_if.async_frd_ready[i] <= rt_frf_ready[i];
+    end
+    case(delay_mode_wr_vxsat)
+      delay_mode_pkg::SLOW:   assert(std::randomize(fcsr_ready) with {fcsr_ready dist {0 := 90, 1 := 10};});
+      delay_mode_pkg::NORMAL: assert(std::randomize(fcsr_ready) with {fcsr_ready dist {0 := 20, 1 := 80};});
+      delay_mode_pkg::FAST:   assert(std::randomize(fcsr_ready) with {fcsr_ready dist {0 := 0, 1 := 100};});
+    endcase
+    rvs_if.fcsr2rt_write_ready <= fcsr_ready;
+`endif
+
     // vector_csr response
     if(trap_queue.size() > 0) begin
       if(trap_queue[0].vcsr_ready_delay == 0) begin
@@ -313,6 +346,10 @@ task rvs_driver::vrf_driver();
           for(int reg_idx=0; reg_idx<32; reg_idx++) begin
             for(int j=0; j<`VLENB(VLEN); j++) begin
               value[j*8+:8] = $urandom_range(0, 8'hFF);
+            end
+            // floating point tests want FP-shaped data after a clear as well
+            if(rvs_transaction::fp_en) begin
+              for(int j=0; j<`VLEN/32; j++) value[j*32+:32] = rvv_softfloat_pkg::rand_fp32();
             end
             test_top.set_mdl_vrf(reg_idx, value);
             vrf_if.set_dut_vrf(reg_idx, value);

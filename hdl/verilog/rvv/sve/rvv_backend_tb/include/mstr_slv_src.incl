@@ -21,3 +21,4 @@
 
 `include "rvv_inst_sequence_library.sv"
 `include "rvv_zve32x_inst_sequences.sv"
+`include "rvv_fp_sequences.sv"

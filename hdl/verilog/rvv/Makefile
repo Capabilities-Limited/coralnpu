@@ -61,6 +61,11 @@ MASK_TAIL_TAG   := $(MASK_TAIL_LOGIC)-$(MASK_TAIL_SET)-$(MASK_TAIL_CMP)-$(MASK_T
 #   FOF_SEGMENT:    a fault inside a segment of a segment load: whole | partial
 FOF_POST_FAULT  ?= not_updated
 FOF_SEGMENT     ?= whole
+# FP=1 builds the Zve32f floating point backend (ZVE32F_ON). The FP units wrap CVFPU (fpnew); its RTL,
+# and that of common_cells and fpu_div_sqrt_mvp, is fetched with Bender (see Bender.yml, Bender.local
+# and Bender.lock). Needs `bender` on PATH, or BENDER=<path>, and network access on the first run.
+FP         ?= 0
+BENDER     ?= bender
 UVM_HOME  ?=
 UVM_VERBOSITY ?= UVM_LOW
 timeout   ?= 1000000000ns
@@ -88,7 +93,7 @@ DESIGN_PATH := $(RVV_ROOT)/design
 STD_PATH    := $(RVV_ROOT)/common
 RTL_INC_DIR := $(RVV_ROOT)/inc
 TB_PATH     := $(RVV_ROOT)/sve/rvv_backend_tb
-BUILD_PATH  := $(RVV_ROOT)/build/$(scfg)$(if $(filter-out VLEN_128,$(VLEN_DEFINE)),_vlen$(VLEN_DEFINE:VLEN_%=%))$(if $(filter 1,$(TRACE)),_trace)$(if $(filter-out calculated-undisturbed-undisturbed-undisturbed,$(MASK_TAIL_TAG)),_tail_$(MASK_TAIL_TAG))$(if $(filter-out not_updated-whole,$(FOF_POST_FAULT)-$(FOF_SEGMENT)),_fof_$(FOF_POST_FAULT)-$(FOF_SEGMENT))
+BUILD_PATH  := $(RVV_ROOT)/build/$(scfg)$(if $(filter-out VLEN_128,$(VLEN_DEFINE)),_vlen$(VLEN_DEFINE:VLEN_%=%))$(if $(filter 1,$(FP)),_fp)$(if $(filter 1,$(TRACE)),_trace)$(if $(filter-out calculated-undisturbed-undisturbed-undisturbed,$(MASK_TAIL_TAG)),_tail_$(MASK_TAIL_TAG))$(if $(filter-out not_updated-whole,$(FOF_POST_FAULT)-$(FOF_SEGMENT)),_fof_$(FOF_POST_FAULT)-$(FOF_SEGMENT))
 TB_TOP      := rvv_backend_top
 
 # ------------------------------------------------------------------
@@ -109,6 +114,18 @@ RTL_FILES := $(filter-out $(RTL_UNUSED),$(sort $(wildcard $(DESIGN_PATH)/rvv_bac
 TB_FILES  := $(sort $(wildcard $(TB_PATH)/hdl/*.sv))
 
 RTL_INCDIRS := $(RTL_INC_DIR)
+
+# Third-party RTL (FP=1 only), all through Bender (see Bender.yml):
+#  - CVFPU is vendored into .vendor/cvfpu and patched with third_party/cvfpu/*.patch (the patches the
+#    Bazel build applies); redone when the manifest or a patch changes.
+#  - Bender then checks the remaining dependencies out into .bender/ and writes a file list (include
+#    directories, defines and sources in dependency order) that rtl.f pulls in ahead of the backend
+#    sources. Regenerated when the manifest, the overrides or the lock file change.
+#  - Patch 0002 removes the `include of the common_cells macro headers from cvfpu, so rtl.f lists
+#    assertions.svh and registers.svh itself, ahead of the Bender list.
+BENDER_FLIST     := $(BUILD_PATH)/bender.f
+BENDER_VENDORED  := $(RVV_ROOT)/.vendor/cvfpu/Bender.yml
+CVFPU_PATCHES    := $(wildcard $(RVV_ROOT)/../../../third_party/cvfpu/*.patch)
 TB_INCDIRS  := $(TB_PATH)/include $(TB_PATH)/src $(TB_PATH)/env \
                $(TB_PATH)/tests $(TB_PATH)/hdl
 
@@ -116,7 +133,7 @@ TB_INCDIRS  := $(TB_PATH)/include $(TB_PATH)/src $(TB_PATH)/env \
 # Configurations (mirrors sve/rvv_backend_tb/Makefile)
 # ------------------------------------------------------------------
 # SVA (ASSERT_ON) uses `strong`, which Verilator does not support; opt in with ASSERT=1
-COMMON_DEFINES := TB_SUPPORT RVV_CONFIG_SVH $(if $(ASSERT),ASSERT_ON) PRECISE_RVVTRAP
+COMMON_DEFINES := TB_SUPPORT RVV_CONFIG_SVH $(if $(ASSERT),ASSERT_ON) PRECISE_RVVTRAP $(if $(filter 1,$(FP)),ZVE32F_ON)
 ifeq ($(scfg),rvv_backend)
   RTL_DEFINES := $(COMMON_DEFINES) ISSUE_3_READ_PORT_6
 else ifeq ($(scfg),rvv_backend_i3rp6)
@@ -181,11 +198,30 @@ filelists: $(BUILD_PATH)/rtl.f $(BUILD_PATH)/tb.f $(BUILD_PATH)/lint.f
 $(BUILD_PATH):
 	@mkdir -p $@
 
+.PHONY: deps
+deps: $(BENDER_FLIST)
+
+$(BENDER_VENDORED): $(RVV_ROOT)/Bender.yml $(CVFPU_PATCHES)
+	@command -v $(BENDER) >/dev/null 2>&1 || { echo "error: FP=1 needs bender (https://github.com/pulp-platform/bender); put it on PATH or set BENDER=<path>"; exit 1; }
+	@# `vendor init` loads the manifest, which already names this (not yet existing) path dependency
+	mkdir -p $(dir $@)
+	cd $(RVV_ROOT) && $(BENDER) vendor init
+	@# Without a lock file `vendor init` resolves while the vendored copy is still empty, so the lock misses
+	@# CVFPU's own dependencies; resolve again now that its manifest exists.
+	@cd $(RVV_ROOT) && grep -q '^  common_cells:' Bender.lock 2>/dev/null || $(BENDER) update
+
+$(BENDER_FLIST): $(RVV_ROOT)/Bender.yml $(RVV_ROOT)/Bender.local $(wildcard $(RVV_ROOT)/Bender.lock) $(BENDER_VENDORED) | $(BUILD_PATH)
+	cd $(RVV_ROOT) && $(BENDER) checkout
+	cd $(RVV_ROOT) && $(BENDER) script flist-plus -e tech_cells_generic -e common_verification > $@
+
 # Regenerate whenever the Makefile, scfg or source set changes.
-$(BUILD_PATH)/rtl.f: Makefile | $(BUILD_PATH) $(RTL_FILES) $(foreach incdir,$(RTL_INCDIRS),$(wildcard $(incdir)/*))
+$(BUILD_PATH)/rtl.f: Makefile $(if $(filter 1,$(FP)),$(BENDER_FLIST)) | $(BUILD_PATH) $(RTL_FILES) $(foreach incdir,$(RTL_INCDIRS),$(wildcard $(incdir)/*))
 	@echo "generating $@"
 	@{ for i in $(RTL_INCDIRS); do echo "+incdir+$$i"; done; \
 	   for d in $(DEFINES); do echo "+define+$$d"; done; \
+	   $(if $(filter 1,$(FP)),cc=$$(cd $(RVV_ROOT) && $(BENDER) path common_cells); \
+	     echo "$$cc/include/common_cells/assertions.svh"; echo "$$cc/include/common_cells/registers.svh"; \
+	     echo "-f $(BENDER_FLIST)";) \
 	   for f in $(RTL_FILES); do echo "$$f"; done; } > $@
 
 $(BUILD_PATH)/tb.f: Makefile | $(BUILD_PATH) $(TB_FILES) $(foreach incdir,$(TB_INCDIRS),$(wildcard $(incdir)/*))

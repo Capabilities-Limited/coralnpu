@@ -78,6 +78,21 @@ module rvv_backend_top();
     .wr_vxsat                 (), // use internal signal   
     .wr_vxsat_ready           (rvs_if.wr_vxsat_ready),
 
+`ifdef ZVE32F_ON
+    .async_frd_valid          (rvs_if.async_frd_valid       ),
+  `ifdef TB_SUPPORT
+    .async_frd_pc             (                             ),
+  `endif
+    .async_frd_rob_tag        (                             ),
+    .async_frd_addr           (rvs_if.async_frd_addr        ),
+    .async_frd_data           (rvs_if.async_frd_data        ),
+    .async_frd_ready          (rvs_if.async_frd_ready       ),
+
+    .rt2fcsr_write_valid      (rvs_if.rt2fcsr_write_valid   ),
+    .rt2fcsr_write_data       (rvs_if.rt2fcsr_write_data    ),
+    .fcsr2rt_write_ready      (rvs_if.fcsr2rt_write_ready   ),
+`endif
+
     .vcsr_valid               (rvs_if.vcsr_valid            ),
     .vector_csr               (rvs_if.vector_csr            ),
     .vcsr_ready               (rvs_if.vcsr_ready            ),
@@ -143,6 +158,16 @@ module rvv_backend_top();
   assign rvs_if.wr_vxsat[1] = `RT_VXSAT_PATH.w_vxsat[1];
   assign rvs_if.wr_vxsat[2] = `RT_VXSAT_PATH.w_vxsat[2];
   assign rvs_if.wr_vxsat[3] = `RT_VXSAT_PATH.w_vxsat[3];
+    
+`ifdef ZVE32F_ON
+  // fflags of each retiring uop: only the active elements contribute (retire masks the others)
+  always_comb begin
+    for(int i=0; i<`NUM_RT_UOP; i++) begin
+      rvs_if.rt_fflags_valid[i] = `RT_VXSAT_PATH.w_valid_chkTrap[i] & `RT_VXSAT_PATH.w_fpexp_vld[i];
+      rvs_if.rt_fflags[i]       = `RT_VXSAT_PATH.w_fpexp[i];
+    end
+  end
+`endif
     
 // lsu interface -----------------------------------------------------
   // trap pc tracer
