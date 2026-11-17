@@ -1,3 +1,6 @@
+SHELL := /usr/bin/env
+.SHELLFLAGS := bash -c
+
 ifneq ($(shell command -v vcs 2>/dev/null || true),)
 
 Aligner: Aligner.sv
@@ -32,9 +35,6 @@ else
 # does not need either.
 #
 # Run from hdl/verilog/rvv. Output goes to build/<scfg>/.
-
-SHELL := /usr/bin/env
-.SHELLFLAGS := bash -c
 
 # ------------------------------------------------------------------
 # Options

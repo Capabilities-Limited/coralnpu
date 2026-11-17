@@ -1,4 +1,7 @@
-#!/usr/bin/make  -f
+#!/usr/bin/env make -f
+
+SHELL := /usr/bin/env
+.SHELLFLAGS := bash -c
 
 # ------------------------------------------------------------------
 # Setting of project
