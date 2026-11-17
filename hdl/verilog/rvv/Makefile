@@ -64,6 +64,12 @@ FOF_SEGMENT     ?= whole
 # FP=1 builds the Zve32f floating point backend (ZVE32F_ON). The FP units wrap CVFPU (fpnew); its RTL,
 # and that of common_cells and fpu_div_sqrt_mvp, is fetched with Bender (see Bender.yml, Bender.local
 # and Bender.lock). Needs `bender` on PATH, or BENDER=<path>, and network access on the first run.
+# ZVT=1 additionally builds the Zvt matrix extension (ZVT_ON, design/Zvt/). It needs the FP units, so it
+# implies FP=1. TE (the tile edge) is VLEN/8.
+ZVT        ?= 0
+ifeq ($(ZVT),1)
+  FP := 1
+endif
 FP         ?= 0
 BENDER     ?= bender
 UVM_HOME  ?=
@@ -93,7 +99,7 @@ DESIGN_PATH := $(RVV_ROOT)/design
 STD_PATH    := $(RVV_ROOT)/common
 RTL_INC_DIR := $(RVV_ROOT)/inc
 TB_PATH     := $(RVV_ROOT)/sve/rvv_backend_tb
-BUILD_PATH  := $(RVV_ROOT)/build/$(scfg)$(if $(filter-out VLEN_128,$(VLEN_DEFINE)),_vlen$(VLEN_DEFINE:VLEN_%=%))$(if $(filter 1,$(FP)),_fp)$(if $(filter 1,$(TRACE)),_trace)$(if $(filter-out calculated-undisturbed-undisturbed-undisturbed,$(MASK_TAIL_TAG)),_tail_$(MASK_TAIL_TAG))$(if $(filter-out not_updated-whole,$(FOF_POST_FAULT)-$(FOF_SEGMENT)),_fof_$(FOF_POST_FAULT)-$(FOF_SEGMENT))
+BUILD_PATH  := $(RVV_ROOT)/build/$(scfg)$(if $(filter-out VLEN_128,$(VLEN_DEFINE)),_vlen$(VLEN_DEFINE:VLEN_%=%))$(if $(filter 1,$(FP)),_fp)$(if $(filter 1,$(ZVT)),_zvt)$(if $(filter 1,$(TRACE)),_trace)$(if $(filter-out calculated-undisturbed-undisturbed-undisturbed,$(MASK_TAIL_TAG)),_tail_$(MASK_TAIL_TAG))$(if $(filter-out not_updated-whole,$(FOF_POST_FAULT)-$(FOF_SEGMENT)),_fof_$(FOF_POST_FAULT)-$(FOF_SEGMENT))
 TB_TOP      := rvv_backend_top
 
 # ------------------------------------------------------------------
@@ -111,6 +117,10 @@ RTL_UNUSED := $(DESIGN_PATH)/Aligner.sv \
 
 RTL_FILES := $(filter-out $(RTL_UNUSED),$(sort $(wildcard $(DESIGN_PATH)/rvv_backend*.sv)) \
                                          $(sort $(wildcard $(STD_PATH)/*.sv)))
+ifeq ($(ZVT),1)
+  # zvt_acc.sv is stale: nothing instantiates it and it uses the undefined NUM_ACC
+  RTL_FILES += $(filter-out $(DESIGN_PATH)/Zvt/zvt_acc.sv,$(sort $(wildcard $(DESIGN_PATH)/Zvt/*.sv)))
+endif
 TB_FILES  := $(sort $(wildcard $(TB_PATH)/hdl/*.sv))
 
 RTL_INCDIRS := $(RTL_INC_DIR)
@@ -133,7 +143,7 @@ TB_INCDIRS  := $(TB_PATH)/include $(TB_PATH)/src $(TB_PATH)/env \
 # Configurations (mirrors sve/rvv_backend_tb/Makefile)
 # ------------------------------------------------------------------
 # SVA (ASSERT_ON) uses `strong`, which Verilator does not support; opt in with ASSERT=1
-COMMON_DEFINES := TB_SUPPORT RVV_CONFIG_SVH $(if $(ASSERT),ASSERT_ON) PRECISE_RVVTRAP $(if $(filter 1,$(FP)),ZVE32F_ON)
+COMMON_DEFINES := TB_SUPPORT RVV_CONFIG_SVH $(if $(ASSERT),ASSERT_ON) PRECISE_RVVTRAP $(if $(filter 1,$(FP)),ZVE32F_ON) $(if $(filter 1,$(ZVT)),ZVT_ON)
 ifeq ($(scfg),rvv_backend)
   RTL_DEFINES := $(COMMON_DEFINES) ISSUE_3_READ_PORT_6
 else ifeq ($(scfg),rvv_backend_i3rp6)
