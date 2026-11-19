@@ -73,10 +73,11 @@ typedef struct packed {
   // - ta: 0:tail undisturbed, 1:tail agnostic
   // - xsat: rvv dont need this bit, but output this to rvs
 // - ZVT_ON:
-  //   - altfmt, mtwiden, tm, tk: VME (Zvt) non-tile state. Packed mtype view assembled from {tm, tk,
-  // mtwiden} per ?5.1.1.2; widths follow the literal spec bit allocation
-  // (tk in [7:5] = 3 bits, mtwiden in [1:0] = 2 bits, tm in [23:10] = 14
-  // bits).
+  //   - altfmt: constructs the vtype CSR value. See section 3.4 of the RISC-V Vector Specification
+  // v1.0, and section 12.1.1.4 of the Zvt Specification (bit 8 = altfmt).
+  //   - mtwiden, tm, tk: VME (Zvt) non-tile state. Packed mtype view assembled from {tm, tk,
+  // mtwiden} per 12.1.1.2. The spec defines tk as tk[2:0] (3 bits, values 0-4) in bits 7:5,
+  // tm is in [23:10] (14 bits), mtwiden is in [1:0] (2 bits).
 //
 `define CONFIG_STATE_t(VLEN) \
 struct packed { \
