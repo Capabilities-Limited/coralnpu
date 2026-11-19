@@ -14,6 +14,9 @@
   typedef class lsu_processor;
   typedef class pmt_processor;
   typedef class fp_processor;
+`ifdef ZVT_ON
+  typedef class zvt_processor;
+`endif
 
 //------------------------------------------------------------------------------
 // CLASS: rvv_behavior_model
@@ -91,6 +94,11 @@ class rvv_behavior_model extends uvm_component;
   lsu_processor lsu_proc;
   pmt_processor pmt_inst;
   fp_processor fp_proc;
+`ifdef ZVT_ON
+  zvt_processor zvt_proc;
+  typedef virtual vme_interface v_if5;
+  v_if5 vme_if;
+`endif
   logic [4:0] fflags;            // OR of the flags of the active elements of the instruction
 
   // Memory
@@ -145,6 +153,10 @@ class rvv_behavior_model extends uvm_component;
 
 endclass: rvv_behavior_model
 
+`ifdef ZVT_ON
+`include "rvv_zvt_proc.sv"
+`endif
+
 // Phases --------------------------------------------------
   function rvv_behavior_model::new(string name = "rvv_behavior_model", uvm_component parent);
     super.new(name, parent);
@@ -192,6 +204,9 @@ endclass: rvv_behavior_model
     lsu_proc = lsu_processor::type_id::create("lsu_proc", this);
     pmt_inst = pmt_processor::type_id::create("pmt_isnt", this);
     fp_proc = fp_processor::type_id::create("fp_proc", this);
+`ifdef ZVT_ON
+    zvt_proc = new();
+`endif
 
     // mem
     mem = new("mdl_mem", this);
@@ -213,6 +228,11 @@ endclass: rvv_behavior_model
     if(!uvm_config_db#(v_if3)::get(this, "", "vrf_if", vrf_if)) begin
       `uvm_fatal("MDL/NOVIF", "No virtual interface specified for this agent instance")
     end
+`ifdef ZVT_ON
+    if(!uvm_config_db#(v_if5)::get(this, "", "vme_if", vme_if)) begin
+      `uvm_fatal("MDL/NOVIF", "No vme interface specified for this agent instance")
+    end
+`endif
   endfunction:connect_phase
 
   task rvv_behavior_model::reset_phase(uvm_phase phase);
@@ -349,6 +369,10 @@ endclass: rvv_behavior_model
         foreach(rvs_if.rt_uop[i]) begin
           exe_inst_num += rvs_if.rt_last_uop[i] || rvs_if.rt_uop[i] & rvs_if.vcsr_valid & rvs_if.vcsr_ready;
         end
+`ifdef ZVT_ON
+        // Zvt instructions that retire through vmeRt
+        if(vme_if.vmeRtVld && vme_if.vmeRtRdy && inst_queue.size() > 0 && inst_queue[0].is_zvt_vme) exe_inst_num++;
+`endif
         while(exe_inst_num > 0) begin
           // --------------------------------------------------
           // 0. Get inst and update VCSR
@@ -486,6 +510,17 @@ endclass: rvv_behavior_model
           if(is_permutation_inst == 1) begin //is_permutation_inst
             pmt_inst.PMT_INIT(this,inst_tr);
             pmt_inst.pmt_func(this,inst_tr);
+`ifdef ZVT_ON
+          end else if(inst_tr.is_zvt_inst) begin
+            zvt_proc.exe(this, inst_tr);
+            // vector results (vtmv.v.t) are written back like those of the other instructions
+            vrf = vrf_temp;
+            for(int i=0; i<32; i++) begin
+              for(int j=0; j<`VLENB(VLEN); j++) begin
+                vrf_byte_strobe_temp[i][j] = |vrf_bit_strobe_temp[i][j*8 +: 8];
+              end
+            end
+`endif
           end else if(inst_tr.inst_type inside {LD, ST}) begin
             lsu_proc.exe(this, inst_tr);
             // Writeback whole vrf
@@ -734,6 +769,30 @@ endclass: rvv_behavior_model
           rt_tr   = new("rt_tr");
           rt_tr.copy(inst_tr);
           rt_tr.is_rt = 1;
+`ifdef ZVT_ON
+          if(inst_tr.is_zvt_inst) begin
+            // Zvt: a vector destination (vtmv.v.t) retires like any other VRF write, the tile
+            // bytes the instruction wrote are what the scoreboard checks against vmeRt.
+            if(rt_tr.dest_type == VRF) begin
+              for(int reg_idx=dest_reg_idx_base; reg_idx<dest_reg_idx_base+int'($ceil(dest_emul)); reg_idx++) begin
+                if((reg_idx - dest_reg_idx_base) >= (vstart / (`VLEN / dest_eew))) begin
+                  rt_tr.rt_vrf_index.push_back(reg_idx);
+                  rt_tr.rt_vrf_strobe.push_back(vrf_byte_strobe_temp[reg_idx]);
+                  rt_tr.rt_vrf_data.push_back(vrf_temp[reg_idx]);
+                  rt_tr.rt_vrf_old.push_back(vrf_old_temp[reg_idx]);
+                end
+              end
+            end
+            rt_tr.exp_mt_ptile  = zvt_proc.dst_ptile;
+            rt_tr.exp_mt_nptile = zvt_proc.dst_nptile;
+            rt_tr.exp_mt_val    = zvt_proc.dst_val;
+            rt_tr.exp_mt_req    = zvt_proc.dst_req;
+            fflags = zvt_proc.flags;
+            vxsat_valid = 0;
+            rt_tr.vxsat = 0;
+            rt_tr.vxsat_valid = 0;
+          end else
+`endif
           if( is_permutation_inst == 1) begin //is_permutation_inst
             rt_tr   = new("rt_tr");
             rt_tr.copy(inst_tr);

@@ -18,6 +18,10 @@ class rvs_monitor extends uvm_monitor;
 
   typedef virtual rvs_interface v_if;
   typedef virtual rvv_intern_interface v_if4;
+`ifdef ZVT_ON
+  typedef virtual vme_interface v_if5;
+  v_if5 vme_if;
+`endif
   v_if rvs_if;
   v_if4 rvv_intern_if;
 
@@ -29,6 +33,13 @@ class rvs_monitor extends uvm_monitor;
 
   int total_inst = 0;
   int executed_inst = 0;
+
+`ifdef ZVT_ON
+  // Zvt retire bookkeeping
+  int zvt_vme_accepted   = 0;   // Zvt instructions that retire through vmeRt, accepted by the backend
+  int zvt_vmert_events   = 0;   // vmeRt handshakes seen
+  int zvt_rt_pc_mismatch = 0;   // vmeRt handshakes whose inst_pc is not the oldest outstanding Zvt instruction
+`endif
 
   int inst_tx_timeout_max = 500;
   int inst_tx_timeout_cnt = 0;
@@ -50,6 +61,9 @@ class rvs_monitor extends uvm_monitor;
   extern protected virtual task rx_monitor();
   extern protected virtual task rx_timeout_monitor();
   extern protected virtual task idle_monitor();
+`ifdef ZVT_ON
+  extern protected virtual task zvt_flag_monitor();
+`endif
 
   // imp task
   extern virtual function void write_rvs_mon_inst(rvs_transaction inst_tr);
@@ -84,6 +98,10 @@ function void rvs_monitor::connect_phase(uvm_phase phase);
     `uvm_fatal(get_type_name(), "Fail to get rvs_if!")
   if(!uvm_config_db#(v_if4)::get(this, "", "rvv_intern_if", rvv_intern_if))
     `uvm_fatal(get_type_name(), "Fail to get rvv_intern_if!")
+`ifdef ZVT_ON
+  if(!uvm_config_db#(v_if5)::get(this, "", "vme_if", vme_if))
+    `uvm_fatal(get_type_name(), "Fail to get vme_if!")
+`endif
   if(uvm_config_db#(int)::get(this, "", "inst_tx_timeout_max", inst_tx_timeout_max))
     `uvm_info(get_type_name(), $sformatf("inst_tx_timeout_max is set to = %0d",inst_tx_timeout_max), UVM_LOW)
   else begin
@@ -108,6 +126,14 @@ function void rvs_monitor::final_phase(uvm_phase phase);
       `uvm_error("FINAL_CHECK",inst_rx_queue[idx].sprint())
     end
   end
+`ifdef ZVT_ON
+  if(zvt_vme_accepted != 0 || zvt_vmert_events != 0) begin
+    `uvm_info("FINAL_CHECK", $sformatf("Zvt: %0d instructions retire through vmeRt, %0d vmeRt records seen, %0d with an unexpected inst_pc.",
+                                       zvt_vme_accepted, zvt_vmert_events, zvt_rt_pc_mismatch), UVM_NONE)
+    if(zvt_vme_accepted != zvt_vmert_events)
+      `uvm_error("FINAL_CHECK", $sformatf("Zvt: %0d vmeRt records for %0d instructions.", zvt_vmert_events, zvt_vme_accepted))
+  end
+`endif
   uvm_config_db#(int)::set(uvm_root::get(), "", "rvv_total_inst", this.total_inst);
   uvm_config_db#(int)::set(uvm_root::get(), "", "rvv_excuted_inst", this.executed_inst);
   `uvm_info("FINAL_CHECK", $sformatf("RVV total accepted inst: %0d, executed inst: %0d, discarded %.2f%%", 
@@ -121,6 +147,9 @@ task rvs_monitor::run_phase(uvm_phase phase);
      rx_monitor();
      rx_timeout_monitor();
      idle_monitor();
+`ifdef ZVT_ON
+     zvt_flag_monitor();
+`endif
   join
 endtask: run_phase
 
@@ -180,6 +209,12 @@ task rvs_monitor::tx_monitor();
 `ifdef ZVE32F_ON
             inst_tr.frm = rvs_if.insts_rvs2cq[i].arch_state.frm;
 `endif
+`ifdef ZVT_ON
+            inst_tr.mtwiden = rvs_if.insts_rvs2cq[i].arch_state.mtwiden;
+            inst_tr.tm      = rvs_if.insts_rvs2cq[i].arch_state.tm;
+            inst_tr.tk      = rvs_if.insts_rvs2cq[i].arch_state.tk;
+            inst_tr.altfmt  = rvs_if.insts_rvs2cq[i].arch_state.altfmt;
+`endif
             inst_32[31:7] = rvs_if.insts_rvs2cq[i].bits;
             case(rvs_if.insts_rvs2cq[i].opcode)
               2'b00: inst_32[6:0] = 7'b000_0111; // LOAD
@@ -195,6 +230,11 @@ task rvs_monitor::tx_monitor();
 
             if(is_active) begin
               inst_tr.is_last_inst = inst_tx_queue[0].is_last_inst;
+`ifdef ZVT_ON
+              // The address of a tile load/store stays with the scalar LSU and never reaches the
+              // backend; take it from what the driver sent.
+              if(inst_tr.is_zvt_inst && inst_tr.alu_inst inside {VTLE, VTSE}) inst_tr.zt_base = inst_tx_queue[0].zt_base;
+`endif
               inst_tx_queue.pop_front();
             end
           end
@@ -204,6 +244,9 @@ task rvs_monitor::tx_monitor();
           if(inst_tr.reserve_inst_check()) begin
             `uvm_info(get_type_name(), $sformatf("Send transaction to mdl:\n%s", inst_tr.sprint()), UVM_HIGH)
             inst_ap.write(inst_tr); // write to mdl/lsu
+`ifdef ZVT_ON
+            if(inst_tr.is_zvt_vme) zvt_vme_accepted++;
+`endif
           end else begin 
             `uvm_info(get_type_name(), $sformatf("MON discarded inst:\n%s", inst_tr.sprint()), UVM_HIGH)
           end
@@ -264,6 +307,12 @@ task rvs_monitor::rx_monitor();
 `ifdef ZVE32F_ON
           inst_tr.frm = rvs_if.inst_pkg_cq2de[i].arch_state.frm;
 `endif
+`ifdef ZVT_ON
+          inst_tr.mtwiden = rvs_if.inst_pkg_cq2de[i].arch_state.mtwiden;
+          inst_tr.tm      = rvs_if.inst_pkg_cq2de[i].arch_state.tm;
+          inst_tr.tk      = rvs_if.inst_pkg_cq2de[i].arch_state.tk;
+          inst_tr.altfmt  = rvs_if.inst_pkg_cq2de[i].arch_state.altfmt;
+`endif
           inst_32[31:7] = rvs_if.inst_pkg_cq2de[i].bits;
           case(rvs_if.inst_pkg_cq2de[i].opcode)
             2'b00: inst_32[6:0] = 7'b000_0111; // LOAD
@@ -293,6 +342,52 @@ task rvs_monitor::rx_monitor();
           end
         end
       end
+
+`ifdef ZVT_ON
+      // Zvt instructions that bypass the ROB (matmuls, vtzero, vtmv.t.v, tile loads / stores) retire
+      // through vmeRt. The driver fences between the two retire paths, so the head of the queue is the
+      // instruction this event belongs to.
+      if(vme_if.vmeRtVld && vme_if.vmeRtRdy) begin
+        if(inst_rx_queue.size() == 0) begin
+          `uvm_error("TB_ISSUE", "vmeRt retire while inst_rx_queue is empty.")
+        end else if(!inst_rx_queue[0].is_zvt_vme) begin
+          `uvm_info(get_type_name(), $sformatf("vmeRt for an instruction that retires through the ROB (pc=0x%08x, mtIdxVld=%b); ignored.", inst_rx_queue[0].pc, vme_if.vmeRt.mtIdxVld), UVM_MEDIUM)
+        end else begin
+          rvs_transaction vtr;
+          vtr = inst_rx_queue.pop_front();
+          zvt_vmert_events++;
+`ifdef TB_SUPPORT
+          // The record must belong to the oldest outstanding Zvt instruction
+          if(vme_if.vmeRt.inst_pc !== vtr.pc[`PC_WIDTH-1:0]) begin
+            zvt_rt_pc_mismatch++;
+            `uvm_error("ZVT_RT_PC", $sformatf("vmeRt retires inst_pc=0x%08x, but the oldest outstanding Zvt instruction is pc=0x%08x (%s)",
+                                              vme_if.vmeRt.inst_pc, vtr.pc, vtr.asm_string))
+          end
+`endif
+          vtr.rt_mt_valid  = 1;
+          vtr.rt_mt_idxvld = vme_if.vmeRt.mtIdxVld;
+          vtr.rt_mt_idx    = vme_if.vmeRt.mtIdx;
+          vtr.fflags      |= {vme_if.vmeRt.status};
+          // slot i carries byte-tile mtIdx+i when mtIdxVld[i]
+          vtr.rt_mt_val = new[4 * `TE(`VLEN) * `TE(`VLEN)];
+          for(int i = 0; i < 4; i++) begin
+            if(vme_if.vmeRt.mtIdxVld[i]) begin
+              for(int s = 0; s < `NUM_SUBTILE(`VLEN); s++) begin
+                for(int b = 0; b < `SUBTILE_SIZE; b++) begin
+                  vtr.rt_mt_val[i * `TE(`VLEN) * `TE(`VLEN) + s * `SUBTILE_SIZE + b] = vme_if.vmeRt.mtData[i][s][b*8 +: 8];
+                end
+              end
+            end
+          end
+          vtr.is_rt = 1;
+          vtr.vxsat = '0;
+          vtr.vxsat_valid = '0;
+          `uvm_info(get_type_name(), $sformatf("Send vme rt transaction to scb: pc=0x%08x", vtr.pc), UVM_HIGH)
+          rt_ap.write(vtr);
+          this.executed_inst++;
+        end
+      end
+`endif
 
       // Collect retire info
       for(int rt_idx=0; rt_idx<`NUM_RT_UOP; rt_idx++) begin
@@ -451,7 +546,19 @@ task rvs_monitor::idle_monitor();
       end
     end else begin
       if(rvs_if.rvv_idle && inst_rx_queue.size() != 0) begin
+`ifdef ZVT_ON
+        // Known RTL finding: for Zvt instructions that retire through vmeRt, rvv_idle rises while the
+        // retire information is still held in the retire-command register stage and the mtInfo FIFOs
+        // (zvtBusy does not cover them), so the backend reports idle one instruction early.
+        // +zvt_waive_early_idle turns that case into a warning so the rest of the checking can run.
+        if(inst_rx_queue[0].is_zvt_vme && $test$plusargs("zvt_waive_early_idle")) begin
+          `uvm_warning("ZVT_IDLE_EARLY", $sformatf("rvv_idle is high while Zvt instruction pc=0x%08x has not retired yet.", inst_rx_queue[0].pc))
+        end else begin
+          `uvm_error(get_type_name(), $sformatf("Rvv in idle mode, but rvs monitor has instructions to wait for retire info."))
+        end
+`else
         `uvm_error(get_type_name(), $sformatf("Rvv in idle mode, but rvs monitor has instructions to wait for retire info."))
+`endif
       end
     end
   end
@@ -473,4 +580,43 @@ task rvs_monitor::get_rvv_state(output rvv_state_pkg::rvv_state_e rvv_state);
   else
     rvv_state = rvv_state_pkg::UNKNOW;
 endtask: get_rvv_state
+`ifdef ZVT_ON
+// Attribute the matrix unit's architectural FP flags (the ones that reach fcsr.fflags) to instructions.
+// The events carry no tag, so this works by time: everything that arrives between the acceptance of
+// one instruction and the next belongs to the first. That is only meaningful when every instruction is
+// fenced (+zvt_fence_all): then a flag arriving after the next instruction was accepted means the flag
+// reached fcsr after the backend had already gone idle, which the precise-state model does not allow.
+task rvs_monitor::zvt_flag_monitor();
+  logic [4:0]  acc;
+  int unsigned cur_pc;
+  bit          have_cur;
+  // the attribution is only checked (scoreboard final_phase) with every instruction fenced; don't
+  // build a per-instruction map otherwise
+  if(!$test$plusargs("zvt_fence_all")) return;
+  acc = '0;
+  have_cur = 0;
+  forever begin
+    @(posedge rvs_if.clk);
+    if(~rvs_if.rst_n) begin
+      acc = '0;
+      have_cur = 0;
+    end else begin
+      if(vme_if.zvt_fpexp_fire) acc |= {vme_if.zvt_fpexp};
+      for(int i = 0; i < `ISSUE_LANE; i++) begin
+        if(rvs_if.insts_valid_rvs2cq[i] && rvs_if.insts_ready_cq2rvs[i]) begin
+          if(have_cur) rvs_transaction::zvt_arch_flags[cur_pc] = acc;
+          acc = '0;
+`ifdef TB_SUPPORT
+          cur_pc = rvs_if.insts_rvs2cq[i].inst_pc;
+`else
+          cur_pc = 0;
+`endif
+          have_cur = 1;
+        end
+      end
+    end
+  end
+endtask: zvt_flag_monitor
+`endif
+
 `endif // RVS_MONITOR__SV

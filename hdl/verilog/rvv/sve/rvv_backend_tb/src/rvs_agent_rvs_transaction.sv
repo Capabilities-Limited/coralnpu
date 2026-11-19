@@ -50,6 +50,28 @@ class rvs_transaction extends uvm_sequence_item;
   rand vxrm_e            vxrm;
   rand logic [2:0]       frm;      // rounding mode of the OPF instruction (CSR frm)
 
+`ifdef ZVT_ON
+  /* Zvt (matrix extension). Zvt instructions are not randomised by the solver: zvt_build() sets every
+     field explicitly. The values below are the msetmtype / msettn state the instruction runs under. */
+  static bit zvt_en = 0;
+  // Architectural (fcsr) FP flags of each Zvt instruction, by pc, as the monitor attributes them; checked
+  // against the model by the scoreboard when every instruction is fenced (+zvt_fence_all).
+  static logic [4:0] zvt_arch_flags [int unsigned];
+       logic [1:0]   mtwiden = 2'b0; // mtype.mtwiden, 0: matrix unit not configured
+       int           tm;           // mtype.tm
+       int           tk;           // mtype.tk
+       bit           altfmt = 0;   // vtype.altfmt
+       int           zt_tile;      // tile specifier: TSS tile field (moves, loads, stores) or mtd (vtzero, matmuls)
+       int           zt_pattern;   // TSS pattern: 0 row, 1 column
+       int           zt_index;     // TSS index
+       int           zt_ew = 32;   // element width of vtle / vtse (TEW = EEW)
+       logic [31:0]  zt_base;      // vtle / vtse base address (the backend never sees it)
+       bit           fence_before; // the driver waits for the backend to go idle before sending this one
+       bit           is_zvt_inst;
+       bit           is_zvt_vme;   // retires through vmeRt rather than the ROB
+`endif
+
+
   /* Instruction description field */
   rand inst_type_e  inst_type;// opcode
 
@@ -157,6 +179,19 @@ class rvs_transaction extends uvm_sequence_item;
        reg_idx_t    rt_frf_index [$];     // vfmv.f.s
        xrf_t        rt_frf_data  [$];
        bit          is_fp_inst;
+
+`ifdef ZVT_ON
+  /* Zvt retire info */
+       bit               rt_mt_valid;                   // a vmeRt handshake was seen for this instruction
+       logic [3:0]       rt_mt_idxvld;
+       logic [3:0]       rt_mt_idx;
+       byte unsigned     rt_mt_val [];                  // DUT: the 4 retire slots' byte-tiles (mtIdx+slot), slot-major
+       // model: the destination tile after the instruction (see zvt_processor::snapshot)
+       int unsigned      exp_mt_ptile;                  // first byte-tile of the destination tile
+       int unsigned      exp_mt_nptile;                 // byte-tiles it occupies, 0: no tile destination
+       byte unsigned     exp_mt_val [];                 // all its bytes
+       bit               exp_mt_req [];                 // bytes the instruction wrote; the others must be unchanged
+`endif
 
 // Constrain -------------------------------------------------------------------
   constraint c_solve_order {
@@ -1049,6 +1084,13 @@ class rvs_transaction extends uvm_sequence_item;
   // Floating point (OPF*, Zve32f). The DUT decodes a subset of RVV 1.0 (see the legality rules in
   // reserve_inst_check): SEW=32 arithmetic and mask compares, fp32<->int32 conversions, int16 <-> fp32
   // widening/narrowing conversions, fp32 reductions, and the scalar moves.
+`ifdef ZVT_ON
+  constraint c_zvt {
+    // Zvt instructions come from zvt_build(), never from the solver
+    (inst_type == ALU) -> (alu_inst[7:6] != 2'b11);
+  }
+`endif
+
   constraint c_fp {
     // OPF encodings only exist when asked for
     if(!fp_en) {
@@ -1236,6 +1278,22 @@ class rvs_transaction extends uvm_sequence_item;
     `uvm_field_int(is_reduction_inst, UVM_ALL_ON)
     `uvm_field_int(is_permutation_inst, UVM_ALL_ON)
     `uvm_field_int(is_fp_inst, UVM_ALL_ON)
+`ifdef ZVT_ON
+    `uvm_field_int(is_zvt_inst, UVM_ALL_ON)
+    `uvm_field_int(is_zvt_vme, UVM_ALL_ON)
+    `uvm_field_int(fence_before, UVM_ALL_ON)
+    if(is_zvt_inst) begin
+      `uvm_field_int(mtwiden, UVM_ALL_ON)
+      `uvm_field_int(tm, UVM_ALL_ON)
+      `uvm_field_int(tk, UVM_ALL_ON)
+      `uvm_field_int(altfmt, UVM_ALL_ON)
+      `uvm_field_int(zt_tile, UVM_ALL_ON)
+      `uvm_field_int(zt_pattern, UVM_ALL_ON)
+      `uvm_field_int(zt_index, UVM_ALL_ON)
+      `uvm_field_int(zt_ew, UVM_ALL_ON)
+      `uvm_field_int(zt_base, UVM_ALL_ON)
+    end
+`endif
 
     // retire info
     if(is_rt) begin
@@ -1290,6 +1348,16 @@ class rvs_transaction extends uvm_sequence_item;
   extern function bit reserve_inst_check();
   extern protected function void asm_string_gen();
   extern function bit compare_inst(ref rvs_transaction inst);
+`ifdef ZVT_ON
+  // Zvt, defined in rvs_agent_rvs_transaction_zvt.sv
+  extern function void zvt_build(alu_inst_e inst, int sew_bits, int mtwiden_v, int tm_v, int vl_v, int tk_v,
+                                 bit altfmt_v, int tile, int vd_or_vs2, int vs1_or_none, int pattern, int index,
+                                 int vstart_v = 0, int base_reg_rs1 = 5, logic [31:0] base = 32'h0, int ew = 32);
+  extern function void zvt_tr2bin();
+  extern function bit  zvt_bin2tr(logic [31:0] inst_in, logic [`XLEN-1:0] rs_data);
+  extern function bit  zvt_check();
+  extern function void zvt_asm();
+`endif
 
 endclass: rvs_transaction
 
@@ -1405,6 +1473,11 @@ endfunction: tr2bin
 
 function bit rvs_transaction::bin2tr(logic [31:0] inst_in, logic [`XLEN-1:0] rs_data);
   bin_inst = inst_in;
+
+`ifdef ZVT_ON
+  // Zvt instructions have their own decode
+  if(zvt_bin2tr(inst_in, rs_data)) return 0;
+`endif
 
   // decode bin field
   inst_type = bin_inst[6:0];
@@ -2166,6 +2239,10 @@ endfunction: overlap_unalign_correct
 
 function bit rvs_transaction::reserve_inst_check();
   enum bit {FAIL = 0, PASS = 1} __sta;
+
+`ifdef ZVT_ON
+  if(is_zvt_inst) return zvt_check();
+`endif
 
 // vl/evl/vstart check -------------------------------------
   if((vl > vlmax_max)) begin
@@ -2950,6 +3027,9 @@ function void rvs_transaction::asm_string_gen();
   string sufd = "";
   string operands = "";
   string comm = "# an example";
+`ifdef ZVT_ON
+  if(is_zvt_inst) begin zvt_asm(); return; end
+`endif
   // Inst name
   case(inst_type)
     LD, ST: begin
@@ -3263,4 +3343,8 @@ function bit rvs_transaction::compare_inst(ref rvs_transaction inst);
   return (same_vcsr && same_bin_inst && same_rs);
     
 endfunction: compare_inst
+`ifdef ZVT_ON
+`include "rvs_agent_rvs_transaction_zvt.sv"
+`endif
+
 `endif // RVS_TRANSACTION__SV

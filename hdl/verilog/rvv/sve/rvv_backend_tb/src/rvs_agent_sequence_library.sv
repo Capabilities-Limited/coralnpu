@@ -2148,6 +2148,9 @@ class rvs_last_sequence extends base_sequence;
       req = new("req");
       start_item(req);
       req.is_last_inst = 1;
+`ifdef ZVT_ON
+      req.fence_before = 1;   // must not overtake Zvt instructions that retire through vmeRt
+`endif
       assert(req.randomize() with {
         use_vlmax == 1;
 
