@@ -38,6 +38,11 @@ class rvs_driver extends uvm_driver # (rvs_transaction);
   delay_mode_pkg::delay_mode_e       delay_mode_vcsr_ready;
 
   trap_info_transaction trap_queue [$];
+`ifdef ZVT_ON
+  // fence support: a transaction with fence_before waits here until the backend has drained
+  rvs_transaction held_tr;
+  int unsigned    idle_cnt;
+`endif
   int unsigned    vcsr_ready_delay;
   int unsigned    gen_inst_after_trap;
 
@@ -158,7 +163,19 @@ task rvs_driver::inst_manage();
       break;
     end
     //seq_item_port.get_next_item(tr);
+`ifdef ZVT_ON
+    if(held_tr != null) tr = held_tr;
+    else                seq_item_port.try_next_item(tr);
+    if(tr != null && tr.fence_before && !(inst_tx_queue.size() == 0 && idle_cnt >= 8)) begin
+      // Zvt: instructions that retire through a different path than the previous ones must not overtake
+      // them, so wait for the backend to go idle first.
+      held_tr = tr;
+      break;
+    end
+    held_tr = null;
+`else
     seq_item_port.try_next_item(tr);
+`endif
     if(tr != null) begin
       `uvm_info(get_type_name(), $sformatf("Get item from rvs_sqr:\n%s",tr.sprint()),UVM_HIGH)
       inst_tx_queue.push_back(tr);
@@ -194,6 +211,12 @@ task rvs_driver::inst_manage();
       assert($cast(inst[i].arch_state.lmul, inst_tx_queue[i].vlmul));
       // The LSU/ARI decode units read lmul_orig (the architectural vtype LMUL).
       assert($cast(inst[i].arch_state.lmul_orig, inst_tx_queue[i].vlmul));
+`ifdef ZVT_ON
+      inst[i].arch_state.altfmt     = inst_tx_queue[i].altfmt;
+      inst[i].arch_state.mtwiden    = inst_tx_queue[i].mtwiden;
+      inst[i].arch_state.tm         = inst_tx_queue[i].tm;
+      inst[i].arch_state.tk         = inst_tx_queue[i].tk;
+`endif
 `ifdef ZVE32F_ON
       inst[i].arch_state.frm        = RVFRM_e'(inst_tx_queue[i].frm);
 `endif
@@ -211,6 +234,10 @@ task rvs_driver::tx_driver();
   tr = new();
   forever begin
     @(posedge rvs_if.clk);
+`ifdef ZVT_ON
+    if(rvs_if.rvv_idle === 1'b1 && inst_tx_queue.size() == 0) idle_cnt++;
+    else                                                       idle_cnt = 0;
+`endif
     if(~rvs_if.rst_n) begin
       inst_tx_queue.delete();
       for(int i=0; i<`ISSUE_LANE; i++) begin

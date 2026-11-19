@@ -41,6 +41,14 @@ module rvv_backend_top();
   vrf_interface vrf_if(clk,rst_n);
 
   rvv_intern_interface rvv_intern_if(clk,rst_n);
+`ifdef ZVT_ON
+  vme_interface vme_if(clk,rst_n);
+`endif
+`ifdef ZVT_ON
+  // the matrix unit's floating-point flags on their way to fcsr (zvt_pe_array -> retire -> rt2fcsr)
+  assign vme_if.zvt_fpexp_fire = DUT.zvtFpexpVld & DUT.zvtFpexpRdy;
+  assign vme_if.zvt_fpexp      = DUT.zvtFpexp;
+`endif
   
   rvv_backend_tb_mod test(); 
   
@@ -69,6 +77,23 @@ module rvv_backend_top();
     .uop_lsu_valid_lsu2rvv    (lsu_if.uop_lsu_valid_lsu2rvv ),
     .uop_lsu_lsu2rvv          (lsu_if.uop_lsu_lsu2rvv       ),
     .uop_lsu_ready_rvv2lsu    (lsu_if.uop_lsu_ready_rvv2lsu ),
+
+`ifdef ZVT_ON
+    // Zvt (VME) side: tile store data out, tile load data in, retire information
+    .uop_vme2lsu_vld          (vme_if.uop_vme2lsu_vld       ),
+    .uop_vme2lsu              (vme_if.uop_vme2lsu           ),
+    .uop_vme2lsu_rdy          (vme_if.uop_vme2lsu_rdy       ),
+
+    .uop_lsu2vme_vld          (vme_if.uop_lsu2vme_vld       ),
+    .uop_lsu2vme              (vme_if.uop_lsu2vme           ),
+    .uop_lsu2vme_rdy          (vme_if.uop_lsu2vme_rdy       ),
+    .vme_lsuflush_vld         (vme_if.vme_lsuflush_vld      ),
+    .vme_lsuflush_rdy         (vme_if.vme_lsuflush_rdy      ),
+
+    .vmeRtVld                 (vme_if.vmeRtVld              ),
+    .vmeRt                    (vme_if.vmeRt                 ),
+    .vmeRtRdy                 (vme_if.vmeRtRdy              ),
+`endif
 
     
     .trap_valid_rvs2rvv       (lsu_if.trap_valid_rvs2rvv    ),

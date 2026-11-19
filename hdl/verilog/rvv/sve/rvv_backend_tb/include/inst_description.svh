@@ -4,6 +4,9 @@
 `include "rvv_backend_define.svh"
 `include "rvv_backend.svh"
 `include "rvv_softfloat.svh"
+`ifdef ZVT_ON
+`include "rvv_zvt_model.svh"
+`endif
 
 // TB status description ------------------------------------
 package vrf_mon_pkg;
@@ -334,6 +337,19 @@ typedef enum logic [7:0] {
   VWFUNARY0       =   8'b10_010_000,  // OPFVV: vfmv.f.s;  OPFVF: vfmv.s.f
   VFSLIDE1UP      =   8'b10_001_110,
   VFSLIDE1DOWN    =   8'b10_001_111,
+
+`ifdef ZVT_ON
+  // Zvt (Vector Matrix Extension). alu_inst[7:6] == 2'b11 marks the matrix class. The real encodings
+  // are built by rvs_transaction::zvt_tr2bin (see rvs_agent_rvs_transaction_zvt.sv).
+  VTMMU           =   8'b11_000_000,  // int8 matmul, vs2 unsigned
+  VTMMS           =   8'b11_000_001,  // int8 matmul, vs2 signed
+  VTFMM           =   8'b11_000_010,  // FP matmul (altfmt in vtype)
+  VTMV_V_T        =   8'b11_000_011,  // tile subset -> vector register group
+  VTMV_T_V        =   8'b11_000_100,  // vector register group -> tile subset
+  VTZERO          =   8'b11_000_101,
+  VTLE            =   8'b11_000_110,  // tile subset load
+  VTSE            =   8'b11_000_111,  // tile subset store
+`endif
 
   ALU_UNUSE_INST  =   8'b11_111_111
 } alu_inst_e;

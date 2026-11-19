@@ -16,9 +16,14 @@
 `include "lsu_agent_lsu_driver.sv"
 `include "lsu_agent.sv"
 
+`include "vme_agent_vme_driver.sv"
+
 `include "rvv_behavior_model.sv" 
 
 
 `include "rvv_inst_sequence_library.sv"
 `include "rvv_zve32x_inst_sequences.sv"
 `include "rvv_fp_sequences.sv"
+`ifdef ZVT_ON
+`include "rvv_zvt_sequences.sv"
+`endif

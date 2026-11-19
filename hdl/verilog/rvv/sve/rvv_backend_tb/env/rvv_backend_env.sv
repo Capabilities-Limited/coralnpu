@@ -7,6 +7,9 @@ class rvv_backend_env extends uvm_env;
   rvv_scoreboard scb;
   rvs_agent rvs_agt;
   lsu_agent lsu_agt;
+`ifdef ZVT_ON
+  vme_driver vme_drv;
+`endif
   rvv_cov cov;
   
   rvv_behavior_model mdl;
@@ -33,6 +36,9 @@ function void rvv_backend_env::build_phase(uvm_phase phase);
   super.build_phase(phase);
   rvs_agt = rvs_agent::type_id::create("rvs_agt",this); 
   lsu_agt = lsu_agent::type_id::create("lsu_agt",this);
+`ifdef ZVT_ON
+  vme_drv = vme_driver::type_id::create("vme_drv",this);
+`endif
  
   cov = rvv_cov::type_id::create("cov",this); //Instantiating the coverage class
 
@@ -46,6 +52,11 @@ function void rvv_backend_env::connect_phase(uvm_phase phase);
   // ref_mdl ap
   rvs_agt.rvs_mon.inst_ap.connect(mdl.inst_imp);
   rvs_agt.rvs_mon.inst_ap.connect(lsu_agt.lsu_drv.inst_imp);
+`ifdef ZVT_ON
+  // Zvt tile loads / stores: the VME LSU shares the LSU-side memory
+  rvs_agt.rvs_mon.inst_ap.connect(vme_drv.inst_imp);
+  vme_drv.mem = lsu_agt.lsu_drv.mem;
+`endif
   // rvs_agt.rvs_drv.inst_ap.connect(mdl.inst_imp);
   rvs_agt.rvs_drv.vrf_state_port.connect(rvs_agt.vrf_mon.vrf_state_imp);
   rvs_agt.rvs_drv.rvv_state_port.connect(rvs_agt.rvs_mon.rvv_state_imp);

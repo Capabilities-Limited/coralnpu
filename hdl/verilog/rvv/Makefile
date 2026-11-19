@@ -61,6 +61,18 @@ MASK_TAIL_TAG   := $(MASK_TAIL_LOGIC)-$(MASK_TAIL_SET)-$(MASK_TAIL_CMP)-$(MASK_T
 #   FOF_SEGMENT:    a fault inside a segment of a segment load: whole | partial
 FOF_POST_FAULT  ?= not_updated
 FOF_SEGMENT     ?= whole
+# Zvt tile tail policy the model follows (ZVT=1 only). The tile tails are agnostic, so each element may be
+# left undisturbed or overwritten with all 1s; the model follows one, per instruction class:
+#   undisturbed | all_ones
+# TILE_TAIL sets every class at once; TILE_TAIL_MM (vtmmu/vtmms/vtfmm: mtd outside tm x tn),
+# TILE_TAIL_ZERO (vtzero: mtd outside tm x tn), TILE_TAIL_MV (vtmv.t.v: tile subset elements past
+# min(vl, ETE)) and TILE_TAIL_LD (vtle: likewise) override one class. See include/rvv_zvt_model.svh.
+TILE_TAIL       ?=
+TILE_TAIL_MM    ?= $(or $(TILE_TAIL),undisturbed)
+TILE_TAIL_ZERO  ?= $(or $(TILE_TAIL),undisturbed)
+TILE_TAIL_MV    ?= $(or $(TILE_TAIL),undisturbed)
+TILE_TAIL_LD    ?= $(or $(TILE_TAIL),undisturbed)
+TILE_TAIL_TAG   := $(TILE_TAIL_MM)-$(TILE_TAIL_ZERO)-$(TILE_TAIL_MV)-$(TILE_TAIL_LD)
 # FP=1 builds the Zve32f floating point backend (ZVE32F_ON). The FP units wrap CVFPU (fpnew); its RTL,
 # and that of common_cells and fpu_div_sqrt_mvp, is fetched with Bender (see Bender.yml, Bender.local
 # and Bender.lock). Needs `bender` on PATH, or BENDER=<path>, and network access on the first run.
@@ -99,7 +111,7 @@ DESIGN_PATH := $(RVV_ROOT)/design
 STD_PATH    := $(RVV_ROOT)/common
 RTL_INC_DIR := $(RVV_ROOT)/inc
 TB_PATH     := $(RVV_ROOT)/sve/rvv_backend_tb
-BUILD_PATH  := $(RVV_ROOT)/build/$(scfg)$(if $(filter-out VLEN_128,$(VLEN_DEFINE)),_vlen$(VLEN_DEFINE:VLEN_%=%))$(if $(filter 1,$(FP)),_fp)$(if $(filter 1,$(ZVT)),_zvt)$(if $(filter 1,$(TRACE)),_trace)$(if $(filter-out calculated-undisturbed-undisturbed-undisturbed,$(MASK_TAIL_TAG)),_tail_$(MASK_TAIL_TAG))$(if $(filter-out not_updated-whole,$(FOF_POST_FAULT)-$(FOF_SEGMENT)),_fof_$(FOF_POST_FAULT)-$(FOF_SEGMENT))
+BUILD_PATH  := $(RVV_ROOT)/build/$(scfg)$(if $(filter-out VLEN_128,$(VLEN_DEFINE)),_vlen$(VLEN_DEFINE:VLEN_%=%))$(if $(filter 1,$(FP)),_fp)$(if $(filter 1,$(ZVT)),_zvt)$(if $(filter 1,$(TRACE)),_trace)$(if $(filter-out calculated-undisturbed-undisturbed-undisturbed,$(MASK_TAIL_TAG)),_tail_$(MASK_TAIL_TAG))$(if $(filter-out not_updated-whole,$(FOF_POST_FAULT)-$(FOF_SEGMENT)),_fof_$(FOF_POST_FAULT)-$(FOF_SEGMENT))$(if $(filter-out undisturbed-undisturbed-undisturbed-undisturbed,$(TILE_TAIL_TAG)),_ttail_$(TILE_TAIL_TAG))
 TB_TOP      := rvv_backend_top
 
 # ------------------------------------------------------------------
@@ -169,7 +181,14 @@ $(if $(filter $(FOF_POST_FAULT),not_updated loaded),,$(error FOF_POST_FAULT must
 $(if $(filter $(FOF_SEGMENT),whole partial),,$(error FOF_SEGMENT must be whole or partial, got '$(FOF_SEGMENT)'))
 FOF_DEFINES := RVV_TB_FOF_POST_FAULT=$(if $(filter $(FOF_POST_FAULT),loaded),1,0) \
                RVV_TB_FOF_SEGMENT=$(if $(filter $(FOF_SEGMENT),partial),1,0)
-DEFINES := $(RTL_DEFINES) $(VLEN_DEFINE) $(MASK_TAIL_DEFINES) $(FOF_DEFINES)
+$(foreach v,TILE_TAIL_MM TILE_TAIL_ZERO TILE_TAIL_MV TILE_TAIL_LD,$(if $(filter $($(v)),undisturbed all_ones),,$(error $(v) must be undisturbed or all_ones, got '$($(v))')))
+# Policy names map to the tile_tail_policy_e values used by the testbench: 0, 1.
+tile_tail_num = $(if $(filter $(1),all_ones),1,0)
+TILE_TAIL_DEFINES := RVV_TB_TILE_TAIL_MM=$(call tile_tail_num,$(TILE_TAIL_MM)) \
+                     RVV_TB_TILE_TAIL_ZERO=$(call tile_tail_num,$(TILE_TAIL_ZERO)) \
+                     RVV_TB_TILE_TAIL_MV=$(call tile_tail_num,$(TILE_TAIL_MV)) \
+                     RVV_TB_TILE_TAIL_LD=$(call tile_tail_num,$(TILE_TAIL_LD))
+DEFINES := $(RTL_DEFINES) $(VLEN_DEFINE) $(MASK_TAIL_DEFINES) $(FOF_DEFINES) $(TILE_TAIL_DEFINES)
 
 # ------------------------------------------------------------------
 # Verilator invocation
@@ -255,7 +274,11 @@ lint: $(BUILD_PATH)/lint.f
 UVM_DPI_SRCS  := $(UVM_HOME)/src/dpi/uvm_dpi.cc
 UVM_DPI_FLAGS := --vpi -CFLAGS -I$(UVM_HOME)/src/dpi
 
-$(BUILD_PATH)/obj_dir/V$(TB_TOP): $(BUILD_PATH)/rtl.f $(BUILD_PATH)/tb.f
+# The testbench is mostly `included from its include directories, so every source there is a
+# dependency of the simulator, not only the files named in the file lists.
+TB_DEPS := $(foreach d,$(TB_INCDIRS),$(wildcard $(d)/*.sv $(d)/*.svh $(d)/*.incl))
+
+$(BUILD_PATH)/obj_dir/V$(TB_TOP): $(BUILD_PATH)/rtl.f $(BUILD_PATH)/tb.f $(TB_DEPS) $(RTL_FILES) $(wildcard $(RTL_INC_DIR)/*.svh)
 	@test -n "$(UVM_HOME)" || { echo "error: set UVM_HOME to a UVM tree containing src/uvm_pkg.sv"; exit 1; }
 	@# uvm_pkg.sv must come first so the UVM macros are defined for the testbench
 	@# (VCS gets this implicitly from -ntb_opts uvm).
