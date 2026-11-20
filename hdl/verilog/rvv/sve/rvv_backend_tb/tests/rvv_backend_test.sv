@@ -150,6 +150,7 @@ endclass: rvv_backend_test
 class tb_debug_test extends rvv_backend_test;
 
   zero_seq rvs_seq;
+  rvs_last_sequence rvs_last_seq;
 
   `uvm_component_utils(tb_debug_test)
 
@@ -176,6 +177,8 @@ class tb_debug_test extends rvv_backend_test;
     rvs_seq = zero_seq::type_id::create("rvs_seq", this);
     rvs_seq.start(env.rvs_agt.rvs_sqr);
 
+    rvs_last_seq = rvs_last_sequence::type_id::create("rvs_last_seq", this);
+    rvs_last_seq.start(env.rvs_agt.rvs_sqr);
 
     `uvm_info(get_type_name(), "Complete test ...", UVM_LOW)
   endtask
@@ -200,6 +203,7 @@ class alu_smoke_test extends rvv_backend_test;
   alu_smoke_vmunary0_seq rvs_vmunary0_seq;
   alu_smoke_vwxunary0_seq rvs_vwxunary0_seq;
   alu_smoke_vred_seq rvs_vred_seq;
+  rvs_last_sequence rvs_last_seq;
 
   `uvm_component_utils(alu_smoke_test)
 
@@ -320,7 +324,7 @@ class alu_smoke_test extends rvv_backend_test;
     if($test$plusargs("case11") || $test$plusargs("all_case")) begin
       rvs_vv_seq.run_inst(VWMACCU , env.rvs_agt.rvs_sqr);
       rvs_vv_seq.run_inst(VWMACC  , env.rvs_agt.rvs_sqr);
-      rvs_vv_seq.run_inst(VWMACCUS, env.rvs_agt.rvs_sqr);
+      rvs_vx_seq.run_inst(VWMACCUS, env.rvs_agt.rvs_sqr);
       rvs_vv_seq.run_inst(VWMACCSU, env.rvs_agt.rvs_sqr);
     end
 
@@ -396,6 +400,8 @@ class alu_smoke_test extends rvv_backend_test;
     // Last inst  
     rvs_vv_seq.run_inst(VAND, env.rvs_agt.rvs_sqr);
 
+    rvs_last_seq = rvs_last_sequence::type_id::create("rvs_last_seq", this);
+    rvs_last_seq.start(env.rvs_agt.rvs_sqr);
 
   endtask
 

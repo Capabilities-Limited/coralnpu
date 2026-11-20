@@ -8,7 +8,7 @@ SHELL := /usr/bin/env
 # ------------------------------------------------------------------
 RVV_WORKSPACE = $(shell pwd | sed 's/\(\S\+\)\/hdl\/verilog\/rvv/\1/')
 scfg ?= rvv_backend
-test ?= tb_debug_test
+test ?= alu_smoke_test
 PROJECT_NAME = rvv_backend_tb
 
 # ------------------------------------------------------------------

@@ -41,7 +41,7 @@ else
 # ------------------------------------------------------------------
 VERILATOR ?= verilator
 scfg      ?= rvv_backend
-test      ?= tb_debug_test
+test      ?= alu_smoke_test
 VLEN_DEFINE ?= VLEN_128
 # Mask-result tail policy the model follows (RVV spec 3.4.3), per instruction class:
 #   undisturbed | all_ones | calculated

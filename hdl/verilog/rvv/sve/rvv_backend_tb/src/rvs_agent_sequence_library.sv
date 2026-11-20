@@ -333,9 +333,7 @@ class alu_smoke_vmunary0_seq extends base_sequence;
 
         inst_type == ALU;
         alu_inst == local::alu_inst;
-        (src1_idx inside {VIOTA}) -> 
-          (dest_type == XRF);
-        (src1_idx inside {VMSBF, VMSOF, VMSIF, VID}) -> 
+        (src1_idx inside {VMSBF, VMSOF, VMSIF, VIOTA, VID}) -> 
           (dest_type == VRF && dest_idx == 16);
         (src1_idx == VID) -> (src2_type == UNUSE);
         (src1_idx == VID) -> (src2_idx dist{0 := 9, 1 := 1});
