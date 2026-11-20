@@ -10,6 +10,7 @@
 module handshake_multistage_ctrl#(
   parameter int unsigned NUM_PIPE_REGS = 1,  // Pipeline length
   parameter REMV_PIPE_BUBBLE = 0,            // See above
+  parameter LOCKSTEP = 0,                    // 1: shift only on down_ready, ignore this pipeline's own bubbles
 
   localparam int unsigned N = NUM_PIPE_REGS  // for simplicity
 ) (
@@ -55,7 +56,7 @@ module handshake_multistage_ctrl#(
     // If no need to remove bubbles, the pipeline will be treated as a shift register
     // Attention to fanout
     logic can_shift;
-    assign can_shift = pip_ready[NUM_PIPE_REGS] | ~pip_valid[NUM_PIPE_REGS];
+    assign can_shift = LOCKSTEP ? pip_ready[NUM_PIPE_REGS] : (pip_ready[NUM_PIPE_REGS] | ~pip_valid[NUM_PIPE_REGS]);
     // keep pip_ready for waveform compability
     assign pip_ready[NUM_PIPE_REGS-1:0] = {NUM_PIPE_REGS{can_shift}};
     cdffr #(.T(logic[NUM_PIPE_REGS-1:0])) valid_shift_reg(.q(pip_valid[N:1]), .d(pip_valid[N-1:0]), .c(flush), .e(can_shift), .clk(clk), .rst_n(rst_n));
