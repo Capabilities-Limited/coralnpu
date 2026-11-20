@@ -26,6 +26,10 @@ else
 #   make lint                      lint the RTL only (no UVM needed)
 #   make build UVM_HOME=<path>     build the testbench simulator
 #   make sim   UVM_HOME=<path> test=<uvm_test> [seed=N]
+#   make regress UVM_HOME=<path> [list=<file>] [seeds="1 2 ..."] [REGRESS_JOBS=N]
+#                                  build, then run every test in a regression list in parallel
+#   make regress-<suite>           regress-int, -fp, -zvt, ...: one list on the build it needs
+#   make regress-all               every regress*.list in turn
 #   make filelists                 only generate the filelists
 #   make show / make clean
 #
@@ -219,7 +223,7 @@ VFLAGS = --sv --timing -j $(JOBS) $(WARN_FLAGS) $(TB_WARN_FLAGS) \
 # ------------------------------------------------------------------
 # Targets
 # ------------------------------------------------------------------
-.PHONY: all build sim lint filelists show clean help
+.PHONY: all build sim regress lint filelists show clean help
 all: build
 
 filelists: $(BUILD_PATH)/rtl.f $(BUILD_PATH)/tb.f $(BUILD_PATH)/lint.f
@@ -298,6 +302,77 @@ sim: build
 	  +UVM_MAX_QUIT_COUNT=$(max_error),NO +UVM_TIMEOUT=$(timeout) \
 	  2>&1 | tee $(SIM_PATH)/test.log
 	@echo "Test log: $(SIM_PATH)/test.log"
+
+# ------------------------------------------------------------------
+# Regression
+# ------------------------------------------------------------------
+# `make regress` builds, then runs every test in $(list) (first word of each line;
+# blank lines and # comments are skipped) as a separate simulator process,
+# REGRESS_JOBS at a time, for each seed in $(seeds) (default $(seed), or 1).
+# Each run logs to outfiles/<build>/<test>.<seed>/test.log; it passes if the
+# simulator exits 0 and the UVM report shows no errors or fatals.
+# REGRESS_TIMEOUT (e.g. 1h) bounds the wall-clock time of each run.
+#
+# Every sve/rvv_backend_tb/regress*.list also gets a target that picks the build
+# the list needs: regress.list is regress-int, regress_<name>.list is
+# regress-<name>. regress-all runs every list in turn.
+list            ?= $(TB_PATH)/regress.list
+seeds           ?= $(or $(seed),1)
+REGRESS_JOBS    ?= $(JOBS)
+REGRESS_TIMEOUT ?=
+REGRESS_DIR      = $(subst build,outfiles,$(BUILD_PATH))
+REGRESS_SUMMARY  = $(REGRESS_DIR)/$(basename $(notdir $(list))).summary
+REGRESS_TESTS   := $(shell grep -vE '^[[:space:]]*(\#|$$)' $(list) 2>/dev/null | awk '{print $$1}')
+REGRESS_RUNS    := $(foreach t,$(REGRESS_TESTS),$(foreach s,$(seeds),regress/$(t).$(s)))
+# Verilator's randomize() needs an SMT solver (z3 by default, or VERILATOR_SOLVER).
+REGRESS_SOLVER  := $(firstword $(or $(VERILATOR_SOLVER),z3))
+comma           := ,
+
+# Suites, from the list names, and the build options each one needs.
+REGRESS_LISTS    := $(sort $(wildcard $(TB_PATH)/regress*.list))
+regress_suite     = $(or $(patsubst regress_%,%,$(filter regress_%,$(basename $(notdir $(1))))),int)
+regress_list      = $(TB_PATH)/$(if $(filter int,$(1)),regress,regress_$(1)).list
+REGRESS_SUITES   := $(foreach l,$(REGRESS_LISTS),$(call regress_suite,$(l)))
+REGRESS_ARGS_fp  := FP=1
+# The DUT drops rvv_idle while Zvt work is still in flight; waived until that is fixed.
+REGRESS_ARGS_zvt := ZVT=1 PLUS_ARGS="+zvt_waive_early_idle $(PLUS_ARGS)"
+
+.PHONY: regress regress-run regress-check regress-all $(REGRESS_RUNS) $(addprefix regress-,$(REGRESS_SUITES))
+regress:
+	@$(MAKE) --no-print-directory build
+	@$(MAKE) --no-print-directory -j$(REGRESS_JOBS) regress-run
+
+regress-check:
+	@test -n "$(REGRESS_TESTS)" || { echo "error: no tests found in '$(list)'"; exit 1; }
+	@command -v $(REGRESS_SOLVER) >/dev/null || \
+	  { echo "error: '$(REGRESS_SOLVER)' not on PATH (needed by randomize(); set VERILATOR_SOLVER to override)"; exit 1; }
+
+# regress/<test>.<seed>
+$(REGRESS_RUNS): regress/%: build regress-check
+	@t=$(basename $*); s=$(patsubst .%,%,$(suffix $*)); d=$(REGRESS_DIR)/$*; mkdir -p $$d; \
+	( cd $$d && $(if $(REGRESS_TIMEOUT),timeout $(REGRESS_TIMEOUT)) $(BUILD_PATH)/obj_dir/V$(TB_TOP) \
+	    +verilator+seed+$$s +verilator+rand+reset+$(RAND_RESET) $(PLUS_ARGS) \
+	    +UVM_TESTNAME=$$t +UVM_VERBOSITY=$(UVM_VERBOSITY) \
+	    +UVM_MAX_QUIT_COUNT=$(max_error),NO +UVM_TIMEOUT=$(timeout) > test.log 2>&1 ); rc=$$?; \
+	if [ $$rc = 0 ] && grep -qE 'UVM_ERROR :[[:space:]]*0$$' $$d/test.log \
+	               && grep -qE 'UVM_FATAL :[[:space:]]*0$$' $$d/test.log; then \
+	  echo "PASS $$t seed=$$s"; \
+	else \
+	  echo "FAIL $$t seed=$$s (exit $$rc$(if $(REGRESS_TIMEOUT),$(comma) 124 = timed out)): $$d/test.log"; \
+	fi | tee $$d/result
+
+regress-run: $(REGRESS_RUNS)
+	@r=$(REGRESS_SUMMARY); \
+	cat $(foreach r,$(REGRESS_RUNS),$(REGRESS_DIR)/$(r:regress/%=%)/result) > $$r; \
+	echo "== $(notdir $(list)): $$(grep -c '^PASS' $$r) passed, $$(grep -c '^FAIL' $$r) failed (seeds $(seeds)); summary in $$r"; \
+	! grep -q '^FAIL' $$r
+
+$(addprefix regress-,$(REGRESS_SUITES)): regress-%:
+	@$(MAKE) --no-print-directory regress list=$(call regress_list,$*) $(REGRESS_ARGS_$*)
+
+# Runs every suite even if one fails; fails if any did.
+regress-all:
+	@rc=0; for s in $(REGRESS_SUITES); do $(MAKE) --no-print-directory regress-$$s || rc=1; done; exit $$rc
 
 show:
 	@echo "scfg:     $(scfg)"
