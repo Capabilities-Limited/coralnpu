@@ -8,7 +8,7 @@ interface rvv_intern_interface (input bit clk, input bit rst_n);
 
 // ROB to Retire
   logic    [`NUM_RT_UOP-1:0]  rob2rt_write_valid;
-  ROB2RT_t [`NUM_RT_UOP-1:0]  rob2rt_write_data;
+  `ROB2RT_t(VLEN, PC_WIDTH) [`NUM_RT_UOP-1:0]  rob2rt_write_data;
   logic    [`NUM_RT_UOP-1:0]  rt2rob_write_ready;
 
 // Decode to UOPs queue
@@ -38,6 +38,7 @@ interface rvv_intern_interface (input bit clk, input bit rst_n);
 // FIFO empty/full signals
   /* CMD queue */
   logic cmd_q_full, cmd_q_empty;
+  logic lcmd_q_empty;  // load/store/arith cmd queue between DE1 and DE2
 
   /* UOPs queue */
   logic uop_q_full, uop_q_empty;
@@ -71,7 +72,7 @@ interface rvv_intern_interface (input bit clk, input bit rst_n);
   logic                           vcsr_ready;
 
   function bit rvv_is_idle();
-    rvv_is_idle = cmd_q_empty && !(|cmdq_push) &&
+    rvv_is_idle = cmd_q_empty && lcmd_q_empty && !(|cmdq_push) &&
                   uop_q_empty &&
                   alu_rs_empty &&
                   mul_rs_empty &&

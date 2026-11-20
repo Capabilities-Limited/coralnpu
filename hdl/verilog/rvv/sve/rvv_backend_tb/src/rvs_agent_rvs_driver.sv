@@ -25,7 +25,7 @@ class rvs_driver extends uvm_driver # (rvs_transaction);
   
   int             inst_tx_queue_depth = 4;
   rvs_transaction inst_tx_queue[$];
-  RVVCmd          inst     [`ISSUE_LANE-1:0];
+  `CMD_t(`VLEN, `XLEN, `PC_WIDTH) inst     [`ISSUE_LANE-1:0];
   logic           inst_vld [`ISSUE_LANE-1:0];
   bit             stall_tx;
 
@@ -38,6 +38,11 @@ class rvs_driver extends uvm_driver # (rvs_transaction);
   delay_mode_pkg::delay_mode_e       delay_mode_vcsr_ready;
 
   trap_info_transaction trap_queue [$];
+`ifdef ZVT_ON
+  // fence support: a transaction with fence_before waits here until the backend has drained
+  rvs_transaction held_tr;
+  int unsigned    idle_cnt;
+`endif
   int unsigned    vcsr_ready_delay;
   int unsigned    gen_inst_after_trap;
 
@@ -119,6 +124,10 @@ task rvs_driver::reset_phase(uvm_phase phase);
       rvs_if.rt_xrf_ready_rvs2rvv[i] <= '0;
     end
     rvs_if.wr_vxsat_ready <= '0;
+`ifdef ZVE32F_ON
+    rvs_if.async_frd_ready <= '0;
+    rvs_if.fcsr2rt_write_ready <= '0;
+`endif
     @(posedge rvs_if.clk);
   end
   phase.drop_objection( .obj( this ) );
@@ -154,7 +163,19 @@ task rvs_driver::inst_manage();
       break;
     end
     //seq_item_port.get_next_item(tr);
+`ifdef ZVT_ON
+    if(held_tr != null) tr = held_tr;
+    else                seq_item_port.try_next_item(tr);
+    if(tr != null && tr.fence_before && !(inst_tx_queue.size() == 0 && idle_cnt >= 8)) begin
+      // Zvt: instructions that retire through a different path than the previous ones must not overtake
+      // them, so wait for the backend to go idle first.
+      held_tr = tr;
+      break;
+    end
+    held_tr = null;
+`else
     seq_item_port.try_next_item(tr);
+`endif
     if(tr != null) begin
       `uvm_info(get_type_name(), $sformatf("Get item from rvs_sqr:\n%s",tr.sprint()),UVM_HIGH)
       inst_tx_queue.push_back(tr);
@@ -188,6 +209,17 @@ task rvs_driver::inst_manage();
       inst[i].arch_state.ta         = inst_tx_queue[i].vta;
       assert($cast(inst[i].arch_state.sew,  inst_tx_queue[i].vsew));
       assert($cast(inst[i].arch_state.lmul, inst_tx_queue[i].vlmul));
+      // The LSU/ARI decode units read lmul_orig (the architectural vtype LMUL).
+      assert($cast(inst[i].arch_state.lmul_orig, inst_tx_queue[i].vlmul));
+`ifdef ZVT_ON
+      inst[i].arch_state.altfmt     = inst_tx_queue[i].altfmt;
+      inst[i].arch_state.mtwiden    = inst_tx_queue[i].mtwiden;
+      inst[i].arch_state.tm         = inst_tx_queue[i].tm;
+      inst[i].arch_state.tk         = inst_tx_queue[i].tk;
+`endif
+`ifdef ZVE32F_ON
+      inst[i].arch_state.frm        = RVFRM_e'(inst_tx_queue[i].frm);
+`endif
       inst_vld[i] = 1'b1;
     end else begin
       inst[i] = inst[i];
@@ -202,6 +234,10 @@ task rvs_driver::tx_driver();
   tr = new();
   forever begin
     @(posedge rvs_if.clk);
+`ifdef ZVT_ON
+    if(rvs_if.rvv_idle === 1'b1 && inst_tx_queue.size() == 0) idle_cnt++;
+    else                                                       idle_cnt = 0;
+`endif
     if(~rvs_if.rst_n) begin
       inst_tx_queue.delete();
       for(int i=0; i<`ISSUE_LANE; i++) begin
@@ -234,6 +270,10 @@ endtask: tx_driver
 task rvs_driver::rx_driver();
   logic rt_xrf_ready [`NUM_RT_UOP-1:0] ;
   logic wr_vxsat_ready;
+`ifdef ZVE32F_ON
+  logic rt_frf_ready [`NUM_RT_UOP-1:0];
+  logic fcsr_ready;
+`endif
   forever begin
     @(posedge rvs_if.clk);
     if(~rvs_if.rst_n) begin
@@ -241,6 +281,10 @@ task rvs_driver::rx_driver();
         rvs_if.rt_xrf_ready_rvs2rvv[i] <= '0;
       end
       rvs_if.wr_vxsat_ready <= '0;
+`ifdef ZVE32F_ON
+      rvs_if.async_frd_ready <= '0;
+      rvs_if.fcsr2rt_write_ready <= '0;
+`endif
       rvs_if.vcsr_ready <= 1'b0;
     end
     // trap handler
@@ -278,6 +322,24 @@ task rvs_driver::rx_driver();
     endcase
     rvs_if.wr_vxsat_ready <= wr_vxsat_ready;
 
+`ifdef ZVE32F_ON
+    // FRF write (vfmv.f.s) and fcsr.fflags update handshakes. They follow the xrf / vxsat delay modes.
+    for(int i=0; i<`NUM_RT_UOP; i++) begin
+      case(delay_mode_rt_xrf)
+        delay_mode_pkg::SLOW:   assert(std::randomize(rt_frf_ready[i]) with {rt_frf_ready[i] dist {0 := 90, 1 := 10};});
+        delay_mode_pkg::NORMAL: assert(std::randomize(rt_frf_ready[i]) with {rt_frf_ready[i] dist {0 := 20, 1 := 80};});
+        delay_mode_pkg::FAST:   assert(std::randomize(rt_frf_ready[i]) with {rt_frf_ready[i] dist {0 := 0, 1 := 100};});
+      endcase
+      rvs_if.async_frd_ready[i] <= rt_frf_ready[i];
+    end
+    case(delay_mode_wr_vxsat)
+      delay_mode_pkg::SLOW:   assert(std::randomize(fcsr_ready) with {fcsr_ready dist {0 := 90, 1 := 10};});
+      delay_mode_pkg::NORMAL: assert(std::randomize(fcsr_ready) with {fcsr_ready dist {0 := 20, 1 := 80};});
+      delay_mode_pkg::FAST:   assert(std::randomize(fcsr_ready) with {fcsr_ready dist {0 := 0, 1 := 100};});
+    endcase
+    rvs_if.fcsr2rt_write_ready <= fcsr_ready;
+`endif
+
     // vector_csr response
     if(trap_queue.size() > 0) begin
       if(trap_queue[0].vcsr_ready_delay == 0) begin
@@ -309,8 +371,12 @@ task rvs_driver::vrf_driver();
           `uvm_info(get_type_name(),$sformatf("Got rvv status %s",rvv_state.name()),UVM_HIGH)
           `uvm_info(get_type_name(), "Start to randomize vrf", UVM_HIGH)
           for(int reg_idx=0; reg_idx<32; reg_idx++) begin
-            for(int j=0; j<`VLENB; j++) begin
+            for(int j=0; j<`VLENB(VLEN); j++) begin
               value[j*8+:8] = $urandom_range(0, 8'hFF);
+            end
+            // floating point tests want FP-shaped data after a clear as well
+            if(rvs_transaction::fp_en) begin
+              for(int j=0; j<`VLEN/32; j++) value[j*32+:32] = rvv_softfloat_pkg::rand_fp32();
             end
             test_top.set_mdl_vrf(reg_idx, value);
             vrf_if.set_dut_vrf(reg_idx, value);

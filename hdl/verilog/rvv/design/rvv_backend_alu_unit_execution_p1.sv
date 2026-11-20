@@ -11,7 +11,15 @@
 `include "rvv_backend_sva.svh"
 `endif
 
-module rvv_backend_alu_unit_execution_p1
+module rvv_backend_alu_unit_execution_p1#(
+  parameter bit CMP_SUPPORT = 1'b0,
+  parameter int unsigned VLEN = `VLEN,
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type RVVXRM = RVVXRM_e,
+  localparam type ALU_RS_t = `ALU_RS_t(VLEN, PC_WIDTH),
+  localparam type PU2ROB_t = `PU2ROB_t(VLEN, PC_WIDTH),
+  localparam type PIPE_DATA_t = `PIPE_DATA_t(VLEN, PC_WIDTH)
+)
 (
   clk,
   rst_n,
@@ -21,7 +29,6 @@ module rvv_backend_alu_unit_execution_p1
   result,
   trap_flush_rvv
 );
-  parameter CMP_SUPPORT = 1'b0;
 
 //
 // interface signals
@@ -45,59 +52,59 @@ module rvv_backend_alu_unit_execution_p1
   ADDSUB_e                                opcode;
   FUNCT6_u                                uop_funct6;
   logic   [`FUNCT3_WIDTH-1:0]             uop_funct3;
-  logic   [`VSTART_WIDTH-1:0]             vstart;
-  logic   [`VL_WIDTH-1:0]                 vl;       
+  logic   [`VSTART_WIDTH(VLEN)-1:0]       vstart;
+  logic   [`VL_WIDTH(VLEN)-1:0]           vl;       
   logic                                   vm;       
   RVVXRM                                  vxrm;       
-  logic   [`VLEN-1:0]                     v0_data;
-  logic   [`VLEN-1:0]                     vd_data;           
+  logic   [VLEN-1:0]                      v0_data;
+  logic   [VLEN-1:0]                      vd_data;           
   EEW_e                                   vs2_eew;
   logic        	                          last_uop_valid;
   logic   [$clog2(`EMUL_MAX)-1:0]         uop_index;   
 
-  logic                                   is_cmp;
-  logic   [`VLENB-1:0][`BYTE_WIDTH-1:0]   src2_data;
-  logic   [`VLENB-1:0][`BYTE_WIDTH-1:0]   src1_data;  
-  logic   [`VLENB-1:0]                    src2_sgn;
-  logic   [`VLENB-1:0]                    src1_sgn;
-  logic   [`VLENB-1:0][`BYTE_WIDTH-1:0]   product8;
-  logic   [`VLENH-1:0][`HWORD_WIDTH-1:0]  product16;
-  logic   [`VLENW-1:0][`WORD_WIDTH-1:0]   product32;
-  logic   [`VLENB-1:0]                    cout8;
-  logic   [`VLENH-1:0]                    cout16;
-  logic   [`VLENW-1:0]                    cout32;  
+  logic                                         is_cmp;
+  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0]   src2_data;
+  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0]   src1_data;  
+  logic   [`VLENB(VLEN)-1:0]                    src2_sgn;
+  logic   [`VLENB(VLEN)-1:0]                    src1_sgn;
+  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0]   product8;
+  logic   [`VLENH(VLEN)-1:0][`HWORD_WIDTH-1:0]  product16;
+  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]   product32;
+  logic   [`VLENB(VLEN)-1:0]                    cout8;
+  logic   [`VLENH(VLEN)-1:0]                    cout16;
+  logic   [`VLENW(VLEN)-1:0]                    cout32;  
 `ifndef CORALNPU_STRUCTURAL_DATAPATH
-  logic   [`VLENB-1:0][`BYTE_WIDTH-1:0]   round8_src;
-  logic   [`VLENH-1:0][`HWORD_WIDTH-1:0]  round16_src;
-  logic   [`VLENW-1:0][`WORD_WIDTH-1:0]   round32_src;
+  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0]   round8_src;
+  logic   [`VLENH(VLEN)-1:0][`HWORD_WIDTH-1:0]  round16_src;
+  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]   round32_src;
 `endif
-  logic   [`VLENB-1:0][`BYTE_WIDTH-1:0]   round8;
-  logic   [`VLENH-1:0][`HWORD_WIDTH-1:0]  round16;
-  logic   [`VLENW-1:0][`WORD_WIDTH-1:0]   round32;
-  logic   [`VLENB-1:0]                    addu_upoverflow;
-  logic   [`VLENB-1:0]                    add_upoverflow;
-  logic   [`VLENB-1:0]                    add_underoverflow;
-  logic   [`VLENB-1:0]                    subu_underoverflow;
-  logic   [`VLENB-1:0]                    sub_upoverflow;
-  logic   [`VLENB-1:0]                    sub_underoverflow;
-  logic   [`VLENB-1:0][`BYTE_WIDTH-1:0]   result_minmax8;
-  logic   [`VLENH-1:0][`HWORD_WIDTH-1:0]  result_minmax16;
-  logic   [`VLENW-1:0][`WORD_WIDTH-1:0]   result_minmax32;
-  logic   [`VLEN-1:0]                     result_data;   // regular data for EEW_vd = 8b,16b,32b
-  genvar                                  j;
+  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0]   round8;
+  logic   [`VLENH(VLEN)-1:0][`HWORD_WIDTH-1:0]  round16;
+  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]   round32;
+  logic   [`VLENB(VLEN)-1:0]                    addu_upoverflow;
+  logic   [`VLENB(VLEN)-1:0]                    add_upoverflow;
+  logic   [`VLENB(VLEN)-1:0]                    add_underoverflow;
+  logic   [`VLENB(VLEN)-1:0]                    subu_underoverflow;
+  logic   [`VLENB(VLEN)-1:0]                    sub_upoverflow;
+  logic   [`VLENB(VLEN)-1:0]                    sub_underoverflow;
+  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0]   result_minmax8;
+  logic   [`VLENH(VLEN)-1:0][`HWORD_WIDTH-1:0]  result_minmax16;
+  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]   result_minmax32;
+  logic   [VLEN-1:0]                            result_data;   // regular data for EEW_vd = 8b,16b,32b
+  genvar                                        j;
 
   // for CMP
-  logic   [`VLEN-1:0]                     vstart_elements_tmp;
-  logic   [`VLEN-1:0]                     vstart_elements;
-  logic   [`VLEN-1:0]                     tail_elements_tmp;
-  logic   [`VLEN-1:0]                     tail_elements;
-  logic   [`VLEN-1:0]                     cmp_tmp;
-  logic   [`VLEN-1:0]                     cmp;
+  logic   [VLEN-1:0]                      vstart_elements_tmp;
+  logic   [VLEN-1:0]                      vstart_elements;
+  logic   [VLEN-1:0]                      tail_elements_tmp;
+  logic   [VLEN-1:0]                      tail_elements;
+  logic   [VLEN-1:0]                      cmp_tmp;
+  logic   [VLEN-1:0]                      cmp;
   logic   [27:0]                          cmp_en;
-  logic   [28*`VLENW-1:0]                 cmp_d1;
-  logic   [`VLEN-1:0]                     cmp_res_tmp;
-  logic   [`VLEN-1:0]                     cmp_res;
-  logic   [`VLEN-1:0]                     vmadcsbc_res;
+  logic   [28*`VLENW(VLEN)-1:0]           cmp_d1;
+  logic   [VLEN-1:0]                      cmp_res_tmp;
+  logic   [VLEN-1:0]                      cmp_res;
+  logic   [VLEN-1:0]                      vmadcsbc_res;
 
 //
 // prepare source data to calculate    
@@ -186,7 +193,7 @@ module rvv_backend_alu_unit_execution_p1
 //
 `ifdef CORALNPU_STRUCTURAL_DATAPATH
   generate
-    for (j = 0; j < `VLENW; j = j + 1) begin : gen_alu_p1_lane
+    for (j = 0; j < `VLENW(VLEN); j = j + 1) begin : gen_alu_p1_lane
       rvv_backend_alu_addsub_p1_datapath u_alu_p1_dp (
         .is_sub             (opcode == ADDSUB_VSUB),
         .vs2_eew            (vs2_eew),
@@ -214,7 +221,7 @@ module rvv_backend_alu_unit_execution_p1
   endgenerate
 `else
   always_comb begin
-    for(int i=0;i<`VLENH;i++) begin: VADDSUB_PROD16
+    for(int i=0;i<`VLENH(VLEN);i++) begin: VADDSUB_PROD16
       if (opcode==ADDSUB_VADD) 
         {cout16[i],product16[i]} = { ({cout8[2*i+1],product8[2*i+1]} + cout8[2*i]), product8[2*i] };
       else //(opcode==ADDSUB_VSUB)
@@ -223,7 +230,7 @@ module rvv_backend_alu_unit_execution_p1
   end
 
   always_comb begin
-    for(int i=0;i<`VLENW;i++) begin: VADDSUB_PROD32
+    for(int i=0;i<`VLENW(VLEN);i++) begin: VADDSUB_PROD32
       if (opcode==ADDSUB_VADD) 
         {cout32[i],product32[i]} = { ({cout16[2*i+1],product16[2*i+1]} + cout16[2*i]), product16[2*i] };
       else //(opcode==ADDSUB_VSUB)
@@ -245,65 +252,65 @@ module rvv_backend_alu_unit_execution_p1
       VASUBU: begin
         case(vxrm)
           RNU: begin
-            for(int i=0;i<`VLENB;i=i+1) begin
+            for(int i=0;i<`VLENB(VLEN);i=i+1) begin
               round8_src[i] = {cout8[i], product8[i][`BYTE_WIDTH-1:1]};
               round8[i]     = product8[i][0] ? round8_src[i]+1'b1 : round8_src[i];
             end
 
-            for(int i=0;i<`VLENH;i=i+1) begin
+            for(int i=0;i<`VLENH(VLEN);i=i+1) begin
               round16_src[i] = {cout16[i], product16[i][`HWORD_WIDTH-1:1]};
               round16[i]     = product16[i][0] ? round16_src[i]+1'b1 : round16_src[i];
             end
 
-            for(int i=0;i<`VLENW;i=i+1) begin
+            for(int i=0;i<`VLENW(VLEN);i=i+1) begin
               round32_src[i] = {cout32[i], product32[i][`WORD_WIDTH-1:1]};
               round32[i]     = product32[i][0] ? round32_src[i]+1'b1 : round32_src[i];
             end
           end
           RNE: begin
-            for(int i=0;i<`VLENB;i=i+1) begin
+            for(int i=0;i<`VLENB(VLEN);i=i+1) begin
               round8_src[i] = {cout8[i], product8[i][`BYTE_WIDTH-1:1]};
               round8[i]     = product8[i][0]&product8[i][1] ? round8_src[i]+1'b1 : round8_src[i];
             end
     
-            for(int i=0;i<`VLENH;i=i+1) begin
+            for(int i=0;i<`VLENH(VLEN);i=i+1) begin
               round16_src[i] = {cout16[i], product16[i][`HWORD_WIDTH-1:1]};
               round16[i]     = product16[i][0]&product16[i][1] ? round16_src[i]+1'b1 : round16_src[i];
             end
     
-            for(int i=0;i<`VLENW;i=i+1) begin
+            for(int i=0;i<`VLENW(VLEN);i=i+1) begin
               round32_src[i] = {cout32[i], product32[i][`WORD_WIDTH-1:1]};
               round32[i]     = product32[i][0]&product32[i][1] ? round32_src[i]+1'b1 : round32_src[i];
             end
           end
           RDN: begin
-            for(int i=0;i<`VLENB;i=i+1) begin
+            for(int i=0;i<`VLENB(VLEN);i=i+1) begin
               round8_src[i] = {cout8[i], product8[i][`BYTE_WIDTH-1:1]}; 
               round8[i]     = round8_src[i];
             end
     
-            for(int i=0;i<`VLENH;i=i+1) begin
+            for(int i=0;i<`VLENH(VLEN);i=i+1) begin
               round16_src[i] = {cout16[i], product16[i][`HWORD_WIDTH-1:1]}; 
               round16[i]     = round16_src[i];
             end
     
-            for(int i=0;i<`VLENW;i=i+1) begin
+            for(int i=0;i<`VLENW(VLEN);i=i+1) begin
               round32_src[i] = {cout32[i], product32[i][`WORD_WIDTH-1:1]}; 
               round32[i]     = round32_src[i];
             end
           end
           ROD: begin
-            for(int i=0;i<`VLENB;i=i+1) begin
+            for(int i=0;i<`VLENB(VLEN);i=i+1) begin
               round8_src[i] = {cout8[i], product8[i][`BYTE_WIDTH-1:1]};
               round8[i]     = (!product8[i][1])&product8[i][0] ? round8_src[i]+1'b1 : round8_src[i];
             end
     
-            for(int i=0;i<`VLENH;i=i+1) begin
+            for(int i=0;i<`VLENH(VLEN);i=i+1) begin
               round16_src[i] = {cout16[i], product16[i][`HWORD_WIDTH-1:1]};
               round16[i]     = (!product16[i][1])&product16[i][0] ? round16_src[i]+1'b1 : round16_src[i]; 
             end
     
-            for(int i=0;i<`VLENW;i=i+1) begin
+            for(int i=0;i<`VLENW(VLEN);i=i+1) begin
               round32_src[i] = {cout32[i], product32[i][`WORD_WIDTH-1:1]}; 
               round32[i]     = (!product32[i][1])&product32[i][0] ? round32_src[i]+1'b1 : round32_src[i]; 
             end
@@ -314,65 +321,65 @@ module rvv_backend_alu_unit_execution_p1
       VASUB: begin
         case(vxrm)
           RNU: begin
-            for(int i=0;i<`VLENB;i=i+1) begin
+            for(int i=0;i<`VLENB(VLEN);i=i+1) begin
               round8_src[i] = {src2_sgn[i]^src1_sgn[i] ? (!cout8[i]) : cout8[i], product8[i][`BYTE_WIDTH-1:1]};
               round8[i]     = product8[i][0] ? round8_src[i]+1'b1 : round8_src[i];                  
             end
             
-            for(int i=0;i<`VLENH;i=i+1) begin
+            for(int i=0;i<`VLENH(VLEN);i=i+1) begin
               round16_src[i] = {src2_sgn[2*i+1]^src1_sgn[2*i+1] ? (!cout16[i]) : cout16[i], product16[i][`HWORD_WIDTH-1:1]};
               round16[i]     = product16[i][0] ? round16_src[i]+1'b1 : round16_src[i]; 
             end
 
-            for(int i=0;i<`VLENW;i=i+1) begin
+            for(int i=0;i<`VLENW(VLEN);i=i+1) begin
               round32_src[i] = {src2_sgn[4*i+3]^src1_sgn[4*i+3] ? (!cout32[i]) : cout32[i], product32[i][`WORD_WIDTH-1:1]};
               round32[i]     = product32[i][0] ? round32_src[i]+1'b1 : round32_src[i]; 
             end
           end
           RNE: begin
-            for(int i=0;i<`VLENB;i=i+1) begin
+            for(int i=0;i<`VLENB(VLEN);i=i+1) begin
               round8_src[i] = {src2_sgn[i]^src1_sgn[i] ? (!cout8[i]) : cout8[i], product8[i][`BYTE_WIDTH-1:1]};
               round8[i]     = product8[i][0]&product8[i][1] ? round8_src[i]+1'b1 : round8_src[i]; 
             end
     
-            for(int i=0;i<`VLENH;i=i+1) begin
+            for(int i=0;i<`VLENH(VLEN);i=i+1) begin
               round16_src[i] = {src2_sgn[2*i+1]^src1_sgn[2*i+1] ? (!cout16[i]) : cout16[i], product16[i][`HWORD_WIDTH-1:1]};
               round16[i]     = product16[i][0]&product16[i][1] ? round16_src[i]+1'b1 : round16_src[i]; 
             end
     
-            for(int i=0;i<`VLENW;i=i+1) begin
+            for(int i=0;i<`VLENW(VLEN);i=i+1) begin
               round32_src[i] = {src2_sgn[4*i+3]^src1_sgn[4*i+3] ? (!cout32[i]) : cout32[i], product32[i][`WORD_WIDTH-1:1]};
               round32[i]     = product32[i][0]&product32[i][1] ? round32_src[i]+1'b1 : round32_src[i]; 
             end
           end
           RDN: begin
-            for(int i=0;i<`VLENB;i=i+1) begin
+            for(int i=0;i<`VLENB(VLEN);i=i+1) begin
               round8_src[i] = {src2_sgn[i]^src1_sgn[i] ? (!cout8[i]) : cout8[i], product8[i][`BYTE_WIDTH-1:1]}; 
               round8[i]     = round8_src[i];
             end
     
-            for(int i=0;i<`VLENH;i=i+1) begin
+            for(int i=0;i<`VLENH(VLEN);i=i+1) begin
               round16_src[i] = {src2_sgn[2*i+1]^src1_sgn[2*i+1] ? (!cout16[i]) : cout16[i], product16[i][`HWORD_WIDTH-1:1]}; 
               round16[i]     = round16_src[i];
             end
     
-            for(int i=0;i<`VLENW;i=i+1) begin
+            for(int i=0;i<`VLENW(VLEN);i=i+1) begin
               round32_src[i] = {src2_sgn[4*i+3]^src1_sgn[4*i+3] ? (!cout32[i]) : cout32[i], product32[i][`WORD_WIDTH-1:1]}; 
               round32[i]     = round32_src[i];
             end
           end
           ROD: begin
-            for(int i=0;i<`VLENB;i=i+1) begin
+            for(int i=0;i<`VLENB(VLEN);i=i+1) begin
               round8_src[i] = {src2_sgn[i]^src1_sgn[i] ? (!cout8[i]) : cout8[i], product8[i][`BYTE_WIDTH-1:1]};
               round8[i]     = (!product8[i][1])&product8[i][0] ? round8_src[i]+1'b1 : round8_src[i]; 
             end
     
-            for(int i=0;i<`VLENH;i=i+1) begin
+            for(int i=0;i<`VLENH(VLEN);i=i+1) begin
               round16_src[i] = {src2_sgn[2*i+1]^src1_sgn[2*i+1] ? (!cout16[i]) : cout16[i], product16[i][`HWORD_WIDTH-1:1]};
               round16[i]     = (!product16[i][1])&product16[i][0] ? round16_src[i]+1'b1 : round16_src[i]; 
             end
     
-            for(int i=0;i<`VLENW;i=i+1) begin
+            for(int i=0;i<`VLENW(VLEN);i=i+1) begin
               round32_src[i] = {src2_sgn[4*i+3]^src1_sgn[4*i+3] ? (!cout32[i]) : cout32[i], product32[i][`WORD_WIDTH-1:1]};
               round32[i]     = (!product32[i][1])&product32[i][0] ? round32_src[i]+1'b1 : round32_src[i]; 
             end
@@ -384,7 +391,7 @@ module rvv_backend_alu_unit_execution_p1
 
   // overflow check
   generate 
-    for (j=0;j<`VLENW;j++) begin: OVERFLOW
+    for (j=0;j<`VLENW(VLEN);j++) begin: OVERFLOW
       always_comb begin
         // initial
         addu_upoverflow[   4*j +: 4] = 'b0;
@@ -487,52 +494,52 @@ module rvv_backend_alu_unit_execution_p1
         cmp     = 'b0;
         cmp_en  = 'b0;
         
-        for(int i=0;i<`VLENW;i++) begin
+        for(int i=0;i<`VLENW(VLEN);i++) begin
           // calculate result data
           case(uop_funct6.ari_funct6)
             VMSEQ,
             VMSNE: begin
               case(vs2_eew)
                 EEW8: begin
-                  cmp_tmp[(4*uop_index  )*`VLENW+i] = |(product8[0*`VLENW+i]);
-                  cmp_tmp[(4*uop_index+1)*`VLENW+i] = |(product8[1*`VLENW+i]);
-                  cmp_tmp[(4*uop_index+2)*`VLENW+i] = |(product8[2*`VLENW+i]);
-                  cmp_tmp[(4*uop_index+3)*`VLENW+i] = |(product8[3*`VLENW+i]);
+                  cmp_tmp[(4*uop_index  )*`VLENW(VLEN)+i] = |(product8[0*`VLENW(VLEN)+i]);
+                  cmp_tmp[(4*uop_index+1)*`VLENW(VLEN)+i] = |(product8[1*`VLENW(VLEN)+i]);
+                  cmp_tmp[(4*uop_index+2)*`VLENW(VLEN)+i] = |(product8[2*`VLENW(VLEN)+i]);
+                  cmp_tmp[(4*uop_index+3)*`VLENW(VLEN)+i] = |(product8[3*`VLENW(VLEN)+i]);
 
-                  cmp[(4*uop_index  )*`VLENW+i] = (uop_funct6.ari_funct6==VMSNE) ? 
-                                                    cmp_tmp[(4*uop_index)*`VLENW+i] : 
-                                                    !cmp_tmp[(4*uop_index)*`VLENW+i];
-                  cmp[(4*uop_index+1)*`VLENW+i] = (uop_funct6.ari_funct6==VMSNE) ? 
-                                                    cmp_tmp[(4*uop_index+1)*`VLENW+i] : 
-                                                    !cmp_tmp[(4*uop_index+1)*`VLENW+i];
-                  cmp[(4*uop_index+2)*`VLENW+i] = (uop_funct6.ari_funct6==VMSNE) ? 
-                                                    cmp_tmp[(4*uop_index+2)*`VLENW+i] : 
-                                                    !cmp_tmp[(4*uop_index+2)*`VLENW+i];
-                  cmp[(4*uop_index+3)*`VLENW+i] = (uop_funct6.ari_funct6==VMSNE) ? 
-                                                    cmp_tmp[(4*uop_index+3)*`VLENW+i] : 
-                                                    !cmp_tmp[(4*uop_index+3)*`VLENW+i];
+                  cmp[(4*uop_index  )*`VLENW(VLEN)+i] = (uop_funct6.ari_funct6==VMSNE) ? 
+                                                    cmp_tmp[(4*uop_index)*`VLENW(VLEN)+i] : 
+                                                    !cmp_tmp[(4*uop_index)*`VLENW(VLEN)+i];
+                  cmp[(4*uop_index+1)*`VLENW(VLEN)+i] = (uop_funct6.ari_funct6==VMSNE) ? 
+                                                    cmp_tmp[(4*uop_index+1)*`VLENW(VLEN)+i] : 
+                                                    !cmp_tmp[(4*uop_index+1)*`VLENW(VLEN)+i];
+                  cmp[(4*uop_index+2)*`VLENW(VLEN)+i] = (uop_funct6.ari_funct6==VMSNE) ? 
+                                                    cmp_tmp[(4*uop_index+2)*`VLENW(VLEN)+i] : 
+                                                    !cmp_tmp[(4*uop_index+2)*`VLENW(VLEN)+i];
+                  cmp[(4*uop_index+3)*`VLENW(VLEN)+i] = (uop_funct6.ari_funct6==VMSNE) ? 
+                                                    cmp_tmp[(4*uop_index+3)*`VLENW(VLEN)+i] : 
+                                                    !cmp_tmp[(4*uop_index+3)*`VLENW(VLEN)+i];
 
                   cmp_en[uop_index*4 +: 4] = {4{alu_uop_valid&alu_uop.is_cmp&(!last_uop_valid)}};
                 end
                 EEW16: begin
-                  cmp_tmp[(2*uop_index  )*`VLENW+i] = |(product16[0*`VLENW+i]);
-                  cmp_tmp[(2*uop_index+1)*`VLENW+i] = |(product16[1*`VLENW+i]);
+                  cmp_tmp[(2*uop_index  )*`VLENW(VLEN)+i] = |(product16[0*`VLENW(VLEN)+i]);
+                  cmp_tmp[(2*uop_index+1)*`VLENW(VLEN)+i] = |(product16[1*`VLENW(VLEN)+i]);
 
-                  cmp[(2*uop_index  )*`VLENW+i] = (uop_funct6.ari_funct6==VMSNE) ? 
-                                                    cmp_tmp[(2*uop_index)*`VLENW+i] : 
-                                                    !cmp_tmp[(2*uop_index)*`VLENW+i];
-                  cmp[(2*uop_index+1)*`VLENW+i] = (uop_funct6.ari_funct6==VMSNE) ? 
-                                                    cmp_tmp[(2*uop_index+1)*`VLENW+i] : 
-                                                    !cmp_tmp[(2*uop_index+1)*`VLENW+i];
+                  cmp[(2*uop_index  )*`VLENW(VLEN)+i] = (uop_funct6.ari_funct6==VMSNE) ? 
+                                                    cmp_tmp[(2*uop_index)*`VLENW(VLEN)+i] : 
+                                                    !cmp_tmp[(2*uop_index)*`VLENW(VLEN)+i];
+                  cmp[(2*uop_index+1)*`VLENW(VLEN)+i] = (uop_funct6.ari_funct6==VMSNE) ? 
+                                                    cmp_tmp[(2*uop_index+1)*`VLENW(VLEN)+i] : 
+                                                    !cmp_tmp[(2*uop_index+1)*`VLENW(VLEN)+i];
 
                   cmp_en[uop_index*2 +: 2] = {2{alu_uop_valid&alu_uop.is_cmp&(!last_uop_valid)}};
                 end
                 EEW32: begin
-                  cmp_tmp[uop_index*`VLENW+i] = |(product32[`VLENW*0+i]);
+                  cmp_tmp[uop_index*`VLENW(VLEN)+i] = |(product32[`VLENW(VLEN)*0+i]);
 
-                  cmp[uop_index*`VLENW+i] = (uop_funct6.ari_funct6==VMSNE) ? 
-                                              cmp_tmp[uop_index*`VLENW+i] : 
-                                              !cmp_tmp[uop_index*`VLENW+i];
+                  cmp[uop_index*`VLENW(VLEN)+i] = (uop_funct6.ari_funct6==VMSNE) ? 
+                                              cmp_tmp[uop_index*`VLENW(VLEN)+i] : 
+                                              !cmp_tmp[uop_index*`VLENW(VLEN)+i];
 
                   cmp_en[uop_index] = alu_uop_valid&alu_uop.is_cmp&(!last_uop_valid);
                 end
@@ -542,21 +549,21 @@ module rvv_backend_alu_unit_execution_p1
             VMSBC: begin
               case(vs2_eew)
                 EEW8: begin
-                  cmp[(4*uop_index  )*`VLENW+i] = cout8[0*`VLENW+i];
-                  cmp[(4*uop_index+1)*`VLENW+i] = cout8[1*`VLENW+i];
-                  cmp[(4*uop_index+2)*`VLENW+i] = cout8[2*`VLENW+i];
-                  cmp[(4*uop_index+3)*`VLENW+i] = cout8[3*`VLENW+i];
+                  cmp[(4*uop_index  )*`VLENW(VLEN)+i] = cout8[0*`VLENW(VLEN)+i];
+                  cmp[(4*uop_index+1)*`VLENW(VLEN)+i] = cout8[1*`VLENW(VLEN)+i];
+                  cmp[(4*uop_index+2)*`VLENW(VLEN)+i] = cout8[2*`VLENW(VLEN)+i];
+                  cmp[(4*uop_index+3)*`VLENW(VLEN)+i] = cout8[3*`VLENW(VLEN)+i];
 
                   cmp_en[uop_index*4 +: 4] = {4{alu_uop_valid&alu_uop.is_cmp&(!last_uop_valid)}};
                 end
                 EEW16: begin
-                  cmp[(2*uop_index  )*`VLENW+i] = cout16[0*`VLENW+i];
-                  cmp[(2*uop_index+1)*`VLENW+i] = cout16[1*`VLENW+i];
+                  cmp[(2*uop_index  )*`VLENW(VLEN)+i] = cout16[0*`VLENW(VLEN)+i];
+                  cmp[(2*uop_index+1)*`VLENW(VLEN)+i] = cout16[1*`VLENW(VLEN)+i];
 
                   cmp_en[uop_index*2 +: 2] = {2{alu_uop_valid&alu_uop.is_cmp&(!last_uop_valid)}};
                 end
                 EEW32: begin
-                  cmp[uop_index*`VLENW+i] = cout32[`VLENW*0+i];
+                  cmp[uop_index*`VLENW(VLEN)+i] = cout32[`VLENW(VLEN)*0+i];
 
                   cmp_en[uop_index] = alu_uop_valid&alu_uop.is_cmp&(!last_uop_valid);
                 end
@@ -567,52 +574,52 @@ module rvv_backend_alu_unit_execution_p1
             VMSGT: begin
               case(vs2_eew)
                 EEW8: begin
-                  cmp_tmp[(4*uop_index  )*`VLENW+i] = sub_underoverflow[0*`VLENW+i] || 
-                                                      (!sub_upoverflow[0*`VLENW+i]) && product8[0*`VLENW+i][`BYTE_WIDTH-1];
-                  cmp_tmp[(4*uop_index+1)*`VLENW+i] = sub_underoverflow[1*`VLENW+i] || 
-                                                      (!sub_upoverflow[1*`VLENW+i]) && product8[1*`VLENW+i][`BYTE_WIDTH-1];
-                  cmp_tmp[(4*uop_index+2)*`VLENW+i] = sub_underoverflow[2*`VLENW+i] || 
-                                                      (!sub_upoverflow[2*`VLENW+i]) && product8[2*`VLENW+i][`BYTE_WIDTH-1];
-                  cmp_tmp[(4*uop_index+3)*`VLENW+i] = sub_underoverflow[3*`VLENW+i] || 
-                                                      (!sub_upoverflow[3*`VLENW+i]) && product8[3*`VLENW+i][`BYTE_WIDTH-1];
+                  cmp_tmp[(4*uop_index  )*`VLENW(VLEN)+i] = sub_underoverflow[0*`VLENW(VLEN)+i] || 
+                                                      (!sub_upoverflow[0*`VLENW(VLEN)+i]) && product8[0*`VLENW(VLEN)+i][`BYTE_WIDTH-1];
+                  cmp_tmp[(4*uop_index+1)*`VLENW(VLEN)+i] = sub_underoverflow[1*`VLENW(VLEN)+i] || 
+                                                      (!sub_upoverflow[1*`VLENW(VLEN)+i]) && product8[1*`VLENW(VLEN)+i][`BYTE_WIDTH-1];
+                  cmp_tmp[(4*uop_index+2)*`VLENW(VLEN)+i] = sub_underoverflow[2*`VLENW(VLEN)+i] || 
+                                                      (!sub_upoverflow[2*`VLENW(VLEN)+i]) && product8[2*`VLENW(VLEN)+i][`BYTE_WIDTH-1];
+                  cmp_tmp[(4*uop_index+3)*`VLENW(VLEN)+i] = sub_underoverflow[3*`VLENW(VLEN)+i] || 
+                                                      (!sub_upoverflow[3*`VLENW(VLEN)+i]) && product8[3*`VLENW(VLEN)+i][`BYTE_WIDTH-1];
 
-                  cmp[(4*uop_index  )*`VLENW+i] = (uop_funct6.ari_funct6==VMSLE) ? 
-                                                    cmp_tmp[(4*uop_index)*`VLENW+i] | (!(|product8[0*`VLENW+i])) :
-                                                    cmp_tmp[(4*uop_index)*`VLENW+i] ;
-                  cmp[(4*uop_index+1)*`VLENW+i] = (uop_funct6.ari_funct6==VMSLE) ? 
-                                                    cmp_tmp[(4*uop_index+1)*`VLENW+i] | (!(|product8[1*`VLENW+i])) :
-                                                    cmp_tmp[(4*uop_index+1)*`VLENW+i] ;
-                  cmp[(4*uop_index+2)*`VLENW+i] = (uop_funct6.ari_funct6==VMSLE) ? 
-                                                    cmp_tmp[(4*uop_index+2)*`VLENW+i] | (!(|product8[2*`VLENW+i])) :
-                                                    cmp_tmp[(4*uop_index+2)*`VLENW+i] ;
-                  cmp[(4*uop_index+3)*`VLENW+i] = (uop_funct6.ari_funct6==VMSLE) ? 
-                                                    cmp_tmp[(4*uop_index+3)*`VLENW+i] | (!(|product8[3*`VLENW+i])) :
-                                                    cmp_tmp[(4*uop_index+3)*`VLENW+i] ;
+                  cmp[(4*uop_index  )*`VLENW(VLEN)+i] = (uop_funct6.ari_funct6==VMSLE) ? 
+                                                    cmp_tmp[(4*uop_index)*`VLENW(VLEN)+i] | (!(|product8[0*`VLENW(VLEN)+i])) :
+                                                    cmp_tmp[(4*uop_index)*`VLENW(VLEN)+i] ;
+                  cmp[(4*uop_index+1)*`VLENW(VLEN)+i] = (uop_funct6.ari_funct6==VMSLE) ? 
+                                                    cmp_tmp[(4*uop_index+1)*`VLENW(VLEN)+i] | (!(|product8[1*`VLENW(VLEN)+i])) :
+                                                    cmp_tmp[(4*uop_index+1)*`VLENW(VLEN)+i] ;
+                  cmp[(4*uop_index+2)*`VLENW(VLEN)+i] = (uop_funct6.ari_funct6==VMSLE) ? 
+                                                    cmp_tmp[(4*uop_index+2)*`VLENW(VLEN)+i] | (!(|product8[2*`VLENW(VLEN)+i])) :
+                                                    cmp_tmp[(4*uop_index+2)*`VLENW(VLEN)+i] ;
+                  cmp[(4*uop_index+3)*`VLENW(VLEN)+i] = (uop_funct6.ari_funct6==VMSLE) ? 
+                                                    cmp_tmp[(4*uop_index+3)*`VLENW(VLEN)+i] | (!(|product8[3*`VLENW(VLEN)+i])) :
+                                                    cmp_tmp[(4*uop_index+3)*`VLENW(VLEN)+i] ;
 
                   cmp_en[uop_index*4 +: 4] = {4{alu_uop_valid&alu_uop.is_cmp&(!last_uop_valid)}};
                 end
                 EEW16: begin
-                  cmp_tmp[(2*uop_index  )*`VLENW+i] = sub_underoverflow[0*`VLENW+2*i+1] || 
-                                                      (!sub_upoverflow[0*`VLENW+2*i+1]) && product16[0*`VLENW+i][`HWORD_WIDTH-1];
-                  cmp_tmp[(2*uop_index+1)*`VLENW+i] = sub_underoverflow[2*`VLENW+2*i+1] || 
-                                                      (!sub_upoverflow[2*`VLENW+2*i+1]) && product16[1*`VLENW+i][`HWORD_WIDTH-1];
+                  cmp_tmp[(2*uop_index  )*`VLENW(VLEN)+i] = sub_underoverflow[0*`VLENW(VLEN)+2*i+1] || 
+                                                      (!sub_upoverflow[0*`VLENW(VLEN)+2*i+1]) && product16[0*`VLENW(VLEN)+i][`HWORD_WIDTH-1];
+                  cmp_tmp[(2*uop_index+1)*`VLENW(VLEN)+i] = sub_underoverflow[2*`VLENW(VLEN)+2*i+1] || 
+                                                      (!sub_upoverflow[2*`VLENW(VLEN)+2*i+1]) && product16[1*`VLENW(VLEN)+i][`HWORD_WIDTH-1];
 
-                  cmp[(2*uop_index  )*`VLENW+i] = (uop_funct6.ari_funct6==VMSLE) ? 
-                                                    cmp_tmp[(2*uop_index)*`VLENW+i] | (!(|product16[0*`VLENW+i])) :
-                                                    cmp_tmp[(2*uop_index)*`VLENW+i] ;
-                  cmp[(2*uop_index+1)*`VLENW+i] = (uop_funct6.ari_funct6==VMSLE) ? 
-                                                    cmp_tmp[(2*uop_index+1)*`VLENW+i] | (!(|product16[1*`VLENW+i])) :
-                                                    cmp_tmp[(2*uop_index+1)*`VLENW+i] ;
+                  cmp[(2*uop_index  )*`VLENW(VLEN)+i] = (uop_funct6.ari_funct6==VMSLE) ? 
+                                                    cmp_tmp[(2*uop_index)*`VLENW(VLEN)+i] | (!(|product16[0*`VLENW(VLEN)+i])) :
+                                                    cmp_tmp[(2*uop_index)*`VLENW(VLEN)+i] ;
+                  cmp[(2*uop_index+1)*`VLENW(VLEN)+i] = (uop_funct6.ari_funct6==VMSLE) ? 
+                                                    cmp_tmp[(2*uop_index+1)*`VLENW(VLEN)+i] | (!(|product16[1*`VLENW(VLEN)+i])) :
+                                                    cmp_tmp[(2*uop_index+1)*`VLENW(VLEN)+i] ;
 
                   cmp_en[uop_index*2 +: 2] = {2{alu_uop_valid&alu_uop.is_cmp&(!last_uop_valid)}};
                 end
                 EEW32: begin
-                  cmp_tmp[uop_index*`VLENW+i] = sub_underoverflow[4*i+3] ||
+                  cmp_tmp[uop_index*`VLENW(VLEN)+i] = sub_underoverflow[4*i+3] ||
                                                 (!sub_upoverflow[4*i+3]) && product32[i][`WORD_WIDTH-1];
 
-                  cmp[uop_index*`VLENW+i] = (uop_funct6.ari_funct6==VMSLE) ? 
-                                              cmp_tmp[uop_index*`VLENW+i] | (!(|product32[i])) :
-                                              cmp_tmp[uop_index*`VLENW+i] ;
+                  cmp[uop_index*`VLENW(VLEN)+i] = (uop_funct6.ari_funct6==VMSLE) ? 
+                                              cmp_tmp[uop_index*`VLENW(VLEN)+i] | (!(|product32[i])) :
+                                              cmp_tmp[uop_index*`VLENW(VLEN)+i] ;
 
                   cmp_en[uop_index] = alu_uop_valid&alu_uop.is_cmp&(!last_uop_valid);
                 end
@@ -623,45 +630,45 @@ module rvv_backend_alu_unit_execution_p1
             VMSGTU: begin
               case(vs2_eew)
                 EEW8: begin
-                  cmp_tmp[(4*uop_index  )*`VLENW+i] = subu_underoverflow[0*`VLENW+i] || cout8[0*`VLENW+i];
-                  cmp_tmp[(4*uop_index+1)*`VLENW+i] = subu_underoverflow[1*`VLENW+i] || cout8[1*`VLENW+i];
-                  cmp_tmp[(4*uop_index+2)*`VLENW+i] = subu_underoverflow[2*`VLENW+i] || cout8[2*`VLENW+i];
-                  cmp_tmp[(4*uop_index+3)*`VLENW+i] = subu_underoverflow[3*`VLENW+i] || cout8[3*`VLENW+i];
+                  cmp_tmp[(4*uop_index  )*`VLENW(VLEN)+i] = subu_underoverflow[0*`VLENW(VLEN)+i] || cout8[0*`VLENW(VLEN)+i];
+                  cmp_tmp[(4*uop_index+1)*`VLENW(VLEN)+i] = subu_underoverflow[1*`VLENW(VLEN)+i] || cout8[1*`VLENW(VLEN)+i];
+                  cmp_tmp[(4*uop_index+2)*`VLENW(VLEN)+i] = subu_underoverflow[2*`VLENW(VLEN)+i] || cout8[2*`VLENW(VLEN)+i];
+                  cmp_tmp[(4*uop_index+3)*`VLENW(VLEN)+i] = subu_underoverflow[3*`VLENW(VLEN)+i] || cout8[3*`VLENW(VLEN)+i];
 
-                  cmp[(4*uop_index  )*`VLENW+i] = (uop_funct6.ari_funct6==VMSLEU) ? 
-                                                    cmp_tmp[(4*uop_index)*`VLENW+i] | (!(|product8[0*`VLENW+i])) :
-                                                    cmp_tmp[(4*uop_index)*`VLENW+i] ;
-                  cmp[(4*uop_index+1)*`VLENW+i] = (uop_funct6.ari_funct6==VMSLEU) ? 
-                                                    cmp_tmp[(4*uop_index+1)*`VLENW+i] | (!(|product8[1*`VLENW+i])) :
-                                                    cmp_tmp[(4*uop_index+1)*`VLENW+i] ;
-                  cmp[(4*uop_index+2)*`VLENW+i] = (uop_funct6.ari_funct6==VMSLEU) ? 
-                                                    cmp_tmp[(4*uop_index+2)*`VLENW+i] | (!(|product8[2*`VLENW+i])) :
-                                                    cmp_tmp[(4*uop_index+2)*`VLENW+i] ;
-                  cmp[(4*uop_index+3)*`VLENW+i] = (uop_funct6.ari_funct6==VMSLEU) ? 
-                                                    cmp_tmp[(4*uop_index+3)*`VLENW+i] | (!(|product8[3*`VLENW+i])) :
-                                                    cmp_tmp[(4*uop_index+3)*`VLENW+i] ;
+                  cmp[(4*uop_index  )*`VLENW(VLEN)+i] = (uop_funct6.ari_funct6==VMSLEU) ? 
+                                                    cmp_tmp[(4*uop_index)*`VLENW(VLEN)+i] | (!(|product8[0*`VLENW(VLEN)+i])) :
+                                                    cmp_tmp[(4*uop_index)*`VLENW(VLEN)+i] ;
+                  cmp[(4*uop_index+1)*`VLENW(VLEN)+i] = (uop_funct6.ari_funct6==VMSLEU) ? 
+                                                    cmp_tmp[(4*uop_index+1)*`VLENW(VLEN)+i] | (!(|product8[1*`VLENW(VLEN)+i])) :
+                                                    cmp_tmp[(4*uop_index+1)*`VLENW(VLEN)+i] ;
+                  cmp[(4*uop_index+2)*`VLENW(VLEN)+i] = (uop_funct6.ari_funct6==VMSLEU) ? 
+                                                    cmp_tmp[(4*uop_index+2)*`VLENW(VLEN)+i] | (!(|product8[2*`VLENW(VLEN)+i])) :
+                                                    cmp_tmp[(4*uop_index+2)*`VLENW(VLEN)+i] ;
+                  cmp[(4*uop_index+3)*`VLENW(VLEN)+i] = (uop_funct6.ari_funct6==VMSLEU) ? 
+                                                    cmp_tmp[(4*uop_index+3)*`VLENW(VLEN)+i] | (!(|product8[3*`VLENW(VLEN)+i])) :
+                                                    cmp_tmp[(4*uop_index+3)*`VLENW(VLEN)+i] ;
 
                   cmp_en[uop_index*4 +: 4] = {4{alu_uop_valid&alu_uop.is_cmp&(!last_uop_valid)}};
                 end
                 EEW16: begin
-                  cmp_tmp[(2*uop_index  )*`VLENW+i] = subu_underoverflow[0*`VLENW+2*i+1] || cout16[0*`VLENW+i];
-                  cmp_tmp[(2*uop_index+1)*`VLENW+i] = subu_underoverflow[2*`VLENW+2*i+1] || cout16[1*`VLENW+i];
+                  cmp_tmp[(2*uop_index  )*`VLENW(VLEN)+i] = subu_underoverflow[0*`VLENW(VLEN)+2*i+1] || cout16[0*`VLENW(VLEN)+i];
+                  cmp_tmp[(2*uop_index+1)*`VLENW(VLEN)+i] = subu_underoverflow[2*`VLENW(VLEN)+2*i+1] || cout16[1*`VLENW(VLEN)+i];
 
-                  cmp[(2*uop_index  )*`VLENW+i] = (uop_funct6.ari_funct6==VMSLEU) ? 
-                                                    cmp_tmp[(2*uop_index)*`VLENW+i] | (!(|product16[0*`VLENW+i])) :
-                                                    cmp_tmp[(2*uop_index)*`VLENW+i] ;
-                  cmp[(2*uop_index+1)*`VLENW+i] = (uop_funct6.ari_funct6==VMSLEU) ? 
-                                                    cmp_tmp[(2*uop_index+1)*`VLENW+i] | (!(|product16[1*`VLENW+i])) :
-                                                    cmp_tmp[(2*uop_index+1)*`VLENW+i] ;
+                  cmp[(2*uop_index  )*`VLENW(VLEN)+i] = (uop_funct6.ari_funct6==VMSLEU) ? 
+                                                    cmp_tmp[(2*uop_index)*`VLENW(VLEN)+i] | (!(|product16[0*`VLENW(VLEN)+i])) :
+                                                    cmp_tmp[(2*uop_index)*`VLENW(VLEN)+i] ;
+                  cmp[(2*uop_index+1)*`VLENW(VLEN)+i] = (uop_funct6.ari_funct6==VMSLEU) ? 
+                                                    cmp_tmp[(2*uop_index+1)*`VLENW(VLEN)+i] | (!(|product16[1*`VLENW(VLEN)+i])) :
+                                                    cmp_tmp[(2*uop_index+1)*`VLENW(VLEN)+i] ;
 
                   cmp_en[uop_index*2 +: 2] = {2{alu_uop_valid&alu_uop.is_cmp&(!last_uop_valid)}};
                 end
                 EEW32: begin
-                  cmp_tmp[uop_index*`VLENW+i] = subu_underoverflow[4*i+3] || cout32[i];
+                  cmp_tmp[uop_index*`VLENW(VLEN)+i] = subu_underoverflow[4*i+3] || cout32[i];
 
-                  cmp[uop_index*`VLENW+i] = (uop_funct6.ari_funct6==VMSLEU) ? 
-                                              cmp_tmp[uop_index*`VLENW+i] | (!(|product32[i])) :
-                                              cmp_tmp[uop_index*`VLENW+i] ;
+                  cmp[uop_index*`VLENW(VLEN)+i] = (uop_funct6.ari_funct6==VMSLEU) ? 
+                                              cmp_tmp[uop_index*`VLENW(VLEN)+i] | (!(|product32[i])) :
+                                              cmp_tmp[uop_index*`VLENW(VLEN)+i] ;
 
                   cmp_en[uop_index] = alu_uop_valid&alu_uop.is_cmp&(!last_uop_valid);
                 end
@@ -673,35 +680,35 @@ module rvv_backend_alu_unit_execution_p1
 
       for(j=0;j<28;j++) begin
         cdffr # (
-          .T            (logic [`VLENW-1:0])
+          .T            (logic [`VLENW(VLEN)-1:0])
         ) cmp_pipe ( 
-          .q            (cmp_d1[j*`VLENW +: `VLENW]), 
+          .q            (cmp_d1[j*`VLENW(VLEN) +: `VLENW(VLEN)]), 
           .clk          (clk), 
           .rst_n        (rst_n),  
           .c            (alu_uop_valid&is_cmp&last_uop_valid | trap_flush_rvv), 
           .e            (cmp_en[j]), 
-          .d            (cmp[j*`VLENW +: `VLENW]) 
+          .d            (cmp[j*`VLENW(VLEN) +: `VLENW(VLEN)]) 
         );
       end
 
-      assign cmp_res_tmp      = {cmp[`VLEN-1:28*`VLENW], (cmp[28*`VLENW-1:0]|cmp_d1)};
+      assign cmp_res_tmp      = {cmp[VLEN-1:28*`VLENW(VLEN)], (cmp[28*`VLENW(VLEN)-1:0]|cmp_d1)};
 
-      barrel_shifter #(.DATA_WIDTH(`VLEN)) 
-      u_prestart (.din((`VLEN)'('1)), .shift_amount(vstart[$clog2(`VLEN)-1:0]), .shift_mode(2'b00), .dout(vstart_elements_tmp));
-      barrel_shifter #(.DATA_WIDTH(`VLEN)) 
-      u_tail (.din((`VLEN)'('1)), .shift_amount(vl[$clog2(`VLEN)-1:0]), .shift_mode(2'b00), .dout(tail_elements_tmp));
+      barrel_shifter #(.DATA_WIDTH(VLEN)) 
+      u_prestart (.din((VLEN)'('1)), .shift_amount(vstart[$clog2(VLEN)-1:0]), .shift_mode(2'b00), .dout(vstart_elements_tmp));
+      barrel_shifter #(.DATA_WIDTH(VLEN)) 
+      u_tail (.din((VLEN)'('1)), .shift_amount(vl[$clog2(VLEN)-1:0]), .shift_mode(2'b00), .dout(tail_elements_tmp));
       
       assign vstart_elements  = ~vstart_elements_tmp;
-      assign tail_elements    = vl[$clog2(`VLEN)] ? 'b0 : tail_elements_tmp;
+      assign tail_elements    = vl[$clog2(VLEN)] ? 'b0 : tail_elements_tmp;
 
-      for(j=0;j<`VLEN;j++) begin: CMP_MERGE
+      for(j=0;j<VLEN;j++) begin: CMP_MERGE
         assign cmp_res[j]       = !(vstart_elements[j]|tail_elements[j]) & (vm|v0_data[j]) ? cmp_res_tmp[j] : vd_data[j];
         assign vmadcsbc_res[j]  = vstart_elements[j]|tail_elements[j] ? vd_data[j] : cmp_res_tmp[j];
       end
     end
 
     // assign to result_data
-    for (j=0;j<`VLENW;j++) begin: GET_RESULT_DATA
+    for (j=0;j<`VLENW(VLEN);j++) begin: GET_RESULT_DATA
       always_comb begin
         // initial the data
         result_data[j*`WORD_WIDTH +: `WORD_WIDTH] = alu_uop.w_data[j*`WORD_WIDTH +: `WORD_WIDTH];

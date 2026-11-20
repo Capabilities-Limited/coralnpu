@@ -1,5 +1,9 @@
 
-module rvv_backend_sqrt7_rec7(
+module rvv_backend_sqrt7_rec7#(
+  parameter type TagType = logic,
+  localparam type RVFRM = RVFRM_e
+)
+(
   clk,
   rst_n,
   // Input signals
@@ -19,7 +23,6 @@ module rvv_backend_sqrt7_rec7(
   out_valid_o,
   out_ready_i
 );
-  parameter  type TagType   = logic;
   localparam CANO_NAN_SIGN  = 1'b0;
   localparam CANO_NAN_EXP   = 8'hff;
   localparam CANO_NAN_MAN   = 23'h400000;

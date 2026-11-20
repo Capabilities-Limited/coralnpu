@@ -6,7 +6,16 @@
 `include "rvv_backend_alu.svh"
 `endif
 
-module rvv_backend_alu_unit
+module rvv_backend_alu_unit#(
+  parameter int unsigned VLEN = `VLEN,
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  parameter type RegDataT=logic [31:0],
+  parameter bit CMP_SUPPORT = 1'b0,
+  localparam int unsigned XLEN = $bits(RegDataT),
+  localparam type ALU_RS_t = `ALU_RS_t(VLEN, PC_WIDTH),
+  localparam type PU2ROB_t = `PU2ROB_t(VLEN, PC_WIDTH),
+  localparam type PIPE_DATA_t = `PIPE_DATA_t(VLEN, PC_WIDTH)
+)
 (
   clk,
   rst_n,
@@ -18,8 +27,6 @@ module rvv_backend_alu_unit
   result_ready,
   trap_flush_rvv
 );
-
-  parameter               CMP_SUPPORT = 1'b0;
 //
 // interface signals
 //
@@ -65,6 +72,9 @@ module rvv_backend_alu_unit
 // instance
 //
   rvv_backend_alu_unit_addsub #(
+    .VLEN(VLEN),
+    .RegDataT(RegDataT),
+    .PC_WIDTH(PC_WIDTH),
     .CMP_SUPPORT          (CMP_SUPPORT)
   ) u_alu_addsub (
     .alu_uop_valid        (alu_uop_valid),
@@ -73,24 +83,33 @@ module rvv_backend_alu_unit
     .result               (result_addsub_p0)
   );
 
-  rvv_backend_alu_unit_shift 
-  u_alu_shift (
+  rvv_backend_alu_unit_shift#(
+    .VLEN(VLEN),
+    .RegDataT(RegDataT),
+    .PC_WIDTH(PC_WIDTH)
+  ) u_alu_shift (
     .alu_uop_valid        (alu_uop_valid),
     .alu_uop              (alu_uop),
     .result_valid         (result_valid_shift_p0),
     .result               (result_shift_p0)
   );
   
-  rvv_backend_alu_unit_mask 
-  u_alu_mask ( 
+  rvv_backend_alu_unit_mask#(
+    .VLEN(VLEN),
+    .RegDataT(RegDataT),
+    .PC_WIDTH(PC_WIDTH)
+  ) u_alu_mask ( 
     .alu_uop_valid        (alu_uop_valid),
     .alu_uop              (alu_uop),
     .result_valid         (result_valid_mask_p0),
     .result               (result_mask_p0)
   );
 
-  rvv_backend_alu_unit_other 
-  u_alu_other (
+  rvv_backend_alu_unit_other#(
+    .VLEN(VLEN),
+    .RegDataT(RegDataT),
+    .PC_WIDTH(PC_WIDTH)
+  ) u_alu_other (
     .alu_uop_valid        (alu_uop_valid),
     .alu_uop              (alu_uop),
     .result_valid         (result_valid_other_p0),
@@ -219,6 +238,8 @@ module rvv_backend_alu_unit
   );
 
   rvv_backend_alu_unit_execution_p1 #(
+    .VLEN(VLEN),
+    .PC_WIDTH(PC_WIDTH),
     .CMP_SUPPORT          (CMP_SUPPORT)
   ) u_alu_p1
   ( 

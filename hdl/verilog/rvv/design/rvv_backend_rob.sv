@@ -17,7 +17,15 @@ feature list:
 `include "rvv_backend.svh"
 `endif
 
-module rvv_backend_rob
+module rvv_backend_rob#(
+  parameter int unsigned VLEN = `VLEN,
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type PU2ROB_t = `PU2ROB_t(VLEN, PC_WIDTH),
+  localparam type RES_ROB_t = `RES_ROB_t(VLEN, PC_WIDTH),
+  localparam type DP2ROB_t = `DP2ROB_t(VLEN, PC_WIDTH),
+  localparam type ROB2DP_t = `ROB2DP_t(VLEN, PC_WIDTH),
+  localparam type ROB2RT_t = `ROB2RT_t(VLEN, PC_WIDTH)
+)
 (
     clk,
     rst_n,
@@ -61,9 +69,9 @@ module rvv_backend_rob
 
 // push uop result to ROB
 // PU to ROB
-    input   logic     [`NUM_SMPORT-1:0]                   wr_valid_pu2rob;
-    input   PU2ROB_t  [`NUM_SMPORT-1:0]                   wr_pu2rob;
-    input   logic     [`NUM_SMPORT-1:0][$clog2(`VLENB):0] ff_tail_index;  
+    input   logic     [`NUM_SMPORT-1:0]                         wr_valid_pu2rob;
+    input   PU2ROB_t  [`NUM_SMPORT-1:0]                         wr_pu2rob;
+    input   logic     [`NUM_SMPORT-1:0][$clog2(`VLENB(VLEN)):0] ff_tail_index;  
 
 // retire uops
 // pop vd_data from ROB and write to VRF
@@ -276,15 +284,15 @@ module rvv_backend_rob
   assign trap_ready_rob2rmp = 1'b1;
 
   // retire uop(s)
-  logic [`ROB_DEPTH-1:0][$clog2(`VLENB):0] rt_ff_tail_index;
-  logic [`ROB_DEPTH-1:0][`VLENB-1:0]       rt_ff_strobe;
-  logic [`ROB_DEPTH-1:0]                   is_ff;
+  logic [`ROB_DEPTH-1:0][$clog2(`VLENB(VLEN)):0] rt_ff_tail_index;
+  logic [`ROB_DEPTH-1:0][`VLENB(VLEN)-1:0]       rt_ff_strobe;
+  logic [`ROB_DEPTH-1:0]                         is_ff;
 
   for (genvar i=0; i<`ROB_DEPTH; i++) begin
     // write strobe
       assign rt_ff_tail_index[i] = res_mem[wind_uop_rptr[i]].ff_tail_index;
       assign is_ff[i]            = alluop_info[i].is_ff;
-      assign rt_ff_strobe[i]     = ~((`VLENB)'('1)<<rt_ff_tail_index[i]);
+      assign rt_ff_strobe[i]     = ~((`VLENB(VLEN))'('1)<<rt_ff_tail_index[i]);
   end
 
   for (genvar i=0; i<`NUM_RT_UOP; i++) begin : gen_rob2rt
@@ -313,7 +321,7 @@ module rvv_backend_rob
     `endif
 
       always_comb begin
-          for(int j=0;j<`VLENB;j++) begin
+          for(int j=0;j<`VLENB(VLEN);j++) begin
               rd_rob2rt[i].vd_type[j] = (is_ff[i] && !rt_ff_strobe[i][j]) ? TAIL : uop_rob2rt[i].byte_type[j];
           end
       end
@@ -353,7 +361,7 @@ module rvv_backend_rob
       assign uop_rob2dp[i].vector_csr = alluop_info[i].vector_csr;
 
       always_comb begin
-          for(int j=0;j<`VLENB;j++) begin
+          for(int j=0;j<`VLENB(VLEN);j++) begin
               uop_rob2dp[i].byte_type[j] = (is_ff[i] && !rt_ff_strobe[i][j]) ? TAIL : alluop_info[i].byte_type[j];
           end
       end

@@ -13,16 +13,26 @@ import rvv_tb_pkg::*;
 `include "rvv_backend_test.sv"  
 `include "rvv_backend_random_test.sv"  
 `include "rvv_backend_corner_test.sv"  
+`include "rvv_backend_fp_test.sv"
+`ifdef ZVT_ON
+`include "rvv_backend_zvt_test.sv"
+`endif
 
   typedef virtual rvs_interface v_if1;
   typedef virtual lsu_interface v_if2;
   typedef virtual vrf_interface v_if3;
   typedef virtual rvv_intern_interface v_if4;
+`ifdef ZVT_ON
+  typedef virtual vme_interface v_if5;
+`endif
   initial begin
-    uvm_config_db #(v_if1)::set(null,"","rvs_if",rvv_backend_top.rvs_if); 
-    uvm_config_db #(v_if2)::set(null,"","lsu_if",rvv_backend_top.lsu_if);
-    uvm_config_db #(v_if3)::set(null,"","vrf_if",rvv_backend_top.vrf_if);
-    uvm_config_db #(v_if4)::set(null,"","rvv_intern_if",rvv_backend_top.rvv_intern_if);
+    uvm_config_db #(v_if1)::set(null,"*","rvs_if",rvv_backend_top.rvs_if); 
+    uvm_config_db #(v_if2)::set(null,"*","lsu_if",rvv_backend_top.lsu_if);
+    uvm_config_db #(v_if3)::set(null,"*","vrf_if",rvv_backend_top.vrf_if);
+    uvm_config_db #(v_if4)::set(null,"*","rvv_intern_if",rvv_backend_top.rvv_intern_if);
+`ifdef ZVT_ON
+    uvm_config_db #(v_if5)::set(null,"*","vme_if",rvv_backend_top.vme_if);
+`endif
     run_test();
   end
 

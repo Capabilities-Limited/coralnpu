@@ -6,7 +6,16 @@
 // this module decode floating point instruction to sub uop unit
 // and pass results from these submodules to ROB
 
-module rvv_backend_falu( 
+module rvv_backend_falu#( 
+  parameter int unsigned VLEN = `VLEN,
+  // Scalar Register Data
+  parameter type RegDataT=logic [31:0],
+  localparam int unsigned XLEN = $bits(RegDataT),
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type FALU_RS_t = `FALU_RS_t(VLEN, XLEN, PC_WIDTH),
+  localparam type PU2ROB_t = `PU2ROB_t(VLEN, PC_WIDTH)
+)
+(
   clk, 
   rst_n,          
   pop,            
@@ -126,8 +135,11 @@ module rvv_backend_falu(
 
   generate
     for(i=0;i<`NUM_FALU;i++) begin:uop_unit
-      rvv_backend_falu_unit #() 
-      falu_uop_unit(
+      rvv_backend_falu_unit #(
+        .VLEN(VLEN),
+        .PC_WIDTH(PC_WIDTH),
+        .RegDataT(RegDataT)
+      ) falu_uop_unit(
         //global
         .clk                  (clk),
         .rst_n                (rst_n),

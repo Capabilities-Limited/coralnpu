@@ -6,7 +6,15 @@
 `include "rvv_backend_sva.svh"
 `endif
 
-module rvv_backend_decode_unit
+module rvv_backend_decode_unit#(
+  parameter int unsigned VLEN = `VLEN,
+  // Scalar Register Data
+  parameter type RegDataT=logic [31:0],
+  localparam int unsigned XLEN = $bits(RegDataT),
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type RVVCmd = `CMD_t(VLEN, XLEN, PC_WIDTH),
+  localparam type LCMD_t = `LCMD_t(VLEN, XLEN, PC_WIDTH)
+)
 (
   inst_valid,
   inst,
@@ -44,8 +52,11 @@ module rvv_backend_decode_unit
   assign valid_ari    = inst_valid & (inst.opcode==RVV);
   
   // decode LSU instruction 
-  rvv_backend_decode_unit_lsu u_lsu_decode
-  (
+  rvv_backend_decode_unit_lsu#(
+    .VLEN(VLEN),
+    .RegDataT(RegDataT),
+    .PC_WIDTH(PC_WIDTH)
+  ) u_lsu_decode (
     .inst_valid        (valid_lsu),
     .inst              (inst),
     .lcmd_valid        (lcmd_valid_lsu),
@@ -53,8 +64,11 @@ module rvv_backend_decode_unit
   );
 
   // decode arithmetic instruction
-  rvv_backend_decode_unit_ari u_ari_decode
-  (
+  rvv_backend_decode_unit_ari#(
+    .VLEN(VLEN),
+    .RegDataT(RegDataT),
+    .PC_WIDTH(PC_WIDTH)
+  ) u_ari_decode (
     .inst_valid        (valid_ari),
     .inst              (inst),
     .lcmd_valid        (lcmd_valid_ari),
@@ -90,10 +104,10 @@ module rvv_backend_decode_unit
       end
     end
     ReserveInstCheck_Info: `rvv_forbid(inst_valid && !lcmd_valid)
-    else $info("PC(0x%h) is a reserved/nop instruction. RvvBackend.Decoder retired it directly.\n",$sampled(inst.inst_pc));
+    else $info("PC(0x%h) is a nop instruction. RvvBackend.Decoder retired it directly.\n",$sampled(inst.inst_pc));
 
     ReserveInstCheck_Error: `rvv_forbid(inst_valid && !lcmd_valid)
-    else $error("PC(0x%h) is a reserved/nop instruction. RvvBackend.Decoder retired it directly.\n",$sampled(inst.inst_pc));
+    else $error("PC(0x%h) is a nop instruction. RvvBackend.Decoder retired it directly.\n",$sampled(inst.inst_pc));
   `endif
 
 endmodule

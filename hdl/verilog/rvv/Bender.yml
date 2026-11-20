@@ -1,0 +1,26 @@
+# Third-party RTL for the RVV backend, fetched by Bender (https://github.com/pulp-platform/bender).
+#
+# Only needed for the floating point build (`make FP=1`): the FP units instantiate CVFPU (fpnew).
+#
+# CVFPU is vendored: `bender vendor init` copies it from upstream at the pinned revision into
+# .vendor/cvfpu (gitignored) and applies the patches in third_party/cvfpu, the same ones the Bazel
+# build applies (rules/repos.bzl). It is then used as a path dependency. Bender applies every
+# *.patch in patch_dir with `git apply -p1`, sorted by name, so only patches that Bazel also uses may
+# carry that extension there.
+#
+# CVFPU's own manifest pulls in common_cells and fpu_div_sqrt_mvp; Bender.local pins those two to the
+# revisions the Bazel build uses, and Bender.lock pins everything.
+#
+# To bump a dependency: edit the revision here / in Bender.local, run `bender vendor init` and
+# `bender update`, and commit Bender.lock. Keep the revisions in step with rules/repos.bzl.
+package:
+  name: rvv_backend
+
+dependencies:
+  fpnew: {path: .vendor/cvfpu}
+
+vendor_package:
+  - name: fpnew
+    target_dir: .vendor/cvfpu
+    upstream: {git: "https://github.com/openhwgroup/cvfpu.git", rev: bb65bdedd07711dfd41c621382f940a5cbb93046}
+    patch_dir: ../../../third_party/cvfpu

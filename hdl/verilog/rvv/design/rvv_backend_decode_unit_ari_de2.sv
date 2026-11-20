@@ -8,7 +8,16 @@
 
 // TODO: tail uops
 
-module rvv_backend_decode_unit_ari_de2
+module rvv_backend_decode_unit_ari_de2#(
+  parameter int unsigned VLEN = `VLEN,
+  // Scalar Register Data
+  parameter type RegDataT=logic [31:0],
+  localparam int unsigned XLEN = $bits(RegDataT),
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type RVVConfigState = `CONFIG_STATE_t(VLEN),
+  localparam type LCMD_t = `LCMD_t(VLEN, XLEN, PC_WIDTH),
+  localparam type UOP_QUEUE_t = `UOP_QUEUE_t(VLEN, XLEN, PC_WIDTH)
+)
 (
   lcmd_valid,
   lcmd,
@@ -39,11 +48,11 @@ module rvv_backend_decode_unit_ari_de2
   logic   [`REGIDX_WIDTH-1:0]                 inst_vd;          // inst original encoding[11:7]
   logic   [`REGIDX_WIDTH-1:0]                 inst_rd;          // inst original encoding[11:7]
   logic   [`UOP_INDEX_WIDTH-1:0]              uop_vstart;         
-  logic   [`XLEN-1:0]                         rs1;
+  logic   [XLEN-1:0]                          rs1;
   logic   [`REGIDX_WIDTH-1:0]                 vs1_opcode;
   logic   [`REGIDX_WIDTH-1:0]                 vs2_opcode;
   RVVConfigState                              vector_csr_ari;
-  logic   [`VSTART_WIDTH-1:0]                 csr_vstart;
+  logic   [`VSTART_WIDTH(VLEN)-1:0]           csr_vstart;
   logic   [`UOP_INDEX_WIDTH-1:0]              uop_index_max;         
   EMUL_e                                      emul_vd;          
   EMUL_e                                      emul_vs2;          
@@ -84,7 +93,7 @@ module rvv_backend_decode_unit_ari_de2
 `ifdef ZVT_ON
   logic                                               mt_valid; 
 `endif
-  logic   [`XLEN-1:0] 	                              rs1_data;           
+  logic   [XLEN-1:0] 	                              rs1_data;           
   logic        	                                      rs1_data_valid;     
   logic   [`NUM_DE_UOP-1:0][`UOP_INDEX_WIDTH-1:0]     uop_index;          
   logic   [`NUM_DE_UOP-1:0][$clog2(`EMUL_MAX)-1:0]    seg_field_index;
@@ -708,7 +717,8 @@ module rvv_backend_decode_unit_ari_de2
                 VMSBF,
                 VMSIF,
                 VMSOF: begin
-                  uop_class[i] = inst_vm ? XVX: VVX;
+                  // vd is always read (vs3_valid), so the dispatch read-port mapping must include it
+                  uop_class[i] = VVX;
                 end
                 VIOTA: begin
                   uop_class[i] = first_uop_valid[i] ? XVX : XXX;
@@ -842,13 +852,13 @@ module rvv_backend_decode_unit_ari_de2
               default: begin 
                 case(eew_max)
                   EEW8: begin
-                    vector_csr[i].vstart  = {uop_index_current[i][`UOP_INDEX_WIDTH_ALU-1:0],{($clog2(`VLENB)){1'b0}}};
+                    vector_csr[i].vstart  = {uop_index_current[i][`UOP_INDEX_WIDTH_ALU-1:0],{($clog2(`VLENB(VLEN))){1'b0}}};
                   end
                   EEW16: begin
-                    vector_csr[i].vstart  = {1'b0,uop_index_current[i][`UOP_INDEX_WIDTH_ALU-1:0],{($clog2(`VLEN/`HWORD_WIDTH)){1'b0}}};
+                    vector_csr[i].vstart  = {1'b0,uop_index_current[i][`UOP_INDEX_WIDTH_ALU-1:0],{($clog2(VLEN/`HWORD_WIDTH)){1'b0}}};
                   end
                   EEW32: begin
-                    vector_csr[i].vstart  = {2'b0,uop_index_current[i][`UOP_INDEX_WIDTH_ALU-1:0],{($clog2(`VLEN/`WORD_WIDTH)){1'b0}}};
+                    vector_csr[i].vstart  = {2'b0,uop_index_current[i][`UOP_INDEX_WIDTH_ALU-1:0],{($clog2(VLEN/`WORD_WIDTH)){1'b0}}};
                   end
                 endcase
               end
@@ -871,13 +881,13 @@ module rvv_backend_decode_unit_ari_de2
               default: begin 
                 case(eew_max)
                   EEW8: begin
-                    vector_csr[i].vstart  = {uop_index_current[i][`UOP_INDEX_WIDTH_ALU-1:0],{($clog2(`VLENB)){1'b0}}};
+                    vector_csr[i].vstart  = {uop_index_current[i][`UOP_INDEX_WIDTH_ALU-1:0],{($clog2(`VLENB(VLEN))){1'b0}}};
                   end
                   EEW16: begin
-                    vector_csr[i].vstart  = {1'b0,uop_index_current[i][`UOP_INDEX_WIDTH_ALU-1:0],{($clog2(`VLEN/`HWORD_WIDTH)){1'b0}}};
+                    vector_csr[i].vstart  = {1'b0,uop_index_current[i][`UOP_INDEX_WIDTH_ALU-1:0],{($clog2(VLEN/`HWORD_WIDTH)){1'b0}}};
                   end
                   EEW32: begin
-                    vector_csr[i].vstart  = {2'b0,uop_index_current[i][`UOP_INDEX_WIDTH_ALU-1:0],{($clog2(`VLEN/`WORD_WIDTH)){1'b0}}};
+                    vector_csr[i].vstart  = {2'b0,uop_index_current[i][`UOP_INDEX_WIDTH_ALU-1:0],{($clog2(VLEN/`WORD_WIDTH)){1'b0}}};
                   end
                 endcase
               end
@@ -903,13 +913,13 @@ module rvv_backend_decode_unit_ari_de2
               default: begin 
                 case(eew_max)
                   EEW8: begin
-                    vector_csr[i].vstart  = {uop_index_current[i][`UOP_INDEX_WIDTH-1:0],{($clog2(`VLENB)){1'b0}}};
+                    vector_csr[i].vstart  = {uop_index_current[i][`UOP_INDEX_WIDTH-1:0],{($clog2(`VLENB(VLEN))){1'b0}}};
                   end
                   EEW16: begin
-                    vector_csr[i].vstart  = {1'b0,uop_index_current[i][`UOP_INDEX_WIDTH-1:0],{($clog2(`VLEN/`HWORD_WIDTH)){1'b0}}};
+                    vector_csr[i].vstart  = {1'b0,uop_index_current[i][`UOP_INDEX_WIDTH-1:0],{($clog2(VLEN/`HWORD_WIDTH)){1'b0}}};
                   end
                   EEW32: begin
-                    vector_csr[i].vstart  = {2'b0,uop_index_current[i][`UOP_INDEX_WIDTH-1:0],{($clog2(`VLEN/`WORD_WIDTH)){1'b0}}};
+                    vector_csr[i].vstart  = {2'b0,uop_index_current[i][`UOP_INDEX_WIDTH-1:0],{($clog2(VLEN/`WORD_WIDTH)){1'b0}}};
                   end
                 endcase
               end
@@ -1457,7 +1467,9 @@ module rvv_backend_decode_unit_ari_de2
                     VMSBF,
                     VMSIF,
                     VMSOF: begin
-                      vs3_valid[i] = (inst_vm==1'b0);
+                      // Always read the old vd: the tail (and, if masked, the inactive elements)
+                      // is written back undisturbed from vd_data in rvv_backend_alu_unit_mask.sv.
+                      vs3_valid[i] = 1'b1;
                     end
                   endcase
                 end
@@ -2191,7 +2203,7 @@ module rvv_backend_decode_unit_ari_de2
           VMERGE_VMV,
           VSADDU,
           VSADD: begin
-            rs1_data       = {{(`XLEN-`IMM_WIDTH){inst_imm[`IMM_WIDTH-1]}},inst_imm[`IMM_WIDTH-1:0]};
+            rs1_data       = {{(XLEN-`IMM_WIDTH){inst_imm[`IMM_WIDTH-1]}},inst_imm[`IMM_WIDTH-1:0]};
             rs1_data_valid = 1'b1;
           end
 
@@ -2207,7 +2219,7 @@ module rvv_backend_decode_unit_ari_de2
           VSLIDEUP_RGATHEREI16,
           VSLIDEDOWN,
           VRGATHER: begin
-            rs1_data       = {{(`XLEN-`IMM_WIDTH){1'b0}},inst_imm[`IMM_WIDTH-1:0]};
+            rs1_data       = {{(XLEN-`IMM_WIDTH){1'b0}},inst_imm[`IMM_WIDTH-1:0]};
             rs1_data_valid = 1'b1;
           end
         endcase
