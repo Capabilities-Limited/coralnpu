@@ -486,21 +486,21 @@ struct packed { \
 `define FALU_RS_t(VLEN, XLEN, PC_WIDTH) \
 struct packed { \
 `ifdef TB_SUPPORT \
-  logic   [PC_WIDTH-1:0]              uop_pc; \
+  logic   [PC_WIDTH-1:0]                    uop_pc; \
 `endif \
-  logic   [`ROB_DEPTH_WIDTH-1:0]      rob_entry; \
-  FUNCT6_u                            uop_funct6; \
-  logic   [`FUNCT3_WIDTH-1:0]         uop_funct3; \
-  EXE_UNIT_e                          uop_exe_unit; \
-  logic   [`VSTART_WIDTH(VLEN)-1:0]   vstart; \
-  logic   [`VL_WIDTH(VLEN)-1:0]       vl; \
-  logic                               vm; \
-  RVFRM_e                             frm; \
-  logic   [`VLENW(VLEN)*`EMUL_MAX-1:0] v0_data; \
-  logic                               v0_data_valid; \
-  logic   [`REGIDX_WIDTH-1:0]         vs1; \
-  logic   [VLEN-1:0]                  vs1_data; \
-  logic                               vs1_data_valid; \
+  logic   [`ROB_DEPTH_WIDTH-1:0]            rob_entry; \
+  FUNCT6_u                                  uop_funct6; \
+  logic   [`FUNCT3_WIDTH-1:0]               uop_funct3; \
+  EXE_UNIT_e                                uop_exe_unit; \
+  logic   [`VSTART_WIDTH(VLEN)-1:0]         vstart; \
+  logic   [`VL_WIDTH(VLEN)-1:0]             vl; \
+  logic                                     vm; \
+  RVFRM_e                                   frm; \
+  logic   [`VLENW(VLEN)*`EMUL_MAX-1:0]      v0_data; \
+  logic                                     v0_data_valid; \
+  logic   [`REGIDX_WIDTH-1:0]               vs1; \
+  logic   [VLEN-1:0]                        vs1_data; \
+  logic                                     vs1_data_valid; \
   logic   [VLEN-1:0]                 vs2_data; \
   logic                               vs2_data_valid; \
   EEW_e                               vs2_eew; \
@@ -733,26 +733,26 @@ typedef enum logic [1:0] {
 `define ZVT_RS_t(VLEN, PC_WIDTH) \
 struct packed { \
 `ifdef TB_SUPPORT \
-  logic   [PC_WIDTH-1:0]          uop_pc; \
+  logic   [PC_WIDTH-1:0]             uop_pc; \
 `endif \
-  logic   [`ROB_TAG_WIDTH-1:0]    rob_tag; \
-  logic   [`ROB_DEPTH_WIDTH-1:0]  rob_entry; \
-  FUNCT6_u                        uop_funct6; \
-  logic   [`FUNCT3_WIDTH-1:0]     uop_funct3; \
-  logic   [`REGIDX_WIDTH-1:0]     vs2; \
-  logic                           is_lsu; \
-  logic                           is_store; \
-  logic   [`VSTART_WIDTH(VLEN)-1:0] vstart; \
-  logic                           altfmt; \
-  logic   [1:0]                   mtwiden; \
-  logic   [13:0]                  tm; \
-  logic   [$clog2(`TE(VLEN)):0]   vl; \
-  logic   [2:0]                   tk; \
-  RVVSEW_e                        sew; \
-  EEW_e                           eew_mt; \
-  fpnew_pkg::roundmode_e          rndMode; \
-  `TSS_t(VLEN)                    tss; \
-  logic   [VLEN-1:0]              vs1_data; \
+  logic   [`ROB_TAG_WIDTH-1:0]       rob_tag; \
+  logic   [`ROB_DEPTH_WIDTH-1:0]     rob_entry; \
+  FUNCT6_u                           uop_funct6; \
+  logic   [`FUNCT3_WIDTH-1:0]        uop_funct3; \
+  logic   [`REGIDX_WIDTH-1:0]        vs2; \
+  logic                              is_lsu; \
+  logic                              is_store; \
+  logic   [`VSTART_WIDTH(VLEN)-1:0]  vstart; \
+  logic                              altfmt; \
+  logic   [1:0]                      mtwiden; \
+  logic   [13:0]                     tm; \
+  logic   [$clog2(`TE(VLEN)):0]      vl; \
+  logic   [2:0]                      tk; \
+  RVVSEW_e                           sew; \
+  EEW_e                              eew_mt; \
+  fpnew_pkg::roundmode_e             rndMode; \
+  `TSS_t(VLEN)                       tss; \
+  logic   [VLEN-1:0]                 vs1_data; \
   logic   [VLEN-1:0]             vs2_data; \
   logic   [`REGIDX_WIDTH-1:0]     dst_index; \
   logic                           first_uop_valid; \
@@ -763,20 +763,20 @@ struct packed { \
 `define PEVAINFO_t(VLEN, PC_WIDTH) \
 struct packed { \
 `ifdef TB_SUPPORT \
-  logic [PC_WIDTH-1:0]                          uop_pc; \
+  logic [PC_WIDTH-1:0]                                      uop_pc; \
 `endif \
   logic [`TE(VLEN)/2*`COMPRATIO(VLEN)-1:0][`WORD_WIDTH-1:0] va; \
-  logic [`TE(VLEN)/2*`COMPRATIO(VLEN)-1:0][3:0] vaMask; \
-  fpnew_pkg::roundmode_e                        rndMode; \
-  PEOPCODE_e                                    op; \
-  logic                                         opMod; \
-  fpnew_pkg::fp_format_e                        fsrcFmt; \
-  fpnew_pkg::int_format_e                       isrcFmt; \
-  fpnew_pkg::fp_format_e                        fdstFmt; \
-  fpnew_pkg::int_format_e                       idstFmt; \
-  logic [$clog2(`NUM_MT)-1:0]                   readMtIdx; \
-  logic [$clog2(`PROCESS_DELAY(VLEN))-1:0]      readMtId; \
-  logic                                         lastUopVld; \
+  logic [`TE(VLEN)/2*`COMPRATIO(VLEN)-1:0][3:0]             vaMask; \
+  fpnew_pkg::roundmode_e                                    rndMode; \
+  PEOPCODE_e                                                op; \
+  logic                                                     opMod; \
+  fpnew_pkg::fp_format_e                                    fsrcFmt; \
+  fpnew_pkg::int_format_e                                   isrcFmt; \
+  fpnew_pkg::fp_format_e                                    fdstFmt; \
+  fpnew_pkg::int_format_e                                   idstFmt; \
+  logic [$clog2(`NUM_MT)-1:0]                               readMtIdx; \
+  logic [$clog2(`PROCESS_DELAY(VLEN))-1:0]                  readMtId; \
+  logic                                                     lastUopVld; \
 }
 
 `define PEVBINFO_t(VLEN) \
@@ -807,10 +807,10 @@ struct packed { \
 
 `define MULBULKRES_t(VLEN, PC_WIDTH) \
 struct packed { \
-  logic [`TE(VLEN)/2*`COMPRATIO(VLEN)-1:0][`TE(VLEN)/2-1:0][`WORD_WIDTH-1:0] res; \
-  logic [`TE(VLEN)/2*`COMPRATIO(VLEN)-1:0][`TE(VLEN)/2-1:0][3:0] resMask; \
-  fpnew_pkg::status_t                                       status; \
-  `MULBULKTAG_t(VLEN, PC_WIDTH)                             tag; \
+  logic [`TE(VLEN)/2*`COMPRATIO(VLEN)-1:0][`TE(VLEN)/2-1:0][`WORD_WIDTH-1:0]  res; \
+  logic [`TE(VLEN)/2*`COMPRATIO(VLEN)-1:0][`TE(VLEN)/2-1:0][3:0]              resMask; \
+  fpnew_pkg::status_t                                                         status; \
+  `MULBULKTAG_t(VLEN, PC_WIDTH)                                               tag; \
 }
 
 `define ADDERTAG_t(VLEN, PC_WIDTH) \
@@ -843,14 +843,14 @@ struct packed { \
 
 `define MT_INFO_t(VLEN, PC_WIDTH) \
 struct packed { \
-  logic                                                     Vld; \
+  logic                                                                 Vld; \
 `ifdef RVVI_ON \
-  logic [PC_WIDTH-1:0]                                      inst_pc; \
-  fpnew_pkg::status_t                                       status; \
-  logic [3:0][$clog2(`NUM_MT)-1:0]                          rvviMtIdx; \
-  logic [3:0][`NUM_SUBTILE(VLEN)/2-1:0]                     rvviSubVld; \
+  logic [PC_WIDTH-1:0]                                                  inst_pc; \
+  fpnew_pkg::status_t                                                   status; \
+  logic [3:0][$clog2(`NUM_MT)-1:0]                                      rvviMtIdx; \
+  logic [3:0][`NUM_SUBTILE(VLEN)/2-1:0]                                 rvviSubVld; \
   logic [3:0][`NUM_SUBTILE(VLEN)/2-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] rvviSubIdx; \
-  logic [3:0][`NUM_SUBTILE(VLEN)/2-1:0][`SUBTILE_SIZE*8-1:0] rvviData; \
+  logic [3:0][`NUM_SUBTILE(VLEN)/2-1:0][`SUBTILE_SIZE*8-1:0]            rvviData; \
 `endif \
 }
 
@@ -872,15 +872,15 @@ struct packed { \
 `define VMERT_t(VLEN, PC_WIDTH) \
 struct packed { \
 `ifdef TB_SUPPORT \
-  logic [PC_WIDTH-1:0]                                inst_pc; \
+  logic [PC_WIDTH-1:0]                                      inst_pc; \
 `endif \
-  logic [`ROB_TAG_WIDTH-1:0]                          rob_tag; \
-  logic                                               isStore; \
-  logic [3:0]                                         mtIdxVld; \
-  logic [$clog2(`NUM_MT)-1:0]                         mtIdx; \
+  logic [`ROB_TAG_WIDTH-1:0]                                rob_tag; \
+  logic                                                     isStore; \
+  logic [3:0]                                               mtIdxVld; \
+  logic [$clog2(`NUM_MT)-1:0]                               mtIdx; \
 `ifdef RVVI_ON \
-  fpnew_pkg::status_t                                 status; \
-  logic [3:0][`NUM_SUBTILE(VLEN)-1:0][`SUBTILE_SIZE*8-1:0] mtData; \
+  fpnew_pkg::status_t                                       status; \
+  logic [3:0][`NUM_SUBTILE(VLEN)-1:0][`SUBTILE_SIZE*8-1:0]  mtData; \
 `endif \
 }
 `endif  // ZVT_ON 

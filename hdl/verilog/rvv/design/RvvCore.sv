@@ -248,9 +248,9 @@ module RvvCore #(
   // Scalar regfile write-back tie-offs
   // TODO(derekjchow): Properly arbitrate write-back tie-offs by extending
   // interface. For time being, only accept from slot 0.
-  logic    [`NUM_RT_UOP-1:0] rt_xrf_valid_rvv2rvs;
+  logic                     [`NUM_RT_UOP-1:0] rt_xrf_valid_rvv2rvs;
   `RT2RVS_t(XLEN, PC_WIDTH) [`NUM_RT_UOP-1:0] rt_rvs_rvv2rvs;
-  logic    [`NUM_RT_UOP-1:0] rt_rvs_ready_rvs2rvv;
+  logic                     [`NUM_RT_UOP-1:0] rt_rvs_ready_rvs2rvv;
 
   always_comb begin
     rt_rvs_ready_rvs2rvv[0] = async_rd_ready;

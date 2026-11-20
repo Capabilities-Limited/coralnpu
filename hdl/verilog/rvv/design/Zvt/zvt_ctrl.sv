@@ -57,46 +57,46 @@ module zvt_ctrl#(
 );
 
 // interface signals
-  input  logic                      clk;
-  input  logic                      rst_n;
+  input  logic                            clk;
+  input  logic                            rst_n;
   // 
-  input  logic    [`ZVT_LMUL(VLEN)-1:0] uopVld;
-  input  ZVT_RS_t [`ZVT_LMUL(VLEN)-1:0] uop;
-  output logic    [`ZVT_LMUL(VLEN)-1:0] uopRdy;
+  input  logic    [`ZVT_LMUL(VLEN)-1:0]   uopVld;
+  input  ZVT_RS_t [`ZVT_LMUL(VLEN)-1:0]   uop;
+  output logic    [`ZVT_LMUL(VLEN)-1:0]   uopRdy;
   // VME2RVV
-  output logic                      resVme2rvvVld;
-  output PU2ROB_t                   resVme2rvv;
-  input  logic                      resVme2rvvRdy;
+  output logic                            resVme2rvvVld;
+  output PU2ROB_t                         resVme2rvv;
+  input  logic                            resVme2rvvRdy;
   // VME2LSU
-  output logic                      vmelsuVld;
-  output UOP_VME2LSU_t              vmelsu;
-  input  logic                      vmelsuRdy;
+  output logic                            vmelsuVld;
+  output UOP_VME2LSU_t                    vmelsu;
+  input  logic                            vmelsuRdy;
   // LSU2VME
-  input  logic                      vmelsuresVld;
-  input  UOP_LSU2VME_t              vmelsures;
-  output logic                      vmelsuresRdy;
+  input  logic                            vmelsuresVld;
+  input  UOP_LSU2VME_t                    vmelsures;
+  output logic                            vmelsuresRdy;
   // PE array
-  output logic    [`ZVT_LMUL(VLEN)-1:0] peCmdVld;
-  input  logic    [`ZVT_LMUL(VLEN)-1:0] peCmdRdy;
-  input  logic                      peBusy;
-  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0] peReadMtIdx;
+  output logic    [`ZVT_LMUL(VLEN)-1:0]   peCmdVld;
+  input  logic    [`ZVT_LMUL(VLEN)-1:0]   peCmdRdy;
+  input  logic                            peBusy;
+  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0]            peReadMtIdx;
   input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] peReadSubIdx;
 `ifdef TB_SUPPORT
-  input  logic [`NUM_BLK-1:0][PC_WIDTH-1:0]                               peReadPc;
-  input  logic [`NUM_BLK-1:0][PC_WIDTH-1:0]                               peWritePc;
+  input  logic [`NUM_BLK-1:0][PC_WIDTH-1:0]                                           peReadPc;
+  input  logic [`NUM_BLK-1:0][PC_WIDTH-1:0]                                           peWritePc;
 `endif
-  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE-1:0]  peWriteEn;  
-  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0] peWriteMtIdx;
+  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE-1:0]              peWriteEn;  
+  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0]            peWriteMtIdx;
   input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] peWriteSubIdx;
-  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0] peWriteData;  
+  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0]            peWriteData;  
   // MT accessing
-  output logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0] readMtIdx;
+  output logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0]            readMtIdx;
   output logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] readSubIdx;
-  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0] readData;  
-  output logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE-1:0]  writeEn;  
-  output logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0] writeMtIdx;
+  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0]            readData;  
+  output logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE-1:0]              writeEn;  
+  output logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0]            writeMtIdx;
   output logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] writeSubIdx;
-  output logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0] writeData;  
+  output logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0]            writeData;  
   // Retire Cmd 
   output logic                      rtCmdVld;
   output VME_RTCMD_t                rtCmd;
@@ -109,7 +109,7 @@ module zvt_ctrl#(
 
 // -------------- code start --------------------
   // decode
-  logic                 isVme2Lsu, isLsu2Vme, isMv2Rvv, isMv2Vme, isZero; 
+  logic                       isVme2Lsu, isLsu2Vme, isMv2Rvv, isMv2Vme, isZero; 
   logic [`ZVT_LMUL(VLEN)-1:0] isPe;
 
   assign isVme2Lsu = !peBusy && uopVld[0] && uop[0].is_lsu &&  uop[0].is_store && vmelsuRdy && (!uop[0].first_uop_valid || rtCmdRdy);
@@ -155,25 +155,25 @@ module zvt_ctrl#(
   end  
   
   // Move, LSU, Zero
-  logic [$clog2(`NUM_MT)-1:0]   tile;
-  logic                         pattern;
-  logic [$clog2(`TE(VLEN))-1:0] index;
+  logic [$clog2(`NUM_MT)-1:0]     tile;
+  logic                           pattern;
+  logic [$clog2(`TE(VLEN))-1:0]   index;
   logic [`VSTART_WIDTH(VLEN)-1:0] vstart;
-  logic [$clog2(`TE(VLEN)):0]   tm, tn;      
-  logic [`TE(VLEN)-1:0]         notVstart;
-  logic [`TE(VLEN)-1:0]         tailTmTmp, tailTnTmp;
-  logic [`TE(VLEN)-1:0]         notTailTm, notTailTn;
-  logic [`TE(VLEN)-1:0]         bodyTm, bodyTn;
-  logic [$clog2(`EMUL_MAX)-1:0] uop_index; 
-  logic [VLEN-1:0]              vsrc, vdst;
+  logic [$clog2(`TE(VLEN)):0]     tm, tn;      
+  logic [`TE(VLEN)-1:0]           notVstart;
+  logic [`TE(VLEN)-1:0]           tailTmTmp, tailTnTmp;
+  logic [`TE(VLEN)-1:0]           notTailTm, notTailTn;
+  logic [`TE(VLEN)-1:0]           bodyTm, bodyTn;
+  logic [$clog2(`EMUL_MAX)-1:0]   uop_index; 
+  logic [VLEN-1:0]                vsrc, vdst;
 
-  logic [`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0]   partSubIdx32;
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0] mvlsuReadMtIdx;
+  logic [`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0]               partSubIdx32;
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0]            mvlsuReadMtIdx;
   logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] mvlsuReadSubIdx;
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE-1:0]  mvlsuWriteEn;  
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0] mvlsuWriteMtIdx;
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE-1:0]              mvlsuWriteEn;  
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0]            mvlsuWriteMtIdx;
   logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] mvlsuWriteSubIdx;
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0] mvlsuWriteData;  
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0]            mvlsuWriteData;  
   
   // vtzero encodes its destination tile in rd (dst_index[4:1]); TSS ops
   // encode it in rs1 (tss.tile).
@@ -443,8 +443,8 @@ module zvt_ctrl#(
   endgenerate
 
   // Zero
-  logic [$clog2(`PROCESS_DELAY(VLEN))-1:0] cnt, cntMax;
-  logic                               cntEn, cntCr;
+  logic [$clog2(`PROCESS_DELAY(VLEN))-1:0]  cnt, cntMax;
+  logic                                     cntEn, cntCr;
   
   assign cntMax = `PROCESS_DELAY(VLEN) - 1;
   assign cntCr  = cnt==cntMax;
@@ -453,8 +453,8 @@ module zvt_ctrl#(
   cdffr #(.T(logic [$clog2(`PROCESS_DELAY(VLEN))-1:0]))
   counter (.q(cnt), .clk(clk), .rst_n(rst_n), .e(cntEn), .c(cntCr), .d(cnt+($clog2(`PROCESS_DELAY(VLEN)))'('d1)));
 
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE-1:0]  zeroWriteEn;  
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0] zeroWriteMtIdx;
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE-1:0]              zeroWriteEn;  
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0]            zeroWriteMtIdx;
   logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] zeroWriteSubIdx;
 
   always_comb begin
@@ -510,14 +510,14 @@ module zvt_ctrl#(
             zeroWriteEn[0][`TE(VLEN)/4/2*i+j] = {{4{bodyTm[(`TE(VLEN)/4*`COMPRATIO(VLEN))*4*cnt+4*i+1]}},
                                            {4{bodyTm[(`TE(VLEN)/4*`COMPRATIO(VLEN))*4*cnt+4*i  ]}},
                                            {4{bodyTm[(`TE(VLEN)/4*`COMPRATIO(VLEN))*4*cnt+4*i+1]}},
-                                           {4{bodyTm[(`TE(VLEN)/4*`COMPRATIO(VLEN))*4*cnt+4*i  ]}}} & {{2{bodyTn[(8*j )+3]}}, 
-                                                                                           {2{bodyTn[(8*j  )+2]}},
-                                                                                           {2{bodyTn[(8*j  )+3]}},
-                                                                                           {2{bodyTn[(8*j  )+2]}},
-                                                                                           {2{bodyTn[(8*j  )+1]}},
-                                                                                           {2{bodyTn[(8*j  )+0]}},
-                                                                                           {2{bodyTn[(8*j  )+1]}},
-                                                                                           {2{bodyTn[(8*j  )+0]}}};
+                                           {4{bodyTm[(`TE(VLEN)/4*`COMPRATIO(VLEN))*4*cnt+4*i  ]}}} & {{2{bodyTn[(8*j  )+3]}}, 
+                                                                                           {2{bodyTn[(8*j              )+2]}},
+                                                                                           {2{bodyTn[(8*j              )+3]}},
+                                                                                           {2{bodyTn[(8*j              )+2]}},
+                                                                                           {2{bodyTn[(8*j              )+1]}},
+                                                                                           {2{bodyTn[(8*j              )+0]}},
+                                                                                           {2{bodyTn[(8*j              )+1]}},
+                                                                                           {2{bodyTn[(8*j              )+0]}}};
             zeroWriteEn[1][`TE(VLEN)/4/2*i+j] = {{4{bodyTm[(`TE(VLEN)/4*`COMPRATIO(VLEN))*4*cnt+4*i+1]}},
                                            {4{bodyTm[(`TE(VLEN)/4*`COMPRATIO(VLEN))*4*cnt+4*i  ]}},
                                            {4{bodyTm[(`TE(VLEN)/4*`COMPRATIO(VLEN))*4*cnt+4*i+1]}},
@@ -532,14 +532,14 @@ module zvt_ctrl#(
             zeroWriteEn[2][`TE(VLEN)/4/2*i+j] = {{4{bodyTm[(`TE(VLEN)/4*`COMPRATIO(VLEN))*4*cnt+4*i+3]}},
                                            {4{bodyTm[(`TE(VLEN)/4*`COMPRATIO(VLEN))*4*cnt+4*i+2]}},
                                            {4{bodyTm[(`TE(VLEN)/4*`COMPRATIO(VLEN))*4*cnt+4*i+3]}},
-                                           {4{bodyTm[(`TE(VLEN)/4*`COMPRATIO(VLEN))*4*cnt+4*i+2]}}} & {{2{bodyTn[(8*j )+3]}}, 
-                                                                                           {2{bodyTn[(8*j  )+2]}},
-                                                                                           {2{bodyTn[(8*j  )+3]}},
-                                                                                           {2{bodyTn[(8*j  )+2]}},
-                                                                                           {2{bodyTn[(8*j  )+1]}},
-                                                                                           {2{bodyTn[(8*j  )+0]}},
-                                                                                           {2{bodyTn[(8*j  )+1]}},
-                                                                                           {2{bodyTn[(8*j  )+0]}}};
+                                           {4{bodyTm[(`TE(VLEN)/4*`COMPRATIO(VLEN))*4*cnt+4*i+2]}}} & {{2{bodyTn[(8*j  )+3]}}, 
+                                                                                           {2{bodyTn[(8*j              )+2]}},
+                                                                                           {2{bodyTn[(8*j              )+3]}},
+                                                                                           {2{bodyTn[(8*j              )+2]}},
+                                                                                           {2{bodyTn[(8*j              )+1]}},
+                                                                                           {2{bodyTn[(8*j              )+0]}},
+                                                                                           {2{bodyTn[(8*j              )+1]}},
+                                                                                           {2{bodyTn[(8*j              )+0]}}};
             zeroWriteEn[3][`TE(VLEN)/4/2*i+j] = {{4{bodyTm[(`TE(VLEN)/4*`COMPRATIO(VLEN))*4*cnt+4*i+3]}},
                                            {4{bodyTm[(`TE(VLEN)/4*`COMPRATIO(VLEN))*4*cnt+4*i+2]}},
                                            {4{bodyTm[(`TE(VLEN)/4*`COMPRATIO(VLEN))*4*cnt+4*i+3]}},
@@ -568,20 +568,20 @@ module zvt_ctrl#(
             zeroWriteSubIdx[3][`TE(VLEN)/4*i+j] = (`SUBTILE_SIZE)'((`TE(VLEN)/4)*(`TE(VLEN)/4*`COMPRATIO(VLEN))*cnt+`TE(VLEN)/4*i+j);
             
             zeroWriteEn[0][`TE(VLEN)/4*i+j] = {{8{bodyTm[(`TE(VLEN)/4*`COMPRATIO(VLEN))*2*cnt+2*i+1]}},
-                                         {8{bodyTm[(`TE(VLEN)/4*`COMPRATIO(VLEN))*2*cnt+2*i  ]}}} & {{4{bodyTn[(4*j )+1]}}, 
-                                                                                         {4{bodyTn[(4*j  )+0]}},
-                                                                                         {4{bodyTn[(4*j  )+1]}},
-                                                                                         {4{bodyTn[(4*j  )+0]}}};
+                                         {8{bodyTm[(`TE(VLEN)/4*`COMPRATIO(VLEN))*2*cnt+2*i  ]}}} & {{4{bodyTn[(4*j  )+1]}}, 
+                                                                                         {4{bodyTn[(4*j              )+0]}},
+                                                                                         {4{bodyTn[(4*j              )+1]}},
+                                                                                         {4{bodyTn[(4*j              )+0]}}};
             zeroWriteEn[1][`TE(VLEN)/4*i+j] = {{8{bodyTm[(`TE(VLEN)/4*`COMPRATIO(VLEN))*2*cnt+2*i+1]}},
                                          {8{bodyTm[(`TE(VLEN)/4*`COMPRATIO(VLEN))*2*cnt+2*i  ]}}} & {{4{bodyTn[(4*j+2)+1]}}, 
                                                                                          {4{bodyTn[(4*j+2)+0]}},
                                                                                          {4{bodyTn[(4*j+2)+1]}},
                                                                                          {4{bodyTn[(4*j+2)+0]}}};
             zeroWriteEn[2][`TE(VLEN)/4*i+j] = {{8{bodyTm[`TE(VLEN)/2+(`TE(VLEN)/4*`COMPRATIO(VLEN))*2*cnt+2*i+1]}},
-                                         {8{bodyTm[`TE(VLEN)/2+(`TE(VLEN)/4*`COMPRATIO(VLEN))*2*cnt+2*i  ]}}} & {{4{bodyTn[(4*j )+1]}}, 
-                                                                                               {4{bodyTn[(4*j  )+0]}},
-                                                                                               {4{bodyTn[(4*j  )+1]}},
-                                                                                               {4{bodyTn[(4*j  )+0]}}};
+                                         {8{bodyTm[`TE(VLEN)/2+(`TE(VLEN)/4*`COMPRATIO(VLEN))*2*cnt+2*i  ]}}} & {{4{bodyTn[(4*j  )+1]}}, 
+                                                                                               {4{bodyTn[(4*j                    )+0]}},
+                                                                                               {4{bodyTn[(4*j                    )+1]}},
+                                                                                               {4{bodyTn[(4*j                    )+0]}}};
             zeroWriteEn[3][`TE(VLEN)/4*i+j] = {{8{bodyTm[`TE(VLEN)/2+(`TE(VLEN)/4*`COMPRATIO(VLEN))*2*cnt+2*i+1]}},
                                          {8{bodyTm[`TE(VLEN)/2+(`TE(VLEN)/4*`COMPRATIO(VLEN))*2*cnt+2*i  ]}}} & {{4{bodyTn[(4*j+2)+1]}}, 
                                                                                                {4{bodyTn[(4*j+2)+0]}},

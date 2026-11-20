@@ -40,10 +40,10 @@ module rvv_backend_lsu_remap#(
   output  logic           [`NUM_LSU-1:0]  pop_lsu_res;
 
   // submit LSU result to ROB
-  output  logic           [`NUM_LSU-1:0]                    result_valid;
-  output  PU2ROB_t        [`NUM_LSU-1:0]                    result;
-  output  logic           [`NUM_LSU-1:0][$clog2(`VLENB(VLEN)):0] ff_tail_index;  
-  input   logic           [`NUM_LSU-1:0]                    result_ready;
+  output  logic           [`NUM_LSU-1:0]                          result_valid;
+  output  PU2ROB_t        [`NUM_LSU-1:0]                          result;
+  output  logic           [`NUM_LSU-1:0][$clog2(`VLENB(VLEN)):0]  ff_tail_index;  
+  input   logic           [`NUM_LSU-1:0]                          result_ready;
 
   // submit trap to ROB
   output  logic                           trap_valid_rmp2rob;

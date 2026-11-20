@@ -52,16 +52,16 @@ output  logic     [`NUM_VRF-1:0][VLEN-1:0] vrf_data;
 //
 // code start
 //
-logic [`NUM_RT_UOP-1:0]                           wr_valid;
-logic [`NUM_RT_UOP-1:0][`REGIDX_WIDTH-1:0]        wr_addr;
-logic [`NUM_RT_UOP-1:0][VLEN-1:0]                 wr_data;
-logic [`NUM_RT_UOP-1:0][`VLENB(VLEN)-1:0]         wr_we;              // byte enable
-logic [`NUM_RT_UOP-1:0][VLEN-1:0]                 wr_web;             // bit enable
+logic [`NUM_RT_UOP-1:0]                                 wr_valid;
+logic [`NUM_RT_UOP-1:0][`REGIDX_WIDTH-1:0]              wr_addr;
+logic [`NUM_RT_UOP-1:0][VLEN-1:0]                       wr_data;
+logic [`NUM_RT_UOP-1:0][`VLENB(VLEN)-1:0]               wr_we;              // byte enable
+logic [`NUM_RT_UOP-1:0][VLEN-1:0]                       wr_web;             // bit enable
 logic [`NUM_RT_UOP-1:0][`NUM_VRF-1:0][`VLENB(VLEN)-1:0] vrf_wr_wen;
-logic [`NUM_RT_UOP-1:0][`NUM_VRF-1:0][VLEN-1:0]   vrf_wr_data;
-logic [`NUM_VRF-1:0][`VLENB(VLEN)-1:0]            vrf_wr_wen_full;
-logic [`NUM_VRF-1:0][VLEN-1:0]                    vrf_wr_data_full;
-logic [`NUM_VRF-1:0][VLEN-1:0]                    vrf_rd_data_full;   // full 32 VLEN data from VRF
+logic [`NUM_RT_UOP-1:0][`NUM_VRF-1:0][VLEN-1:0]         vrf_wr_data;
+logic [`NUM_VRF-1:0][`VLENB(VLEN)-1:0]                  vrf_wr_wen_full;
+logic [`NUM_VRF-1:0][VLEN-1:0]                          vrf_wr_data_full;
+logic [`NUM_VRF-1:0][VLEN-1:0]                          vrf_rd_data_full;   // full 32 VLEN data from VRF
 
 // RT2VRF data unpack
 for (genvar j=0;j<`NUM_RT_UOP;j++) begin: GET_WT_DATA

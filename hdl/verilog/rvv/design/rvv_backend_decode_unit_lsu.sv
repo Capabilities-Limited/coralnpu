@@ -40,54 +40,54 @@ module rvv_backend_decode_unit_lsu#(
   logic   [`REGIDX_WIDTH-1:0]     inst_vd;          // inst original encoding[11:7]
   OPCODE_t                        inst_opcode;      // inst original encoding[6:0]
 
-  logic   [XLEN-1:0]              rs1;    
-  logic   [`VSTART_WIDTH(VLEN)-1:0] csr_vstart;
-  logic   [`VL_WIDTH(VLEN)-1:0]   csr_vl;
-  logic   [`VL_WIDTH(VLEN)-1:0]   evl;
-  RVVSEW                          csr_sew;
-  RVVLMUL                         csr_lmul;
-  RVVLMUL                         reduced_lmul;  
+  logic   [XLEN-1:0]                 rs1;    
+  logic   [`VSTART_WIDTH(VLEN)-1:0]  csr_vstart;
+  logic   [`VL_WIDTH(VLEN)-1:0]      csr_vl;
+  logic   [`VL_WIDTH(VLEN)-1:0]      evl;
+  RVVSEW                             csr_sew;
+  RVVLMUL                            csr_lmul;
+  RVVLMUL                            reduced_lmul;  
 `ifdef ZVT_ON
-  logic   [1:0]                   csr_mtwiden;
-  logic   [$clog2(`TE(VLEN)):0]   csr_tm;
+  logic   [1:0]                      csr_mtwiden;
+  logic   [$clog2(`TE(VLEN)):0]      csr_tm;
 `endif  
-  EMUL_e                          emul_vd;          
-  EMUL_e                          emul_vs2;          
-  EMUL_e                          emul_vd_nf; 
-  EMUL_e                          emul_max; 
-  logic   [`UOP_INDEX_WIDTH-1:0]  uop_index_max;         
-  EEW_e                           eew_vd;          
+  EMUL_e                             emul_vd;          
+  EMUL_e                             emul_vs2;          
+  EMUL_e                             emul_vd_nf; 
+  EMUL_e                             emul_max; 
+  logic   [`UOP_INDEX_WIDTH-1:0]     uop_index_max;         
+  EEW_e                              eew_vd;          
 `ifdef ZVT_ON
-  EEW_e                           eew_mt;
+  EEW_e                              eew_mt;
 `endif
-  EEW_e                           eew_vs2;          
-  EEW_e                           eew_max;         
-  logic                           valid_lsu;
-  logic                           valid_lsu_opcode;
-  logic                           valid_lsu_mop;
-  logic                           inst_encoding_correct;
-  logic                           check_special;
-  logic                           check_vd_overlap_v0;
-  logic                           check_vd_part_overlap_vs2;
-  logic   [`REGIDX_WIDTH:0]       vd_index_start;
-  logic   [`REGIDX_WIDTH:0]       vd_index_end;
-  logic   [`REGIDX_WIDTH-1:0]     vd_index_offset;
-  logic                           check_vd_overlap_vs2;
-  logic                           check_vs2_part_overlap_vd_2_1;
-  logic                           check_vs2_part_overlap_vd_4_1;
-  logic                           check_common;
-  logic                           check_vd_align;
-  logic                           check_vs2_align;
-  logic                           check_vd_in_range;
-  logic   [`REGIDX_WIDTH-1:0]     check_vd_cmp;
-  logic                           check_sew;
-  logic                           check_lmul;
-  logic                           check_evl_not_0;
-  logic                           check_vstart_sle_evl;
-  FUNCT6_u                        funct6_lsu;
-  logic                           force_vma_agnostic; 
-  logic                           force_vta_agnostic; 
-  genvar                          j;
+  EEW_e                              eew_vs2;          
+  EEW_e                              eew_max;         
+  logic                              valid_lsu;
+  logic                              valid_lsu_opcode;
+  logic                              valid_lsu_mop;
+  logic                              inst_encoding_correct;
+  logic                              check_special;
+  logic                              check_vd_overlap_v0;
+  logic                              check_vd_part_overlap_vs2;
+  logic   [`REGIDX_WIDTH:0]          vd_index_start;
+  logic   [`REGIDX_WIDTH:0]          vd_index_end;
+  logic   [`REGIDX_WIDTH-1:0]        vd_index_offset;
+  logic                              check_vd_overlap_vs2;
+  logic                              check_vs2_part_overlap_vd_2_1;
+  logic                              check_vs2_part_overlap_vd_4_1;
+  logic                              check_common;
+  logic                              check_vd_align;
+  logic                              check_vs2_align;
+  logic                              check_vd_in_range;
+  logic   [`REGIDX_WIDTH-1:0]        check_vd_cmp;
+  logic                              check_sew;
+  logic                              check_lmul;
+  logic                              check_evl_not_0;
+  logic                              check_vstart_sle_evl;
+  FUNCT6_u                           funct6_lsu;
+  logic                              force_vma_agnostic; 
+  logic                              force_vta_agnostic; 
+  genvar                             j;
   
   // local parameter for SEW in original endocing[14:12]
   localparam  SEW_8     = 3'b000;

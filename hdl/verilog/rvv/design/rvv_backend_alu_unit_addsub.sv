@@ -49,15 +49,15 @@ module rvv_backend_alu_unit_addsub#(
 
   // execute 
   // add and sub instructions
-  logic   [`VLENB(VLEN)-1:0]              v0_data_in_use;
-  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0] src2_data;
-  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0] src1_data;
-  logic   [`VLENB(VLEN)-1:0]              src2_sgn;
-  logic   [`VLENB(VLEN)-1:0]              src1_sgn;
-  logic   [`VLENB(VLEN)-1:0]              cin;
-  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0] product8;
-  logic   [`VLENB(VLEN)-1:0]              cout8;
-  ADDSUB_e                                opcode;
+  logic   [`VLENB(VLEN)-1:0]                    v0_data_in_use;
+  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0]   src2_data;
+  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0]   src1_data;
+  logic   [`VLENB(VLEN)-1:0]                    src2_sgn;
+  logic   [`VLENB(VLEN)-1:0]                    src1_sgn;
+  logic   [`VLENB(VLEN)-1:0]                    cin;
+  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0]   product8;
+  logic   [`VLENB(VLEN)-1:0]                    cout8;
+  ADDSUB_e                                      opcode;
   
   // for-loop
   genvar                                  j;

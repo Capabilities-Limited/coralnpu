@@ -77,15 +77,15 @@ module rvv_backend_pmtrdt_unit_reduction#(
   logic [ALU_NUM_T0-1:0][ALU_BYTE-1:0][7:0] src1_t0, src2_t0, dst_t0, data_t1; // reduction operation in 0 stage: source value for reduction vs2[*]
   logic [ALU_BYTE-1:0][7:0] vs1_t0, vs1_t1;                // source value for reduction vs1[0]
 
-  VM_STATE_e                vm_state, next_vm_state;             // vector mask instruction: vcpop, viota
-  logic                     state_en;
-  logic                     vm_en;
-  logic                     vm_last_opr;                   // last operation for vm instruction.
-  logic [`VL_WIDTH(VLEN)-1:0] vm_cnt, vm_cnt_q;
-  RDT_VM_t                  vm_ctrl, vm_ctrl_q;
-  logic [VLEN-1:0]          vs2_m, vs2_m_tail_tmp, vs2_m_tail, vs2_m_body, vs2_m_d, vs2_m_q;       // vector mask register - vs2
-  logic [VLEN-1:0]          vm_vs2;
-  logic [`VLENB(VLEN)-1:0]  vs2_m_t0, vs2_m_t1;            // vector mask register for pipeline
+  VM_STATE_e                      vm_state, next_vm_state;             // vector mask instruction: vcpop, viota
+  logic                           state_en;
+  logic                           vm_en;
+  logic                           vm_last_opr;                   // last operation for vm instruction.
+  logic [`VL_WIDTH(VLEN)-1:0]     vm_cnt, vm_cnt_q;
+  RDT_VM_t                        vm_ctrl, vm_ctrl_q;
+  logic [VLEN-1:0]                vs2_m, vs2_m_tail_tmp, vs2_m_tail, vs2_m_body, vs2_m_d, vs2_m_q;       // vector mask register - vs2
+  logic [VLEN-1:0]                vm_vs2;
+  logic [`VLENB(VLEN)-1:0]        vs2_m_t0, vs2_m_t1;            // vector mask register for pipeline
   logic [M_SUM_NUM-1:0][`VSTART_WIDTH(VLEN)-1:0] vs2_m_sum_t0, vs2_m_sum_t1;   // vector mask sum for pipeline with VIOTA_STRIDE
 
   // ALU_STAGE_NUM > 0
@@ -488,8 +488,8 @@ module rvv_backend_pmtrdt_unit_reduction#(
       end
       default:begin // EEW8
         for (int j=0; j<`VLENB(VLEN)/2; j++) begin
-          widen_vs2[8*(2*j)+:8]   = wsum_h ? rdt_uop.vs2_data[(VLEN/2+8*j)+:8] : rdt_uop.vs2_data[(8*j)+:8];
-          widen_vs2[8*(2*j+1)+:8] = rdt_uop.uop_funct6 == VWREDSUM ? wsum_h ? {8{rdt_uop.vs2_data[VLEN/2+8*(j+1)-1]}}
+          widen_vs2[8*(2*j)+:8]         = wsum_h ? rdt_uop.vs2_data[(VLEN/2+8*j)+:8] : rdt_uop.vs2_data[(8*j)+:8];
+          widen_vs2[8*(2*j+1)+:8]       = rdt_uop.uop_funct6 == VWREDSUM ? wsum_h ? {8{rdt_uop.vs2_data[VLEN/2+8*(j+1)-1]}}
                                                                             : {8{rdt_uop.vs2_data[8*(j+1)-1]}}
                                                                    : '0;
           widen_vs2_type[2*j]   = wsum_h ? rdt_uop.vs2_type[`VLENB(VLEN)/2+j] : rdt_uop.vs2_type[j];

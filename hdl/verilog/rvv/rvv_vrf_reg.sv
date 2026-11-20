@@ -14,9 +14,9 @@ module rvv_vrf_reg#(
   output logic [31:0][VLEN-1:0]  vreg;
 
   input  logic [31:0][`VLENB(VLEN)-1:0] we; // byte enable
-  input  logic [31:0][VLEN-1:0]   wdata;
-  input  logic                    clk;
-  input  logic                    rst_n;
+  input  logic [31:0][VLEN-1:0]         wdata;
+  input  logic                          clk;
+  input  logic                          rst_n;
 
 // -- 32 vector registers --------------------------------------------
 

@@ -52,17 +52,17 @@ module zvt_pe_array#(
   input  ZVT_RS_t [`ZVT_LMUL(VLEN)-1:0]     peCmd;
   output logic    [`ZVT_LMUL(VLEN)-1:0]     peCmdRdy;
   // MT accessing
-  output logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0] readMtIdx;
+  output logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0]            readMtIdx;
   output logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] readSubIdx;
-  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0] readData;  
+  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0]            readData;  
 `ifdef TB_SUPPORT
-  output logic [`NUM_BLK-1:0][PC_WIDTH-1:0]                               readPc;
-  output logic [`NUM_BLK-1:0][PC_WIDTH-1:0]                               writePc;
+  output logic [`NUM_BLK-1:0][PC_WIDTH-1:0]                                           readPc;
+  output logic [`NUM_BLK-1:0][PC_WIDTH-1:0]                                           writePc;
 `endif
-  output logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE-1:0]  writeEn;  
-  output logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0] writeMtIdx;
+  output logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE-1:0]              writeEn;  
+  output logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0]            writeMtIdx;
   output logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] writeSubIdx;
-  output logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0] writeData;  
+  output logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0]            writeData;  
   // floating-point status
   output logic                              fpexpVld;
   output RVFEXP_t                           fpexp;

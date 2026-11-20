@@ -45,18 +45,18 @@ module rvv_backend_fdiv_unit#(
 //
 // internal signals
 //
-  fpnew_pkg::operation_e              op_type;
-  logic [VLEN-1:0]                    src2;
-  logic [VLEN-1:0]                    src1;
-  logic                               fdiv_busy;
-  logic                               fdiv_busy_c;
-  logic                               fdiv_valid;
-  logic [`VLENW(VLEN)-1:0]            fdiv_ready;
-  FDIV_RES_t                          uop_info;
-  FDIV_RES_t                          uop_info_q;
-  logic [VLEN-1:0]                    sub_result;
-  logic [`VLENW(VLEN)-1:0]            sub_result_vld;
-  fpnew_pkg::status_t  [`VLENW(VLEN)-1:0] sub_fpexp;
+  fpnew_pkg::operation_e                    op_type;
+  logic [VLEN-1:0]                          src2;
+  logic [VLEN-1:0]                          src1;
+  logic                                     fdiv_busy;
+  logic                                     fdiv_busy_c;
+  logic                                     fdiv_valid;
+  logic [`VLENW(VLEN)-1:0]                  fdiv_ready;
+  FDIV_RES_t                                uop_info;
+  FDIV_RES_t                                uop_info_q;
+  logic [VLEN-1:0]                          sub_result;
+  logic [`VLENW(VLEN)-1:0]                  sub_result_vld;
+  fpnew_pkg::status_t  [`VLENW(VLEN)-1:0]   sub_fpexp;
   
   // prepare source data
   always_comb begin

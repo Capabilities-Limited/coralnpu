@@ -44,71 +44,71 @@ module zvt#(
 );
 
 // interface signals
-  input  logic                    clk;
-  input  logic                    rst_n;
+  input  logic                          clk;
+  input  logic                          rst_n;
   // uops
   input  logic    [`ZVT_LMUL(VLEN)-1:0] uopVld;
   input  ZVT_RS_t [`ZVT_LMUL(VLEN)-1:0] uop;
   output logic    [`ZVT_LMUL(VLEN)-1:0] uopRdy;
   // VME2RVV
-  output logic                    res_vme2rvv_vld;
-  output PU2ROB_t                 res_vme2rvv;
-  input  logic                    res_vme2rvv_rdy;
+  output logic                          res_vme2rvv_vld;
+  output PU2ROB_t                       res_vme2rvv;
+  input  logic                          res_vme2rvv_rdy;
   // VME2LSU
-  output logic                    uop_vme2lsu_vld;
-  output UOP_VME2LSU_t            uop_vme2lsu;
-  input  logic                    uop_vme2lsu_rdy;
+  output logic                          uop_vme2lsu_vld;
+  output UOP_VME2LSU_t                  uop_vme2lsu;
+  input  logic                          uop_vme2lsu_rdy;
   // LSU2VME
-  input  logic                    uop_lsu2vme_vld;
-  input  UOP_LSU2VME_t            uop_lsu2vme;
-  output logic                    uop_lsu2vme_rdy;
+  input  logic                          uop_lsu2vme_vld;
+  input  UOP_LSU2VME_t                  uop_lsu2vme;
+  output logic                          uop_lsu2vme_rdy;
   // VME retire information
-  output logic                    vmeRtVld;
-  output VMERT_t                  vmeRt;
-  input  logic                    vmeRtRdy;
+  output logic                          vmeRtVld;
+  output VMERT_t                        vmeRt;
+  input  logic                          vmeRtRdy;
   // floating-point status
-  output logic                    fpexpVld;
-  output RVFEXP_t                 fpexp;
-  input  logic                    fpexpRdy;
+  output logic                          fpexpVld;
+  output RVFEXP_t                       fpexp;
+  input  logic                          fpexpRdy;
   // control&status  
-  input  logic                    flush;
-  output logic                    zvtBusy;
+  input  logic                          flush;
+  output logic                          zvtBusy;
 
 // -------------- code start --------------------
   // VME2LSU
-  logic                 vmelsuVld;
-  UOP_VME2LSU_t         vmelsu;
-  logic                 vmelsuRdy;
-  logic                 vmelsuAfull;
-  logic                 vmelsuAempty;
+  logic                       vmelsuVld;
+  UOP_VME2LSU_t               vmelsu;
+  logic                       vmelsuRdy;
+  logic                       vmelsuAfull;
+  logic                       vmelsuAempty;
   // LSU2VME
-  logic                 vmelsuresVld;
-  UOP_LSU2VME_t         vmelsures;
-  logic                 vmelsuresRdy;
-  logic                 vmelsuresAfull;
-  logic                 vmelsuresAempty;
+  logic                       vmelsuresVld;
+  UOP_LSU2VME_t               vmelsures;
+  logic                       vmelsuresRdy;
+  logic                       vmelsuresAfull;
+  logic                       vmelsuresAempty;
   // PE array
   logic [`ZVT_LMUL(VLEN)-1:0] peCmdVld;
   logic [`ZVT_LMUL(VLEN)-1:0] peCmdRdy;
-  logic                 peBusy;  
+  logic                       peBusy;  
 `ifdef TB_SUPPORT
-  logic [`NUM_BLK-1:0][PC_WIDTH-1:0]                                peReadPc;
-  logic [`NUM_BLK-1:0][PC_WIDTH-1:0]                                peWritePc;
+  logic [`NUM_BLK-1:0][PC_WIDTH-1:0]                                            peReadPc;
+  logic [`NUM_BLK-1:0][PC_WIDTH-1:0]                                            peWritePc;
 `endif
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0] peReadMtIdx;
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] peReadSubIdx;
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE-1:0]   peWriteEn;  
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0] peWriteMtIdx;
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] peWriteSubIdx;
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0] peWriteData;  
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0]             peReadMtIdx;
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0]  peReadSubIdx;
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE-1:0]               peWriteEn;  
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0]             peWriteMtIdx;
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0]  peWriteSubIdx;
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0]             peWriteData;  
   // MT
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0] readMtIdx;
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] readSubIdx;
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0] readData;  
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE-1:0]   writeEn;  
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0] writeMtIdx;
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] writeSubIdx;
-  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0] writeData;  
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0]             readMtIdx;
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0]  readSubIdx;
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0]             readData;  
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE-1:0]               writeEn;  
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0]             writeMtIdx;
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0]  writeSubIdx;
+  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0]             writeData;  
   // Retire Info
   logic                 rtCmdVld;
   VME_RTCMD_t           rtCmd;
@@ -338,10 +338,10 @@ module zvt#(
   assign blk2RtMtIdx = blk1RtMtIdx;
 
   // MT accessing
-  logic [`NUM_BLK-1:0][3:0][$clog2(`NUM_MT)-1:0]                          rvviMtIdx;
-  logic [`NUM_BLK-1:0][3:0][`NUM_SUBTILE(VLEN)/2-1:0]                     rvviSubVld;
+  logic [`NUM_BLK-1:0][3:0][$clog2(`NUM_MT)-1:0]                                      rvviMtIdx;
+  logic [`NUM_BLK-1:0][3:0][`NUM_SUBTILE(VLEN)/2-1:0]                                 rvviSubVld;
   logic [`NUM_BLK-1:0][3:0][`NUM_SUBTILE(VLEN)/2-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] rvviSubIdx;
-  logic [`NUM_BLK-1:0][3:0][`NUM_SUBTILE(VLEN)/2-1:0][`SUBTILE_SIZE*8-1:0] rvviMtData;
+  logic [`NUM_BLK-1:0][3:0][`NUM_SUBTILE(VLEN)/2-1:0][`SUBTILE_SIZE*8-1:0]            rvviMtData;
   
   localparam BLKID0 = 0;
   localparam BLKID1 = 1;

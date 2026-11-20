@@ -87,24 +87,24 @@ typedef struct packed {
 // input signals for opr_byte_type unit
 `define UOP_INFO_t(VLEN) \
 struct packed { \
-  logic [$clog2(`EMUL_MAX)-1:0] uop_index; \
-  EXE_UNIT_e                    uop_exe_unit; \
-  EEW_e                         vd_eew; \
-  EEW_e                         vs1_eew; \
-  EEW_e                         vs2_eew; \
+  logic [$clog2(`EMUL_MAX)-1:0]   uop_index; \
+  EXE_UNIT_e                      uop_exe_unit; \
+  EEW_e                           vd_eew; \
+  EEW_e                           vs1_eew; \
+  EEW_e                           vs2_eew; \
   logic [`VSTART_WIDTH(VLEN)-1:0] vstart; \
-  logic [`VL_WIDTH(VLEN)-1:0]   vl; \
-  logic                         vm; \
-  logic                         ignore_vma; \
-  logic                         ignore_vta; \
+  logic [`VL_WIDTH(VLEN)-1:0]     vl; \
+  logic                           vm; \
+  logic                           ignore_vma; \
+  logic                           ignore_vta; \
 }
 
 // the vector operand byte type in uop
 `define UOP_OPN_BYTE_TYPE_t(VLEN) \
 struct packed { \
-  `BYTE_TYPE_t(VLEN)    vs2; \
-  `BYTE_TYPE_t(VLEN)    vd; \
-  logic [`VLENB(VLEN)-1:0] v0_strobe; \
+  `BYTE_TYPE_t(VLEN)          vs2; \
+  `BYTE_TYPE_t(VLEN)          vd; \
+  logic [`VLENB(VLEN)-1:0]    v0_strobe; \
 }
 
 `endif // RVV_DISPATCH__SVH

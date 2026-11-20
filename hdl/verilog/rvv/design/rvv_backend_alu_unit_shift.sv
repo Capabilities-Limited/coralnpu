@@ -65,36 +65,36 @@ module rvv_backend_alu_unit_shift#(
 
   // execute 
   // add and sub instructions
-  logic   [`VLENB(VLEN)/2-1:0][`BYTE_WIDTH-1:0]     src2_data8;
-  logic   [`VLENH(VLEN)/2-1:0][`HWORD_WIDTH-1:0]    src2_data16;
-  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]       src2_data32;
-  logic   [`VLENB(VLEN)/2-1:0][$clog2(`BYTE_WIDTH)-1:0] shift_amount8;
-  logic   [`VLENH(VLEN)/2-1:0][$clog2(`HWORD_WIDTH)-1:0] shift_amount16;
-  logic   [`VLENW(VLEN)-1:0][$clog2(`WORD_WIDTH)-1:0] shift_amount32;
-  logic   [`VLENB(VLEN)/2-1:0][`BYTE_WIDTH-1:0]     product8_tmp;
-  logic   [`VLENH(VLEN)/2-1:0][`HWORD_WIDTH-1:0]    product16_tmp;
-  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]       product32_tmp;
-  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0]       product8;
-  logic   [`VLENH(VLEN)-1:0][`HWORD_WIDTH-1:0]      product16;
-  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]       product32;
-  logic   [`VLENB(VLEN)/2-1:0][`BYTE_WIDTH-1:0]     round_bits8_tmp;
-  logic   [`VLENH(VLEN)/2-1:0][`HWORD_WIDTH-1:0]    round_bits16_tmp;
-  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]       round_bits32_tmp;
-  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0]       round_bits8;
-  logic   [`VLENH(VLEN)-1:0][`HWORD_WIDTH-1:0]      round_bits16;
-  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]       round_bits32;
-  logic   [`VLENB(VLEN)-1:0]                        round_increment8;
-  logic   [`VLENH(VLEN)-1:0]                        round_increment16;
-  logic   [`VLENW(VLEN)-1:0]                        round_increment32;
-  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0]       round8;
-  logic   [`VLENH(VLEN)-1:0][`HWORD_WIDTH-1:0]      round16;
-  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]       round32;
-  logic   [`VLENH(VLEN)-1:0]                        cout16;
-  logic   [`VLENW(VLEN)-1:0]                        cout32;
-  logic   [`VLENB(VLEN)-1:0]                        upoverflow;
-  logic   [`VLENB(VLEN)-1:0]                        underoverflow;
-  logic   [VLEN-1:0]                                result_data; 
-  logic   [1:0]                                     shift_mode;
+  logic   [`VLENB(VLEN)/2-1:0][`BYTE_WIDTH-1:0]           src2_data8;
+  logic   [`VLENH(VLEN)/2-1:0][`HWORD_WIDTH-1:0]          src2_data16;
+  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]             src2_data32;
+  logic   [`VLENB(VLEN)/2-1:0][$clog2(`BYTE_WIDTH)-1:0]   shift_amount8;
+  logic   [`VLENH(VLEN)/2-1:0][$clog2(`HWORD_WIDTH)-1:0]  shift_amount16;
+  logic   [`VLENW(VLEN)-1:0][$clog2(`WORD_WIDTH)-1:0]     shift_amount32;
+  logic   [`VLENB(VLEN)/2-1:0][`BYTE_WIDTH-1:0]           product8_tmp;
+  logic   [`VLENH(VLEN)/2-1:0][`HWORD_WIDTH-1:0]          product16_tmp;
+  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]             product32_tmp;
+  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0]             product8;
+  logic   [`VLENH(VLEN)-1:0][`HWORD_WIDTH-1:0]            product16;
+  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]             product32;
+  logic   [`VLENB(VLEN)/2-1:0][`BYTE_WIDTH-1:0]           round_bits8_tmp;
+  logic   [`VLENH(VLEN)/2-1:0][`HWORD_WIDTH-1:0]          round_bits16_tmp;
+  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]             round_bits32_tmp;
+  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0]             round_bits8;
+  logic   [`VLENH(VLEN)-1:0][`HWORD_WIDTH-1:0]            round_bits16;
+  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]             round_bits32;
+  logic   [`VLENB(VLEN)-1:0]                              round_increment8;
+  logic   [`VLENH(VLEN)-1:0]                              round_increment16;
+  logic   [`VLENW(VLEN)-1:0]                              round_increment32;
+  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0]             round8;
+  logic   [`VLENH(VLEN)-1:0][`HWORD_WIDTH-1:0]            round16;
+  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]             round32;
+  logic   [`VLENH(VLEN)-1:0]                              cout16;
+  logic   [`VLENW(VLEN)-1:0]                              cout32;
+  logic   [`VLENB(VLEN)-1:0]                              upoverflow;
+  logic   [`VLENB(VLEN)-1:0]                              underoverflow;
+  logic   [VLEN-1:0]                                      result_data; 
+  logic   [1:0]                                           shift_mode;
   
   // for-loop
   genvar                                            j;

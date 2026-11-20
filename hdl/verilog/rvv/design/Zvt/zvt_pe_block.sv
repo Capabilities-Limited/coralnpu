@@ -45,53 +45,53 @@ module zvt_pe_block#(
 );
 
 // interface signals
-  input  logic                                              clk;
-  input  logic                                              rst_n;
+  input  logic                                                          clk;
+  input  logic                                                          rst_n;
   // Command
-  input  logic                                              blkCmdVld;
-  input  BLKCMD_t                                           blkCmd;
-  output logic                                              blkCmdRdy;
+  input  logic                                                          blkCmdVld;
+  input  BLKCMD_t                                                       blkCmd;
+  output logic                                                          blkCmdRdy;
   // Tag
-  output logic        [ADDERPIPENUM:1]                      mulbulkTagOutVld;
-  output MULBULKTAG_t [ADDERPIPENUM:1]                      mulbulkTagOut;
+  output logic        [ADDERPIPENUM:1]                                  mulbulkTagOutVld;
+  output MULBULKTAG_t [ADDERPIPENUM:1]                                  mulbulkTagOut;
   // MT 
-  output logic [`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0] readMtIdx;
+  output logic [`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0]            readMtIdx;
   output logic [`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] readSubIdx;
-  input  logic [`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0] readData;  
+  input  logic [`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0]            readData;  
 `ifdef TB_SUPPORT
-  output logic [PC_WIDTH-1:0]                               readPc;
-  output logic [PC_WIDTH-1:0]                               writePc;
+  output logic [PC_WIDTH-1:0]                                           readPc;
+  output logic [PC_WIDTH-1:0]                                           writePc;
 `endif
-  output logic [`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE-1:0]  writeEn;  
-  output logic [`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0] writeMtIdx;
+  output logic [`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE-1:0]              writeEn;  
+  output logic [`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0]            writeMtIdx;
   output logic [`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] writeSubIdx;
-  output logic [`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0] writeData;  
+  output logic [`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0]            writeData;  
   // floating-point status
-  output logic                                              fpexpVld;
-  output RVFEXP_t                                           fpexp;
-  input  logic                                              fpexpRdy;
+  output logic                                                          fpexpVld;
+  output RVFEXP_t                                                       fpexp;
+  input  logic                                                          fpexpRdy;
   // retiring informaiton
-  output logic                                              blkRtVld;
+  output logic                                                          blkRtVld;
 `ifdef RVVI_ON
-  output PE_RTINFO_t                                        blkRtInfo;
+  output PE_RTINFO_t                                                    blkRtInfo;
 `endif
   // control&status  
-  input  logic                                              flush;
-  output logic                                              busy;
+  input  logic                                                          flush;
+  output logic                                                          busy;
 
 // -------------- code start --------------------
   // mul+bulk input
-  MULBULKTAG_t                                              mulbulkTagIn;
-  logic [`TE(VLEN)/2*`COMPRATIO(VLEN)-1:0][`TE(VLEN)/2-1:0][3:0] maskIn;
+  MULBULKTAG_t                                                                mulbulkTagIn;
+  logic [`TE(VLEN)/2*`COMPRATIO(VLEN)-1:0][`TE(VLEN)/2-1:0][3:0]              maskIn;
   // mul+bulk Result
   logic [`TE(VLEN)/2*`COMPRATIO(VLEN)-1:0][`TE(VLEN)/2-1:0][MULBULKPIPENUM:1] mulbulkOutVld;
-  logic                                                     mulbulkResVld;
-  MULBULKRES_t                                              mulbulkRes;
-  logic                                                     mulbulkResRdy;
-  MULBULKTAG_t [MULBULKPIPENUM:1]                           mulbulkTagPipe;
-  fpnew_pkg::status_t [`TE(VLEN)/2*`COMPRATIO(VLEN)-1:0][`TE(VLEN)/2-1:0] mulbulkResStatus;
+  logic                                                                       mulbulkResVld;
+  MULBULKRES_t                                                                mulbulkRes;
+  logic                                                                       mulbulkResRdy;
+  MULBULKTAG_t [MULBULKPIPENUM:1]                                             mulbulkTagPipe;
+  fpnew_pkg::status_t [`TE(VLEN)/2*`COMPRATIO(VLEN)-1:0][`TE(VLEN)/2-1:0]     mulbulkResStatus;
   // mul+bulk status                                        
-  logic                                                     mulbulkBusy;
+  logic                                                                       mulbulkBusy;
 
 `ifdef TB_SUPPORT
   assign mulbulkTagIn.uop_pc     = blkCmd.vaInfo.uop_pc;
@@ -245,16 +245,16 @@ module zvt_pe_block#(
   );
 
 // Adder
-  ADDERTAG_t                                               adderTagIn;
-  logic                                                    adderRdy;
-  logic [`TE(VLEN)/2*`COMPRATIO(VLEN)-1:0][`TE(VLEN)/2-1:0][ADDERPIPENUM:1] adderOutVld;
-  logic [`TE(VLEN)/2*`COMPRATIO(VLEN)-1:0][`TE(VLEN)/2-1:0] adderResVld;  
-  logic                                                    adderResRdy;
+  ADDERTAG_t                                                                 adderTagIn;
+  logic                                                                      adderRdy;
+  logic [`TE(VLEN)/2*`COMPRATIO(VLEN)-1:0][`TE(VLEN)/2-1:0][ADDERPIPENUM:1]  adderOutVld;
+  logic [`TE(VLEN)/2*`COMPRATIO(VLEN)-1:0][`TE(VLEN)/2-1:0]                  adderResVld;  
+  logic                                                                      adderResRdy;
   logic [`TE(VLEN)/2*`COMPRATIO(VLEN)-1:0][`TE(VLEN)/2-1:0][`WORD_WIDTH-1:0] adderRes;
-  fpnew_pkg::status_t [`TE(VLEN)/2*`COMPRATIO(VLEN)-1:0][`TE(VLEN)/2-1:0] adderStatus;
-  ADDERTAG_t [ADDERPIPENUM:1]                              adderTagOut;
-  ADDERTAG_t                                               adderResTag;
-  logic                                                    adderBusy;
+  fpnew_pkg::status_t [`TE(VLEN)/2*`COMPRATIO(VLEN)-1:0][`TE(VLEN)/2-1:0]    adderStatus;
+  ADDERTAG_t [ADDERPIPENUM:1]                                                adderTagOut;
+  ADDERTAG_t                                                                 adderResTag;
+  logic                                                                      adderBusy;
 
   // handshake
   assign mulbulkCmdRdy = adderRdy;

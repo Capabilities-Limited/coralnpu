@@ -526,11 +526,11 @@ module rvv_backend_alu_shift_datapath#(
   assign nar16_eew32 = {product32_raw[3][15:0], product32_raw[2][15:0],
                         product32_raw[1][15:0], product32_raw[0][15:0]};
 
-  logic [VLEN-1:0]   raw_vec;
-  logic [VLEN-1:0]   scaling_vec;
-  logic [VLEN-1:0]   narrow_raw_vec;
-  logic [VLEN-1:0]   clamped_vec;
-  logic [VLEN-1:0]   result_data;
+  logic [VLEN-1:0]         raw_vec;
+  logic [VLEN-1:0]         scaling_vec;
+  logic [VLEN-1:0]         narrow_raw_vec;
+  logic [VLEN-1:0]         clamped_vec;
+  logic [VLEN-1:0]         result_data;
   logic [`VLENB(VLEN)-1:0] vsaturate_data;
 
   always_comb begin

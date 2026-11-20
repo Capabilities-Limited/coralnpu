@@ -145,17 +145,17 @@
 `define EMUL_MAX                8
 
 `ifdef ZVE32F_ON
-  `define LAST_UOP_VLD        1
+  `define LAST_UOP_VLD                  1
   `ifdef TB_SUPPORT
-    `define FP_RDT_TAG_WIDTH(PC_WIDTH) (`LAST_UOP_VLD+PC_WIDTH+`ROB_DEPTH_WIDTH)
+    `define FP_RDT_TAG_WIDTH(PC_WIDTH)  (`LAST_UOP_VLD+PC_WIDTH+`ROB_DEPTH_WIDTH)
   `else
-    `define FP_RDT_TAG_WIDTH(PC_WIDTH) (`LAST_UOP_VLD+`ROB_DEPTH_WIDTH)
+    `define FP_RDT_TAG_WIDTH(PC_WIDTH)  (`LAST_UOP_VLD+`ROB_DEPTH_WIDTH)
   `endif
 `else
   // Define FP variables even if not used
   // TODO(derekjchow): Remove FP modules from chisel build once float is
   // configurable.
-  `define FP_RDT_TAG_WIDTH(PC_WIDTH) 0
+  `define FP_RDT_TAG_WIDTH(PC_WIDTH)    0
 `endif
 
 // ALU instruction will be split 8 uops at most

@@ -62,36 +62,36 @@ module rvv_backend_alu_unit_execution_p1#(
   logic        	                          last_uop_valid;
   logic   [$clog2(`EMUL_MAX)-1:0]         uop_index;   
 
-  logic                                   is_cmp;
-  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0] src2_data;
-  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0] src1_data;  
-  logic   [`VLENB(VLEN)-1:0]              src2_sgn;
-  logic   [`VLENB(VLEN)-1:0]              src1_sgn;
-  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0] product8;
-  logic   [`VLENH(VLEN)-1:0][`HWORD_WIDTH-1:0] product16;
-  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0] product32;
-  logic   [`VLENB(VLEN)-1:0]              cout8;
-  logic   [`VLENH(VLEN)-1:0]              cout16;
-  logic   [`VLENW(VLEN)-1:0]              cout32;  
+  logic                                         is_cmp;
+  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0]   src2_data;
+  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0]   src1_data;  
+  logic   [`VLENB(VLEN)-1:0]                    src2_sgn;
+  logic   [`VLENB(VLEN)-1:0]                    src1_sgn;
+  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0]   product8;
+  logic   [`VLENH(VLEN)-1:0][`HWORD_WIDTH-1:0]  product16;
+  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]   product32;
+  logic   [`VLENB(VLEN)-1:0]                    cout8;
+  logic   [`VLENH(VLEN)-1:0]                    cout16;
+  logic   [`VLENW(VLEN)-1:0]                    cout32;  
 `ifndef CORALNPU_STRUCTURAL_DATAPATH
-  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0] round8_src;
-  logic   [`VLENH(VLEN)-1:0][`HWORD_WIDTH-1:0] round16_src;
-  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0] round32_src;
+  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0]   round8_src;
+  logic   [`VLENH(VLEN)-1:0][`HWORD_WIDTH-1:0]  round16_src;
+  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]   round32_src;
 `endif
-  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0] round8;
-  logic   [`VLENH(VLEN)-1:0][`HWORD_WIDTH-1:0] round16;
-  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0] round32;
-  logic   [`VLENB(VLEN)-1:0]              addu_upoverflow;
-  logic   [`VLENB(VLEN)-1:0]              add_upoverflow;
-  logic   [`VLENB(VLEN)-1:0]              add_underoverflow;
-  logic   [`VLENB(VLEN)-1:0]              subu_underoverflow;
-  logic   [`VLENB(VLEN)-1:0]              sub_upoverflow;
-  logic   [`VLENB(VLEN)-1:0]              sub_underoverflow;
-  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0] result_minmax8;
-  logic   [`VLENH(VLEN)-1:0][`HWORD_WIDTH-1:0] result_minmax16;
-  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0] result_minmax32;
-  logic   [VLEN-1:0]                      result_data;   // regular data for EEW_vd = 8b,16b,32b
-  genvar                                  j;
+  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0]   round8;
+  logic   [`VLENH(VLEN)-1:0][`HWORD_WIDTH-1:0]  round16;
+  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]   round32;
+  logic   [`VLENB(VLEN)-1:0]                    addu_upoverflow;
+  logic   [`VLENB(VLEN)-1:0]                    add_upoverflow;
+  logic   [`VLENB(VLEN)-1:0]                    add_underoverflow;
+  logic   [`VLENB(VLEN)-1:0]                    subu_underoverflow;
+  logic   [`VLENB(VLEN)-1:0]                    sub_upoverflow;
+  logic   [`VLENB(VLEN)-1:0]                    sub_underoverflow;
+  logic   [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0]   result_minmax8;
+  logic   [`VLENH(VLEN)-1:0][`HWORD_WIDTH-1:0]  result_minmax16;
+  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]   result_minmax32;
+  logic   [VLEN-1:0]                            result_data;   // regular data for EEW_vd = 8b,16b,32b
+  genvar                                        j;
 
   // for CMP
   logic   [VLEN-1:0]                      vstart_elements_tmp;

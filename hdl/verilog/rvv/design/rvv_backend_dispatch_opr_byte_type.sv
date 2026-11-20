@@ -33,18 +33,18 @@ module rvv_backend_dispatch_opr_byte_type#(
     EEW_e                               eew_max;
     logic  [1:0]                        eew_max_shift;
     
-    logic  [1:0]                        vs2_eew_shift;
-    logic  [`VSTART_WIDTH(VLEN)-1:0]    uop_vs2_start;
-    logic  [`VSTART_WIDTH(VLEN)-1:0]    uop_vs2_offset;
-    logic  [`VLENB(VLEN)-1:0][`VL_WIDTH(VLEN)-1:0] vs2_ele_index;  // element index
-    logic  [`VLENB(VLEN)-1:0]           vs2_enable, vs2_enable_tmp;
+    logic  [1:0]                                    vs2_eew_shift;
+    logic  [`VSTART_WIDTH(VLEN)-1:0]                uop_vs2_start;
+    logic  [`VSTART_WIDTH(VLEN)-1:0]                uop_vs2_offset;
+    logic  [`VLENB(VLEN)-1:0][`VL_WIDTH(VLEN)-1:0]  vs2_ele_index;  // element index
+    logic  [`VLENB(VLEN)-1:0]                       vs2_enable, vs2_enable_tmp;
     
-    logic  [`VSTART_WIDTH(VLEN)-1:0]    ele_start;      // the index of start element in this uop
-    logic  [1:0]                        vd_eew_shift;
-    logic  [`VSTART_WIDTH(VLEN)-1:0]    uop_vd_start;
-    logic  [`VSTART_WIDTH(VLEN)-1:0]    uop_vd_end;
-    logic  [`VLENB(VLEN)-1:0][`VL_WIDTH(VLEN)-1:0] vd_ele_index;   // element index
-    logic  [`VLENB(VLEN)-1:0]           vd_enable;
+    logic  [`VSTART_WIDTH(VLEN)-1:0]                ele_start;      // the index of start element in this uop
+    logic  [1:0]                                    vd_eew_shift;
+    logic  [`VSTART_WIDTH(VLEN)-1:0]                uop_vd_start;
+    logic  [`VSTART_WIDTH(VLEN)-1:0]                uop_vd_end;
+    logic  [`VLENB(VLEN)-1:0][`VL_WIDTH(VLEN)-1:0]  vd_ele_index;   // element index
+    logic  [`VLENB(VLEN)-1:0]                       vd_enable;
 
     logic  [`VSTART_WIDTH(VLEN)-1:0]          uop_v0_start;
     logic  [`VSTART_WIDTH(VLEN)-1:0]          uop_v0_start_offset;

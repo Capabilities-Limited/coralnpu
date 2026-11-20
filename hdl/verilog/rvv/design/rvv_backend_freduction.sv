@@ -97,13 +97,13 @@ module rvv_backend_freduction#(
   logic      [31:0] vs1_reg;
   logic [VLEN-1:0]  vs2_reg;
   logic [`FP_RDT_TAG_WIDTH(PC_WIDTH)-1:0] tag_reg;
-  BYTE_TYPE_e [`VLENW(VLEN)-1:0] vs2_type_reg;
-  fpnew_pkg::status_t           fpexp_reg;
-  logic                         sub_in_accept;
-  logic                         mask_cur;
-  logic                         mask_cur_reg;
+  BYTE_TYPE_e [`VLENW(VLEN)-1:0]          vs2_type_reg;
+  fpnew_pkg::status_t                     fpexp_reg;
+  logic                                   sub_in_accept;
+  logic                                   mask_cur;
+  logic                                   mask_cur_reg;
   logic [`FP_RDT_TAG_WIDTH(PC_WIDTH)-1:0] mask_tag_reg;
-  logic                 [31:0]  vs1_in_reg;
+  logic                 [31:0]            vs1_in_reg;
 
   //assignment
   assign uop_ready         =  !busy ||

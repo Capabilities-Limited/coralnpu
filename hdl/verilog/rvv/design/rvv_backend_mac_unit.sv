@@ -71,10 +71,10 @@ logic [`VLENB(VLEN)-1:0]              mac_src2_is_signed_extend;
 logic [`VLENB(VLEN)-1:0]              mac_src1_is_signed_extend;
 
 logic [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0] mac8_in0;
-logic [`VLENB(VLEN)-1:0]              mac8_in0_is_signed;
+logic [`VLENB(VLEN)-1:0]                  mac8_in0_is_signed;
 logic [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0] mac8_in1;
-logic [`VLENB(VLEN)-1:0]              mac8_in1_is_signed;
-logic [VLEN/2-1:0][`HWORD_WIDTH-1:0]  mac8_out;  // VLEN/`WORD_WIDTH tiles, each tile has 4*4 elements. Total: VLEN/2 elements
+logic [`VLENB(VLEN)-1:0]                  mac8_in1_is_signed;
+logic [VLEN/2-1:0][`HWORD_WIDTH-1:0]      mac8_out;  // VLEN/`WORD_WIDTH tiles, each tile has 4*4 elements. Total: VLEN/2 elements
 
 logic [VLEN/2-1:0]                   mac8_en;
 // EX2 stage
@@ -94,59 +94,59 @@ RVVXRM                                mac_uop_xrm_d1;
 EEW_e                                 mac_top_vs_eew_d1;
 logic [`ROB_DEPTH_WIDTH-1:0]          mac_uop_rob_entry_d1;
 
-logic [`VLENB(VLEN)-1:0][`HWORD_WIDTH-1:0] mac_rslt_full_eew8_d1;
-logic [2*VLEN-1:0]                    mac_rslt_eew8_widen_d1;
-logic [VLEN-1:0]                      mac_rslt_eew8_no_widen_d1;
-logic [`VLENB(VLEN)-1:0]              vsmul_round_incr_eew8_d1;
-logic [VLEN-1:0]                      vsmul_rslt_eew8_d1;
-logic [`VLENB(VLEN)-1:0]              vsmul_sat_eew8_d1;
-logic [VLEN-1:0]                      mac_rslt_eew8_d1;
-logic [`VLENB(VLEN)-1:0]              update_vxsat_eew8_d1;
-logic [`VLENB(VLEN)-1:0][`BYTE_WIDTH:0] vmac_mul_add_eew8_no_widen_d1;
-logic [`VLENB(VLEN)-1:0][`BYTE_WIDTH:0] vmac_mul_sub_eew8_no_widen_d1;
-logic [VLEN-1:0]                      vmac_rslt_eew8_no_widen_d1;
-logic [`VLENB(VLEN)-1:0][`HWORD_WIDTH:0] vmac_mul_add_eew8_widen_d1;
-logic [`VLENB(VLEN)-1:0][`HWORD_WIDTH:0] vmac_mul_sub_eew8_widen_d1;
-logic [2*VLEN-1:0]                    vmac_rslt_eew8_widen_d1;
+logic [`VLENB(VLEN)-1:0][`HWORD_WIDTH-1:0]  mac_rslt_full_eew8_d1;
+logic [2*VLEN-1:0]                          mac_rslt_eew8_widen_d1;
+logic [VLEN-1:0]                            mac_rslt_eew8_no_widen_d1;
+logic [`VLENB(VLEN)-1:0]                    vsmul_round_incr_eew8_d1;
+logic [VLEN-1:0]                            vsmul_rslt_eew8_d1;
+logic [`VLENB(VLEN)-1:0]                    vsmul_sat_eew8_d1;
+logic [VLEN-1:0]                            mac_rslt_eew8_d1;
+logic [`VLENB(VLEN)-1:0]                    update_vxsat_eew8_d1;
+logic [`VLENB(VLEN)-1:0][`BYTE_WIDTH:0]     vmac_mul_add_eew8_no_widen_d1;
+logic [`VLENB(VLEN)-1:0][`BYTE_WIDTH:0]     vmac_mul_sub_eew8_no_widen_d1;
+logic [VLEN-1:0]                            vmac_rslt_eew8_no_widen_d1;
+logic [`VLENB(VLEN)-1:0][`HWORD_WIDTH:0]    vmac_mul_add_eew8_widen_d1;
+logic [`VLENB(VLEN)-1:0][`HWORD_WIDTH:0]    vmac_mul_sub_eew8_widen_d1;
+logic [2*VLEN-1:0]                          vmac_rslt_eew8_widen_d1;
 
-logic [`VLENH(VLEN)-1:0][17:0]        mac_rslt_part16_eew16_d1;
-logic [`VLENH(VLEN)-1:0][`WORD_WIDTH-1:0] mac_rslt_full_eew16_d1;
-logic [2*VLEN-1:0]                    mac_rslt_eew16_widen_d1;
-logic [VLEN-1:0]                      mac_rslt_eew16_no_widen_d1;
-logic [`VLENH(VLEN)-1:0]              vsmul_round_incr_eew16_d1;
-logic [VLEN-1:0]                      vsmul_rslt_eew16_d1;
-logic [`VLENH(VLEN)-1:0]              vsmul_sat_eew16_d1;
-logic [VLEN-1:0]                      mac_rslt_eew16_d1;
-logic [`VLENB(VLEN)-1:0]              update_vxsat_eew16_d1;
-logic [`VLENH(VLEN)-1:0][`HWORD_WIDTH:0] vmac_mul_add_eew16_no_widen_d1;
-logic [`VLENH(VLEN)-1:0][`HWORD_WIDTH:0] vmac_mul_sub_eew16_no_widen_d1;
-logic [VLEN-1:0]                      vmac_rslt_eew16_no_widen_d1;
-logic [`VLENH(VLEN)-1:0][`WORD_WIDTH:0] vmac_mul_add_eew16_widen_d1;
-logic [`VLENH(VLEN)-1:0][`WORD_WIDTH:0] vmac_mul_sub_eew16_widen_d1;
-logic [2*VLEN-1:0]                    vmac_rslt_eew16_widen_d1;
+logic [`VLENH(VLEN)-1:0][17:0]              mac_rslt_part16_eew16_d1;
+logic [`VLENH(VLEN)-1:0][`WORD_WIDTH-1:0]   mac_rslt_full_eew16_d1;
+logic [2*VLEN-1:0]                          mac_rslt_eew16_widen_d1;
+logic [VLEN-1:0]                            mac_rslt_eew16_no_widen_d1;
+logic [`VLENH(VLEN)-1:0]                    vsmul_round_incr_eew16_d1;
+logic [VLEN-1:0]                            vsmul_rslt_eew16_d1;
+logic [`VLENH(VLEN)-1:0]                    vsmul_sat_eew16_d1;
+logic [VLEN-1:0]                            mac_rslt_eew16_d1;
+logic [`VLENB(VLEN)-1:0]                    update_vxsat_eew16_d1;
+logic [`VLENH(VLEN)-1:0][`HWORD_WIDTH:0]    vmac_mul_add_eew16_no_widen_d1;
+logic [`VLENH(VLEN)-1:0][`HWORD_WIDTH:0]    vmac_mul_sub_eew16_no_widen_d1;
+logic [VLEN-1:0]                            vmac_rslt_eew16_no_widen_d1;
+logic [`VLENH(VLEN)-1:0][`WORD_WIDTH:0]     vmac_mul_add_eew16_widen_d1;
+logic [`VLENH(VLEN)-1:0][`WORD_WIDTH:0]     vmac_mul_sub_eew16_widen_d1;
+logic [2*VLEN-1:0]                          vmac_rslt_eew16_widen_d1;
 
 `ifndef CORALNPU_STRUCTURAL_DATAPATH
-logic [`VLENW(VLEN)-1:0][17:0]        mac_rslt_part16_eew32_d1;
-logic [`VLENW(VLEN)-1:0][33:0]        mac_rslt_part32_eew32_d1;
-logic [`VLENW(VLEN)-1:0][49:0]        mac_rslt_part48_eew32_d1;
+logic [`VLENW(VLEN)-1:0][17:0]              mac_rslt_part16_eew32_d1;
+logic [`VLENW(VLEN)-1:0][33:0]              mac_rslt_part32_eew32_d1;
+logic [`VLENW(VLEN)-1:0][49:0]              mac_rslt_part48_eew32_d1;
 logic [`VLENW(VLEN)-1:0][2*`WORD_WIDTH-1:0] mac_rslt_full_eew32_d1;
 `endif
-logic [2*VLEN-1:0]                    mac_rslt_eew32_widen_d1;
-logic [VLEN-1:0]                      mac_rslt_eew32_no_widen_d1;
+logic [2*VLEN-1:0]                          mac_rslt_eew32_widen_d1;
+logic [VLEN-1:0]                            mac_rslt_eew32_no_widen_d1;
 `ifndef CORALNPU_STRUCTURAL_DATAPATH
-logic [`VLENW(VLEN)-1:0]              vsmul_round_incr_eew32_d1;
-logic [VLEN-1:0]                      vsmul_rslt_eew32_d1;
+logic [`VLENW(VLEN)-1:0]                    vsmul_round_incr_eew32_d1;
+logic [VLEN-1:0]                            vsmul_rslt_eew32_d1;
 `endif
-logic [`VLENW(VLEN)-1:0]              vsmul_sat_eew32_d1;
-logic [VLEN-1:0]                      mac_rslt_eew32_d1;
-logic [`VLENB(VLEN)-1:0]              update_vxsat_eew32_d1;
+logic [`VLENW(VLEN)-1:0]                    vsmul_sat_eew32_d1;
+logic [VLEN-1:0]                            mac_rslt_eew32_d1;
+logic [`VLENB(VLEN)-1:0]                    update_vxsat_eew32_d1;
 `ifndef CORALNPU_STRUCTURAL_DATAPATH
-logic [`VLENW(VLEN)-1:0][`WORD_WIDTH:0] vmac_mul_add_eew32_no_widen_d1;
-logic [`VLENW(VLEN)-1:0][`WORD_WIDTH:0] vmac_mul_sub_eew32_no_widen_d1;
-logic [VLEN-1:0]                      vmac_rslt_eew32_no_widen_d1;
-logic [`VLENW(VLEN)-1:0][2*`WORD_WIDTH:0] vmac_mul_add_eew32_widen_d1;
-logic [`VLENW(VLEN)-1:0][2*`WORD_WIDTH:0] vmac_mul_sub_eew32_widen_d1;
-logic [2*VLEN-1:0]                    vmac_rslt_eew32_widen_d1;
+logic [`VLENW(VLEN)-1:0][`WORD_WIDTH:0]     vmac_mul_add_eew32_no_widen_d1;
+logic [`VLENW(VLEN)-1:0][`WORD_WIDTH:0]     vmac_mul_sub_eew32_no_widen_d1;
+logic [VLEN-1:0]                            vmac_rslt_eew32_no_widen_d1;
+logic [`VLENW(VLEN)-1:0][2*`WORD_WIDTH:0]   vmac_mul_add_eew32_widen_d1;
+logic [`VLENW(VLEN)-1:0][2*`WORD_WIDTH:0]   vmac_mul_sub_eew32_widen_d1;
+logic [2*VLEN-1:0]                          vmac_rslt_eew32_widen_d1;
 `endif
 
 logic [`VLENB(VLEN)-1:0]                    update_vxsat;

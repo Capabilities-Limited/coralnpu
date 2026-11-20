@@ -27,28 +27,28 @@ union packed { \
 `define PIPE_DATA_t(VLEN, PC_WIDTH) \
 struct packed { \
 `ifdef TB_SUPPORT \
-  logic   [PC_WIDTH-1:0]          uop_pc; \
+  logic   [PC_WIDTH-1:0]            uop_pc; \
 `endif \
-  logic   [`ROB_DEPTH_WIDTH-1:0]  rob_entry; \
-  ADDSUB_e                        opcode; \
-  FUNCT6_u                        uop_funct6; \
-  logic   [`FUNCT3_WIDTH-1:0]     uop_funct3; \
-  logic                           is_addsub; \
-  logic                           is_cmp; \
+  logic   [`ROB_DEPTH_WIDTH-1:0]    rob_entry; \
+  ADDSUB_e                          opcode; \
+  FUNCT6_u                          uop_funct6; \
+  logic   [`FUNCT3_WIDTH-1:0]       uop_funct3; \
+  logic                             is_addsub; \
+  logic                             is_cmp; \
   logic   [`VSTART_WIDTH(VLEN)-1:0] vstart; \
-  logic   [`VL_WIDTH(VLEN)-1:0]   vl; \
-  logic                           vm; \
-  RVVXRM_e                        vxrm; \
-  `v0_src2_u(VLEN)                v0_src2; \
-  `vd_src1_u(VLEN)                vd_src1; \
-  EEW_e                           vs2_eew; \
-  logic   [VLEN-1:0]              w_data; \
-  logic                           w_valid; \
-  `info_u(VLEN)                   vsat_cout; \
-  logic   [`VLENB(VLEN)-1:0]      src2_sgn; \
-  logic   [`VLENB(VLEN)-1:0]      src1_sgn; \
-  logic                           last_uop_valid; \
-  logic   [$clog2(`EMUL_MAX)-1:0] uop_index; \
+  logic   [`VL_WIDTH(VLEN)-1:0]     vl; \
+  logic                             vm; \
+  RVVXRM_e                          vxrm; \
+  `v0_src2_u(VLEN)                  v0_src2; \
+  `vd_src1_u(VLEN)                  vd_src1; \
+  EEW_e                             vs2_eew; \
+  logic   [VLEN-1:0]                w_data; \
+  logic                             w_valid; \
+  `info_u(VLEN)                     vsat_cout; \
+  logic   [`VLENB(VLEN)-1:0]        src2_sgn; \
+  logic   [`VLENB(VLEN)-1:0]        src1_sgn; \
+  logic                             last_uop_valid; \
+  logic   [$clog2(`EMUL_MAX)-1:0]   uop_index; \
 }
 
 `endif // ALU_DEFINE_SVH

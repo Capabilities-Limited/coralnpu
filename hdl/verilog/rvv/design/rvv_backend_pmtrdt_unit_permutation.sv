@@ -58,8 +58,8 @@ module rvv_backend_pmtrdt_unit_permutation#(
   input             pmt_res_ready;
 
 // vrf read
-  output logic [`REGIDX_WIDTH-1:0]            rd_index_pmt2vrf;
-  input  logic [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0] rd_data_vrf2pmt;
+  output logic [`REGIDX_WIDTH-1:0]                  rd_index_pmt2vrf;
+  input  logic [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0]  rd_data_vrf2pmt;
 
 // MISC
   input  logic [`ROB_DEPTH_WIDTH-1:0]         rob_rptr;
@@ -67,14 +67,14 @@ module rvv_backend_pmtrdt_unit_permutation#(
   input             trap_flush_rvv;
 
 // ---internal signal definition--------------------------------------
-  PMT_CTRL_t                pmt_ctrl_t0, pmt_ctrl_t1, pmt_ctrl_t2;
-  PMT_INFO_t  [`VLENB(VLEN)-1:0] pmt_info_t0, pmt_info_t1;
-  logic [`VLENB(VLEN)-1:0]  pmt_info_valid;
-  logic                     pmt_info_ready;
-  PMT_DATA_t  [`VLENB(VLEN)-1:0] pmt_data_t1, pmt_data_t2;
-  logic       [`VLENB(VLEN)-1:0] pmt_t0_valid, pmt_t1_valid, pmt_t2_valid;
-  logic       [`VLENB(VLEN)-1:0] pmt_t0_ready, pmt_t1_ready, pmt_t2_ready;
-  logic                     pmt_go;
+  PMT_CTRL_t                      pmt_ctrl_t0, pmt_ctrl_t1, pmt_ctrl_t2;
+  PMT_INFO_t  [`VLENB(VLEN)-1:0]  pmt_info_t0, pmt_info_t1;
+  logic [`VLENB(VLEN)-1:0]        pmt_info_valid;
+  logic                           pmt_info_ready;
+  PMT_DATA_t  [`VLENB(VLEN)-1:0]  pmt_data_t1, pmt_data_t2;
+  logic       [`VLENB(VLEN)-1:0]  pmt_t0_valid, pmt_t1_valid, pmt_t2_valid;
+  logic       [`VLENB(VLEN)-1:0]  pmt_t0_ready, pmt_t1_ready, pmt_t2_ready;
+  logic                           pmt_go;
 
   PMT_INFO_t  [`VLENB(VLEN)-1:0]  slideup_info_t0;
   PMT_INFO_t  [`VLENB(VLEN)-1:0]  slidedown_info_t0;
@@ -82,20 +82,20 @@ module rvv_backend_pmtrdt_unit_permutation#(
   PMT_INFO_t  [`VLENB(VLEN)-1:0]  compress_info_t0;
 
   logic [`VLENB(VLEN)-1:0][XLEN+1:0] slideup_offset;
-  logic [`VLENB(VLEN)-1:0]      slideup_overflow;
-  logic [`VLENB(VLEN)-1:0]      slideup_scalar_valid;
+  logic [`VLENB(VLEN)-1:0]           slideup_overflow;
+  logic [`VLENB(VLEN)-1:0]           slideup_scalar_valid;
   logic [`VLENB(VLEN)-1:0][XLEN+2:0] slidedown_offset;
-  logic [`VLENB(VLEN)-1:0]      slidedown_overflow;
-  logic [`VLENB(VLEN)-1:0]      slidedown_scalar_valid;
+  logic [`VLENB(VLEN)-1:0]           slidedown_overflow;
+  logic [`VLENB(VLEN)-1:0]           slidedown_scalar_valid;
   logic [`VLENB(VLEN)-1:0][XLEN-1:0] rgather_vs1;
-  logic [2*VLEN-1:0]            double_vs1_data;
+  logic [2*VLEN-1:0]                 double_vs1_data;
   logic [`VLENB(VLEN)-1:0][XLEN+2:0] rgather_offset;
-  logic [`VLENB(VLEN)-1:0]      rgather_overflow;
-  logic [VLEN-1:0]              compress_vs1;
-  logic [VLEN-1:0]              compress_vs1_d, compress_vs1_q;
-  logic [VLEN-1:0]              compress_vmsof;
-  logic [`VL_WIDTH(VLEN)-1:0]   compress_vfirst;
-  logic                         compress_overflow;
+  logic [`VLENB(VLEN)-1:0]           rgather_overflow;
+  logic [VLEN-1:0]                   compress_vs1;
+  logic [VLEN-1:0]                   compress_vs1_d, compress_vs1_q;
+  logic [VLEN-1:0]                   compress_vmsof;
+  logic [`VL_WIDTH(VLEN)-1:0]        compress_vfirst;
+  logic                              compress_overflow;
   logic [`VLENB(VLEN)-1:0][`VSTART_WIDTH(VLEN)-1:0]   compress_offset;
   logic [`VLENB(VLEN)-1:0]      compress_info_enable;
   logic [VLENB_WIDTH-1:0]       compress_cnt_d, compress_cnt_q;

@@ -20,16 +20,16 @@ module rvv_backend_arb#(
 );
 
 // global signal
-    input   logic                                         clk;
-    input   logic                                         rst_n;
+    input   logic                                               clk;
+    input   logic                                               rst_n;
 // PU to ARB
-    input   logic     [`NUM_PU-1:0]                       req;
-    input   PU2ROB_t  [`NUM_PU-1:0]                       item;
-    input   logic     [`NUM_LSU-1:0][$clog2(`VLENB(VLEN)):0] ff_tail_index;
-    output  logic     [`NUM_PU-1:0]                       grant;
+    input   logic     [`NUM_PU-1:0]                             req;
+    input   PU2ROB_t  [`NUM_PU-1:0]                             item;
+    input   logic     [`NUM_LSU-1:0][$clog2(`VLENB(VLEN)):0]    ff_tail_index;
+    output  logic     [`NUM_PU-1:0]                             grant;
 // ARB to ROB
-    output  logic     [`NUM_SMPORT-1:0]                   result_valid;
-    output  PU2ROB_t  [`NUM_SMPORT-1:0]                   result;
+    output  logic     [`NUM_SMPORT-1:0]                         result_valid;
+    output  PU2ROB_t  [`NUM_SMPORT-1:0]                         result;
     output  logic     [`NUM_SMPORT-1:0][$clog2(`VLENB(VLEN)):0] res_ff_tail_index;
 
 // ---internal signal definition--------------------------------------

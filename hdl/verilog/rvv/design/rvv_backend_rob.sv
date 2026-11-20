@@ -69,8 +69,8 @@ module rvv_backend_rob#(
 
 // push uop result to ROB
 // PU to ROB
-    input   logic     [`NUM_SMPORT-1:0]                   wr_valid_pu2rob;
-    input   PU2ROB_t  [`NUM_SMPORT-1:0]                   wr_pu2rob;
+    input   logic     [`NUM_SMPORT-1:0]                         wr_valid_pu2rob;
+    input   PU2ROB_t  [`NUM_SMPORT-1:0]                         wr_pu2rob;
     input   logic     [`NUM_SMPORT-1:0][$clog2(`VLENB(VLEN)):0] ff_tail_index;  
 
 // retire uops
@@ -285,8 +285,8 @@ module rvv_backend_rob#(
 
   // retire uop(s)
   logic [`ROB_DEPTH-1:0][$clog2(`VLENB(VLEN)):0] rt_ff_tail_index;
-  logic [`ROB_DEPTH-1:0][`VLENB(VLEN)-1:0] rt_ff_strobe;
-  logic [`ROB_DEPTH-1:0]                   is_ff;
+  logic [`ROB_DEPTH-1:0][`VLENB(VLEN)-1:0]       rt_ff_strobe;
+  logic [`ROB_DEPTH-1:0]                         is_ff;
 
   for (genvar i=0; i<`ROB_DEPTH; i++) begin
     // write strobe

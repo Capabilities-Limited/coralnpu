@@ -39,11 +39,11 @@ struct packed { \
 
 `define PMT_INFO_t(VLEN) \
 struct packed { \
-  logic                         zero_valid; \
-  logic                         rs_valid; \
-  logic [`REGIDX_WIDTH-1:0]     index; \
-  logic [$clog2(`VLENB(VLEN))-1:0] offset; \
-  logic                         vs_valid; \
+  logic                               zero_valid; \
+  logic                               rs_valid; \
+  logic [`REGIDX_WIDTH-1:0]           index; \
+  logic [$clog2(`VLENB(VLEN))-1:0]    offset; \
+  logic                               vs_valid; \
 }
 
 typedef struct packed {

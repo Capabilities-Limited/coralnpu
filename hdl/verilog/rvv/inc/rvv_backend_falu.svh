@@ -44,11 +44,11 @@ struct packed { \
 
 `define FCMP_INFO_t(VLEN) \
 struct packed { \
-  logic   [`VSTART_WIDTH(VLEN)-1:0]   vstart; \
-  logic   [`VL_WIDTH(VLEN)-1:0]       vl; \
-  logic                               vm; \
-  logic   [`VLENW(VLEN)*`EMUL_MAX-1:0] v0; \
-  logic   [VLEN-1:0]                  vd; \
+  logic   [`VSTART_WIDTH(VLEN)-1:0]         vstart; \
+  logic   [`VL_WIDTH(VLEN)-1:0]             vl; \
+  logic                                     vm; \
+  logic   [`VLENW(VLEN)*`EMUL_MAX-1:0]      v0; \
+  logic   [VLEN-1:0]                        vd; \
 }
 
 `define FCVT_TAG_t(PC_WIDTH) \

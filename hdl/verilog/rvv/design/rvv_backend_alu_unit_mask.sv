@@ -35,18 +35,18 @@ module rvv_backend_alu_unit_mask#(
 // internal signals
 //
   // ALU_RS_t struct signals
-  logic   [`ROB_DEPTH_WIDTH-1:0]  rob_entry;
-  FUNCT6_u                        uop_funct6;
-  logic   [`FUNCT3_WIDTH-1:0]     uop_funct3;
-  logic   [`VSTART_WIDTH(VLEN)-1:0] vstart;
-  logic   [VLEN-1:0]              vstart_elements_tmp;
-  logic   [VLEN-1:0]              vstart_elements;
-  logic   [`VL_WIDTH(VLEN)-1:0]   vl;       
-  logic   [VLEN-1:0]              v0_data;           
-  logic   [VLEN-1:0]              vd_data;           
-  EEW_e                           vd_eew;
-  logic   [`REGIDX_WIDTH-1:0]     vs1_opcode;              
-  logic   [VLEN-1:0]              vs1_data;           
+  logic   [`ROB_DEPTH_WIDTH-1:0]     rob_entry;
+  FUNCT6_u                           uop_funct6;
+  logic   [`FUNCT3_WIDTH-1:0]        uop_funct3;
+  logic   [`VSTART_WIDTH(VLEN)-1:0]  vstart;
+  logic   [VLEN-1:0]                 vstart_elements_tmp;
+  logic   [VLEN-1:0]                 vstart_elements;
+  logic   [`VL_WIDTH(VLEN)-1:0]      vl;       
+  logic   [VLEN-1:0]                 v0_data;           
+  logic   [VLEN-1:0]                 vd_data;           
+  EEW_e                              vd_eew;
+  logic   [`REGIDX_WIDTH-1:0]        vs1_opcode;              
+  logic   [VLEN-1:0]                 vs1_data;           
   logic   [VLEN-1:0]             vs2_data;	        
   EEW_e                           vs2_eew;
   logic   [XLEN-1:0] 	          rs1_data;        

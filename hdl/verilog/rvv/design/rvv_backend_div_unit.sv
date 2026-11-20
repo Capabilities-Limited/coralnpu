@@ -62,31 +62,31 @@ module rvv_backend_div_unit#(
   logic   [XLEN-1:0] 	          rs1_data;        
 
   // execute 
-  logic                                     uop_valid;
-  logic                                     uop_valid_e;
-  logic                                     uop_valid_d1;
-  logic   [`VLENB(VLEN)/2-1:0]              div_ready8;
-  logic   [`VLENH(VLEN)/2-1:0]              div_ready16;
-  logic   [`VLENW(VLEN)-1:0]                div_ready32;
-  logic   [`VLENB(VLEN)/2-1:0][`BYTE_WIDTH-1:0] src2_data8;
-  logic   [`VLENH(VLEN)/2-1:0][`HWORD_WIDTH-1:0] src2_data16;
-  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0] src2_data32;
-  logic   [`VLENB(VLEN)/2-1:0][`BYTE_WIDTH-1:0] src1_data8;
-  logic   [`VLENH(VLEN)/2-1:0][`HWORD_WIDTH-1:0] src1_data16;
-  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0] src1_data32;
-  DIV_RES_t                                 res_info;
-  DIV_RES_t                                 res_info_d1;
-  logic   [`VLENB(VLEN)/2-1:0][`BYTE_WIDTH-1:0] quotient8;
-  logic   [`VLENH(VLEN)/2-1:0][`HWORD_WIDTH-1:0] quotient16;
-  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0] quotient32;
-  logic   [`VLENB(VLEN)/2-1:0][`BYTE_WIDTH-1:0] remainder8;
-  logic   [`VLENH(VLEN)/2-1:0][`HWORD_WIDTH-1:0] remainder16;
-  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0] remainder32;
-  logic   [`VLENB(VLEN)/2-1:0]              result_valid8;
-  logic   [`VLENH(VLEN)/2-1:0]              result_valid16;
-  logic   [`VLENW(VLEN)-1:0]                result_valid32;
-  logic   [VLEN-1:0]                        result_data; 
-  logic                                     result_all_valid; 
+  logic                                           uop_valid;
+  logic                                           uop_valid_e;
+  logic                                           uop_valid_d1;
+  logic   [`VLENB(VLEN)/2-1:0]                    div_ready8;
+  logic   [`VLENH(VLEN)/2-1:0]                    div_ready16;
+  logic   [`VLENW(VLEN)-1:0]                      div_ready32;
+  logic   [`VLENB(VLEN)/2-1:0][`BYTE_WIDTH-1:0]   src2_data8;
+  logic   [`VLENH(VLEN)/2-1:0][`HWORD_WIDTH-1:0]  src2_data16;
+  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]     src2_data32;
+  logic   [`VLENB(VLEN)/2-1:0][`BYTE_WIDTH-1:0]   src1_data8;
+  logic   [`VLENH(VLEN)/2-1:0][`HWORD_WIDTH-1:0]  src1_data16;
+  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]     src1_data32;
+  DIV_RES_t                                       res_info;
+  DIV_RES_t                                       res_info_d1;
+  logic   [`VLENB(VLEN)/2-1:0][`BYTE_WIDTH-1:0]   quotient8;
+  logic   [`VLENH(VLEN)/2-1:0][`HWORD_WIDTH-1:0]  quotient16;
+  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]     quotient32;
+  logic   [`VLENB(VLEN)/2-1:0][`BYTE_WIDTH-1:0]   remainder8;
+  logic   [`VLENH(VLEN)/2-1:0][`HWORD_WIDTH-1:0]  remainder16;
+  logic   [`VLENW(VLEN)-1:0][`WORD_WIDTH-1:0]     remainder32;
+  logic   [`VLENB(VLEN)/2-1:0]                    result_valid8;
+  logic   [`VLENH(VLEN)/2-1:0]                    result_valid16;
+  logic   [`VLENW(VLEN)-1:0]                      result_valid32;
+  logic   [VLEN-1:0]                              result_data; 
+  logic                                           result_all_valid; 
 
   // opcode
   logic                                     opcode;

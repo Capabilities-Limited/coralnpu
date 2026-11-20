@@ -78,81 +78,81 @@ module rvv_backend_falu_unit#(
 //
   //sub unit 
   //input of sub unit
-  logic                                     addmul_vld;
-  logic                                     allcmp_vld;
-  logic                                     cvt_vld;
-  logic                                     tbl_vld;
+  logic                                           addmul_vld;
+  logic                                           allcmp_vld;
+  logic                                           cvt_vld;
+  logic                                           tbl_vld;
   // operand
-  logic [VLEN-1:0]                          src1;
-  logic [VLEN-1:0]                          src2;
-  logic [VLEN-1:0]                          src3;
-  logic [`VLENW(VLEN)-1:0][2:0][`WORD_WIDTH-1:0] op_i;
-  EEW_e                                     vd_eew;
-  fpnew_pkg::roundmode_e                    rnd_mod_i;    // also opcode
-  fpnew_pkg::operation_e                    op_type;
-  logic                                     op_mod;
-  fpnew_pkg::fp_format_e                    src_fmt;
-  fpnew_pkg::fp_format_e                    src2_fmt;
-  fpnew_pkg::fp_format_e                    dst_fmt;
-  fpnew_pkg::int_format_e                   int_fmt;
+  logic [VLEN-1:0]                                src1;
+  logic [VLEN-1:0]                                src2;
+  logic [VLEN-1:0]                                src3;
+  logic [`VLENW(VLEN)-1:0][2:0][`WORD_WIDTH-1:0]  op_i;
+  EEW_e                                           vd_eew;
+  fpnew_pkg::roundmode_e                          rnd_mod_i;    // also opcode
+  fpnew_pkg::operation_e                          op_type;
+  logic                                           op_mod;
+  fpnew_pkg::fp_format_e                          src_fmt;
+  fpnew_pkg::fp_format_e                          src2_fmt;
+  fpnew_pkg::fp_format_e                          dst_fmt;
+  fpnew_pkg::int_format_e                         int_fmt;
   // tage
-  TAG_t                                     tag_fma;
-  FCMP_TAG_t                                tag_fcmp;
-  FCVT_TAG_t                                tag_fcvt;
-  TAG_t                                     tag_ftbl;
+  TAG_t                                           tag_fma;
+  FCMP_TAG_t                                      tag_fcmp;
+  FCVT_TAG_t                                      tag_fcvt;
+  TAG_t                                           tag_ftbl;
   // result & arb
-  logic     [3:0]                           result_vld;
-  logic     [3:0]                           arb_rdy;
+  logic     [3:0]                                 result_vld;
+  logic     [3:0]                                 arb_rdy;
   // fma
-  logic     [`VLENW(VLEN)-1:0][4:0][2:0]    addmul_NaNboxing; 
-  logic                                     addmul_result_vld;
-  logic     [VLEN-1:0]                      addmul_result;
-  fpnew_pkg::status_t [`VLENW(VLEN)-1:0]    addmul_status_o;
-  TAG_t                                     addmul_tag_o;
-  logic                                     addmul_result_rdy;
+  logic     [`VLENW(VLEN)-1:0][4:0][2:0]          addmul_NaNboxing; 
+  logic                                           addmul_result_vld;
+  logic     [VLEN-1:0]                            addmul_result;
+  fpnew_pkg::status_t [`VLENW(VLEN)-1:0]          addmul_status_o;
+  TAG_t                                           addmul_tag_o;
+  logic                                           addmul_result_rdy;
   // fcvt
-  logic                                     cvt_result_vld;
-  logic     [VLEN-1:0]                      cvt_result;
-  fpnew_pkg::status_t [`VLENW(VLEN)-1:0]    cvt_status_o;
-  FCVT_TAG_t                                cvt_tag_o;
-  logic                                     cvt_result_rdy;
+  logic                                           cvt_result_vld;
+  logic     [VLEN-1:0]                            cvt_result;
+  fpnew_pkg::status_t [`VLENW(VLEN)-1:0]          cvt_status_o;
+  FCVT_TAG_t                                      cvt_tag_o;
+  logic                                           cvt_result_rdy;
   // ftbl
-  logic                                     tbl_result_vld;
-  logic     [VLEN-1:0]                      tbl_result;
-  RVFEXP_t  [`VLENW(VLEN)-1:0]              tbl_status_o;
-  TAG_t                                     tbl_tag_o;
-  logic                                     tbl_result_rdy;
+  logic                                           tbl_result_vld;
+  logic     [VLEN-1:0]                            tbl_result;
+  RVFEXP_t  [`VLENW(VLEN)-1:0]                    tbl_status_o;
+  TAG_t                                           tbl_tag_o;
+  logic                                           tbl_result_rdy;
   // fcmp&fncmp
-  logic                                     allcmp_result_vld_tmp;
-  logic                                     allcmp_result_vld;
-  logic                                     is_class_o;
-  logic     [VLEN-1:0]                      allcmp_unit_res;
-  fpnew_pkg::classmask_e  [`VLENW(VLEN)-1:0] class_result;
-  logic     [VLEN-1:0]                      allcmp_result;
-  fpnew_pkg::status_t [`VLENW(VLEN)-1:0]    allcmp_status_o;
-  FCMP_TAG_t                                allcmp_tag_o;
-  logic                                     allcmp_result_rdy_tmp;
-  logic                                     allcmp_result_rdy;
+  logic                                           allcmp_result_vld_tmp;
+  logic                                           allcmp_result_vld;
+  logic                                           is_class_o;
+  logic     [VLEN-1:0]                            allcmp_unit_res;
+  fpnew_pkg::classmask_e  [`VLENW(VLEN)-1:0]      class_result;
+  logic     [VLEN-1:0]                            allcmp_result;
+  fpnew_pkg::status_t [`VLENW(VLEN)-1:0]          allcmp_status_o;
+  FCMP_TAG_t                                      allcmp_tag_o;
+  logic                                           allcmp_result_rdy_tmp;
+  logic                                           allcmp_result_rdy;
   // fcmp info
-  logic         [`FALU_PIPEREGS:0][1:0]     info_vld;
-  logic         [`FALU_PIPEREGS:0]          info_rdy;
-  FCMP_INFO_t   [`FALU_PIPEREGS:0]          cmp_info;
-  logic   [VLEN-1:0]                        v0;
-  logic   [VLEN-1:0]                        vstart_elements_tmp;
-  logic   [VLEN-1:0]                        vstart_elements;
-  logic   [VLEN-1:0]                        tail_elements_tmp;
-  logic   [VLEN-1:0]                        tail_elements;
-  logic   [6:0]                             cmp_en;
-  logic   [8*`VLENW(VLEN)-1:0]              cmp;
-  logic   [7*`VLENW(VLEN)-1:0]              cmp_d1;
-  logic   [VLEN-1:0]                        cmp_res_tmp;
-  logic   [VLEN-1:0]                        cmp_res;
-  RVFEXP_t  [8*`VLENW(VLEN)-1:0]            cmp_status;
-  RVFEXP_t  [7*`VLENW(VLEN)-1:0]            cmp_status_d1;
-  RVFEXP_t  [VLEN-1:0]                      cmp_fexp_tmp;
-  RVFEXP_t  [VLEN-1:0]                      cmp_fexp_per1;
-  RVFEXP_t  [`VLENB(VLEN)-1:0]              cmp_fexp;
-  RVFEXP_t  [`VLENB(VLEN)-1:0]              allcmp_fexp;
+  logic         [`FALU_PIPEREGS:0][1:0]           info_vld;
+  logic         [`FALU_PIPEREGS:0]                info_rdy;
+  FCMP_INFO_t   [`FALU_PIPEREGS:0]                cmp_info;
+  logic   [VLEN-1:0]                              v0;
+  logic   [VLEN-1:0]                              vstart_elements_tmp;
+  logic   [VLEN-1:0]                              vstart_elements;
+  logic   [VLEN-1:0]                              tail_elements_tmp;
+  logic   [VLEN-1:0]                              tail_elements;
+  logic   [6:0]                                   cmp_en;
+  logic   [8*`VLENW(VLEN)-1:0]                    cmp;
+  logic   [7*`VLENW(VLEN)-1:0]                    cmp_d1;
+  logic   [VLEN-1:0]                              cmp_res_tmp;
+  logic   [VLEN-1:0]                              cmp_res;
+  RVFEXP_t  [8*`VLENW(VLEN)-1:0]                  cmp_status;
+  RVFEXP_t  [7*`VLENW(VLEN)-1:0]                  cmp_status_d1;
+  RVFEXP_t  [VLEN-1:0]                            cmp_fexp_tmp;
+  RVFEXP_t  [VLEN-1:0]                            cmp_fexp_per1;
+  RVFEXP_t  [`VLENB(VLEN)-1:0]                    cmp_fexp;
+  RVFEXP_t  [`VLENB(VLEN)-1:0]                    allcmp_fexp;
   
   genvar                                    i;
 

@@ -99,22 +99,22 @@ module zvt_mt_fpga #(
   input  logic rst_n;
 
   // 16 read ports (4 blocks x 4 ports/block)
-  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0] readMtIdx;
+  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0]            readMtIdx;
   input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] readSubIdx;
-  output logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0] readData;
+  output logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0]            readData;
 
 `ifdef RVVI_ON
   // RVVI verification read ports
-  input  logic [`NUM_BLK-1:0][3:0][$clog2(`NUM_MT)-1:0]                          rvviMtIdx;
+  input  logic [`NUM_BLK-1:0][3:0][$clog2(`NUM_MT)-1:0]                                      rvviMtIdx;
   input  logic [`NUM_BLK-1:0][3:0][`NUM_SUBTILE(VLEN)/2-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] rvviSubIdx;
-  output logic [`NUM_BLK-1:0][3:0][`NUM_SUBTILE(VLEN)/2-1:0][`SUBTILE_SIZE*8-1:0] rvviReadData;
+  output logic [`NUM_BLK-1:0][3:0][`NUM_SUBTILE(VLEN)/2-1:0][`SUBTILE_SIZE*8-1:0]            rvviReadData;
 `endif
 
   // 16 write ports (4 blocks x 4 ports/block)
-  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE-1:0]  writeEn;
-  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0] writeMtIdx;
+  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE-1:0]              writeEn;
+  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0]            writeMtIdx;
   input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] writeSubIdx;
-  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0] writeData;
+  input  logic [`NUM_BLK-1:0][`NUM_BLKPORT(VLEN)-1:0][`SUBTILE_SIZE*8-1:0]            writeData;
 
   localparam int MT_WIDTH        = $clog2(`NUM_MT);
   localparam int SUB_WIDTH       = $clog2(`NUM_SUBTILE(VLEN));
@@ -363,20 +363,20 @@ endmodule
 module zvt_ctrl_fpga #(
   parameter int unsigned VLEN = `VLEN
 ) (
-  input  logic                 clk,
-  input  logic                 rst_n,
-  input  logic                 isVme2Lsu,
-  input  logic                 isLsu2Vme,
-  input  logic                 isMv2Rvv,
-  input  logic                 isMv2Vme,
-  input  logic                 isZero,
-  input  logic                 resVme2rvvRdy,
-  input  logic                 cntCr,
+  input  logic                       clk,
+  input  logic                       rst_n,
+  input  logic                       isVme2Lsu,
+  input  logic                       isLsu2Vme,
+  input  logic                       isMv2Rvv,
+  input  logic                       isMv2Vme,
+  input  logic                       isZero,
+  input  logic                       resVme2rvvRdy,
+  input  logic                       cntCr,
   input  logic [`ZVT_LMUL(VLEN)-1:0] peCmdRdy,
-  output logic                 vmelsuVld,
-  output logic                 resVme2rvvVld,
+  output logic                       vmelsuVld,
+  output logic                       resVme2rvvVld,
   output logic [`ZVT_LMUL(VLEN)-1:0] uopRdy,
-  output logic                 vmelsuresRdy
+  output logic                       vmelsuresRdy
 );
 
   logic mvlsuReadPending;
@@ -441,20 +441,20 @@ module zvt_pe_block_fpga #(
   parameter logic [1:0] BLKID          = 2'b00
 ) (
   input  logic [`TE(VLEN)/2*`COMPRATIO(VLEN)-1:0][`TE(VLEN)/2-1:0][MULBULKPIPENUM:1] mulbulkOutVld,
-  input  MULBULKTAG_t                                              mulbulkTagIn,
-  input  MULBULKTAG_t [MULBULKPIPENUM:1]                           mulbulkTagPipe,
-  input  logic                                                     mulbulkResVld,
-  input  MULBULKRES_t                                              mulbulkRes,
-  input  logic                                                     mulbulkResRdy,
-  input  logic                                                     mulbulkCmdVld,
-  input  MULBULKRES_t                                              mulbulkCmd,
-  output logic        [ADDERPIPENUM:1]                             mulbulkTagOutVld,
-  output MULBULKTAG_t [ADDERPIPENUM:1]                             mulbulkTagOut,
+  input  MULBULKTAG_t                                                                mulbulkTagIn,
+  input  MULBULKTAG_t [MULBULKPIPENUM:1]                                             mulbulkTagPipe,
+  input  logic                                                                       mulbulkResVld,
+  input  MULBULKRES_t                                                                mulbulkRes,
+  input  logic                                                                       mulbulkResRdy,
+  input  logic                                                                       mulbulkCmdVld,
+  input  MULBULKRES_t                                                                mulbulkCmd,
+  output logic        [ADDERPIPENUM:1]                                               mulbulkTagOutVld,
+  output MULBULKTAG_t [ADDERPIPENUM:1]                                               mulbulkTagOut,
 `ifdef TB_SUPPORT
-  output logic [PC_WIDTH-1:0]                                      readPc,
+  output logic [PC_WIDTH-1:0]                                                        readPc,
 `endif
-  output logic [`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0]       readMtIdx,
-  output logic [`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0] readSubIdx
+  output logic [`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_MT)-1:0]                         readMtIdx,
+  output logic [`NUM_BLKPORT(VLEN)-1:0][$clog2(`NUM_SUBTILE(VLEN))-1:0]              readSubIdx
 );
 
   wire stage4_raw_vld = mulbulkCmdVld && (mulbulkCmd.tag.readMtId == '0);
