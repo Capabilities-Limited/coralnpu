@@ -62,6 +62,9 @@ function void rvv_backend_env::connect_phase(uvm_phase phase);
   lsu_agt.lsu_drv.trap_ap.connect(rvs_agt.rvs_drv.trap_imp);
   lsu_agt.lsu_drv.trap_ap.connect(mdl.trap_imp);
 
+  // fault-only-first vl trimming
+  lsu_agt.lsu_drv.fof_ap.connect(mdl.fof_imp);
+
   // vrf check ap
   rvs_agt.vrf_mon.vrf_ap.connect(scb.rvs_vrf_imp);
   mdl.vrf_ap.connect(scb.mdl_vrf_imp);

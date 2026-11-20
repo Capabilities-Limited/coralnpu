@@ -3,7 +3,15 @@
 `include "rvv_backend.svh"
 `endif
 
-module rvv_backend_freduction(
+module rvv_backend_freduction#(
+  parameter int unsigned VLEN = `VLEN,
+  parameter type RegDataT=logic [31:0],
+  localparam int unsigned XLEN = $bits(RegDataT),
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type PMT_RDT_RS_t = `PMT_RDT_RS_t(VLEN, XLEN, PC_WIDTH),
+  localparam type PU2ROB_t = `PU2ROB_t(VLEN, PC_WIDTH)
+)
+(
   clk,
   rst_n,
   uop_valid,
@@ -17,7 +25,7 @@ module rvv_backend_freduction(
   localparam IDLE = 1'b0;
   localparam MATH = 1'b1;
   localparam PipeLine = 3;
-  localparam CTRW = $clog2(`VLEN/`WORD_WIDTH);
+  localparam CTRW = $clog2(VLEN/`WORD_WIDTH);
   // global signals
   input   logic     clk;
   input   logic     rst_n;
@@ -41,9 +49,9 @@ module rvv_backend_freduction(
   logic         set_busy;
   logic         clear_busy;
   logic         next_state;
-  logic [`FP_RDT_TAG_WIDTH-1:0] tag_i;
-  logic [`FP_RDT_TAG_WIDTH-1:0] rdtadd_tag_o;
-  logic [`FP_RDT_TAG_WIDTH-1:0] rdtcmp_tag_o;
+  logic [`FP_RDT_TAG_WIDTH(PC_WIDTH)-1:0] tag_i;
+  logic [`FP_RDT_TAG_WIDTH(PC_WIDTH)-1:0] rdtadd_tag_o;
+  logic [`FP_RDT_TAG_WIDTH(PC_WIDTH)-1:0] rdtcmp_tag_o;
 
   logic         sub_result_vld;
   logic         sub_result_rdy;
@@ -87,15 +95,15 @@ module rvv_backend_freduction(
   logic             add_in_vld_reg;
   logic             cmp_in_vld_reg;
   logic      [31:0] vs1_reg;
-  logic [`VLEN-1:0] vs2_reg;
-  logic [`FP_RDT_TAG_WIDTH-1:0] tag_reg;
-  BYTE_TYPE_e [`VLENW-1:0]      vs2_type_reg;
-  fpnew_pkg::status_t           fpexp_reg;
-  logic                         sub_in_accept;
-  logic                         mask_cur;
-  logic                         mask_cur_reg;
-  logic [`FP_RDT_TAG_WIDTH-1:0] mask_tag_reg;
-  logic                 [31:0]  vs1_in_reg;
+  logic [VLEN-1:0]  vs2_reg;
+  logic [`FP_RDT_TAG_WIDTH(PC_WIDTH)-1:0] tag_reg;
+  BYTE_TYPE_e [`VLENW(VLEN)-1:0]          vs2_type_reg;
+  fpnew_pkg::status_t                     fpexp_reg;
+  logic                                   sub_in_accept;
+  logic                                   mask_cur;
+  logic                                   mask_cur_reg;
+  logic [`FP_RDT_TAG_WIDTH(PC_WIDTH)-1:0] mask_tag_reg;
+  logic                 [31:0]            vs1_in_reg;
 
   //assignment
   assign uop_ready         =  !busy ||
@@ -127,7 +135,7 @@ module rvv_backend_freduction(
   begin
     sub_result_vld    = sub_rdtcmp_result_vld || sub_rdtadd_result_vld || mask_cur_reg;
     result.vsaturate  = '0;
-    result.fpexp      = {{(`VLENB-1){unused_fexcp}}, sub_fexcp};
+    result.fpexp      = {{(`VLENB(VLEN)-1){unused_fexcp}}, sub_fexcp};
     if(mask_cur_reg) begin
       //sub result
       sub_result        = vs1_in_reg;
@@ -135,13 +143,13 @@ module rvv_backend_freduction(
 
       //total result
     `ifdef TB_SUPPORT
-      result.uop_pc     = mask_tag_reg[`ROB_DEPTH_WIDTH+:`PC_WIDTH];
-      result_last_uop   = mask_tag_reg[`PC_WIDTH+`ROB_DEPTH_WIDTH];
+      result.uop_pc     = mask_tag_reg[`ROB_DEPTH_WIDTH+:PC_WIDTH];
+      result_last_uop   = mask_tag_reg[PC_WIDTH+`ROB_DEPTH_WIDTH];
     `else
       result_last_uop   = mask_tag_reg[`ROB_DEPTH_WIDTH];
     `endif
       result.rob_entry  = mask_tag_reg[0+:`ROB_DEPTH_WIDTH];
-      result.w_data     = {(`VLEN-32)'('b0), vs1_in_reg};
+      result.w_data     = {(VLEN-32)'('b0), vs1_in_reg};
     end
     else begin
       //sub result
@@ -150,13 +158,13 @@ module rvv_backend_freduction(
 
       //total result
     `ifdef TB_SUPPORT
-      result.uop_pc     = sub_rdtcmp_result_vld? rdtcmp_tag_o[`ROB_DEPTH_WIDTH+:`PC_WIDTH]:rdtadd_tag_o[`ROB_DEPTH_WIDTH+:`PC_WIDTH];
-      result_last_uop   = sub_rdtcmp_result_vld? rdtcmp_tag_o[`PC_WIDTH+`ROB_DEPTH_WIDTH]:rdtadd_tag_o[`PC_WIDTH+`ROB_DEPTH_WIDTH];
+      result.uop_pc     = sub_rdtcmp_result_vld? rdtcmp_tag_o[`ROB_DEPTH_WIDTH+:PC_WIDTH]:rdtadd_tag_o[`ROB_DEPTH_WIDTH+:PC_WIDTH];
+      result_last_uop   = sub_rdtcmp_result_vld? rdtcmp_tag_o[PC_WIDTH+`ROB_DEPTH_WIDTH]:rdtadd_tag_o[PC_WIDTH+`ROB_DEPTH_WIDTH];
     `else
       result_last_uop   = sub_rdtcmp_result_vld? rdtcmp_tag_o[`ROB_DEPTH_WIDTH]:rdtadd_tag_o[`ROB_DEPTH_WIDTH];
     `endif
       result.rob_entry  = sub_rdtcmp_result_vld? rdtcmp_tag_o[0+:`ROB_DEPTH_WIDTH]:rdtadd_tag_o[0+:`ROB_DEPTH_WIDTH];
-      result.w_data     = {(`VLEN-32)'('b0), sub_result};
+      result.w_data     = {(VLEN-32)'('b0), sub_result};
     end
     result_valid      = result_last_uop && sub_result_vld && vld_ctr == '0;
     result.w_valid    = result_valid;
@@ -278,7 +286,7 @@ module rvv_backend_freduction(
       end
       if(uop_valid && uop_ready && !trap_flush_rvv) begin
         vs2_reg <= uop.vs2_data;
-        for(int i=0;i<`VLENW;i++) begin
+        for(int i=0;i<`VLENW(VLEN);i++) begin
           vs2_type_reg[i] <= uop.vs2_type[i*4];
         end
       `ifdef TB_SUPPORT
@@ -312,7 +320,7 @@ module rvv_backend_freduction(
     .FpFmtConfig(5'b10000),
     .NumPipeRegs(PipeLine),
     .PipeConfig(fpnew_pkg::DISTRIBUTED),
-    .TagType(logic [`FP_RDT_TAG_WIDTH-1:0])
+    .TagType(logic [`FP_RDT_TAG_WIDTH(PC_WIDTH)-1:0])
     )
   rdtadd (
     .clk_i                 (clk),
@@ -356,7 +364,7 @@ module rvv_backend_freduction(
     .FpFormat(fpnew_pkg::FP32),
     .NumPipeRegs(PipeLine),
     .PipeConfig(fpnew_pkg::DISTRIBUTED),
-    .TagType(logic [`FP_RDT_TAG_WIDTH-1:0])
+    .TagType(logic [`FP_RDT_TAG_WIDTH(PC_WIDTH)-1:0])
   )
   rdtcmp (
     .clk_i               (clk),

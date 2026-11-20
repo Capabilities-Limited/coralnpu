@@ -229,7 +229,7 @@ endtask: tx_monitor
 
 task rvs_monitor::rx_monitor();
   rvs_transaction tr, inst_tr;
-  logic [`VLENB-1:0] rt_vrf_byte_strobe;
+  logic [`VLENB(VLEN)-1:0] rt_vrf_byte_strobe;
   logic [`VLEN-1:0] rt_vrf_bit_strobe;
   bit vrf_overlap;
   bit ready_to_new_inst;
@@ -301,7 +301,7 @@ task rvs_monitor::rx_monitor();
             int pos = 0;
             vrf_overlap = 0;
             rt_vrf_byte_strobe = rvs_if.rt_vrf_data_rob2rt[rt_idx].rt_strobe;
-            for(int i=0; i<`VLENB; i++) begin
+            for(int i=0; i<`VLENB(VLEN); i++) begin
               rt_vrf_bit_strobe[i*8 +: 8] = {8{rvs_if.rt_vrf_data_rob2rt[rt_idx].rt_strobe[i]}}; 
             end 
             foreach(tr.rt_vrf_index[i]) begin

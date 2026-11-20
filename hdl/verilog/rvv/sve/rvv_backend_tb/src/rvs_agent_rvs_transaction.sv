@@ -127,6 +127,8 @@ class rvs_transaction extends uvm_sequence_item;
        reg_idx_t  rt_vrf_index  [$];
        vrf_byte_t rt_vrf_strobe [$];
        vrf_t      rt_vrf_data   [$];
+       // Register value before the instruction, filled by the model only (one entry per rt_vrf_* entry).
+       vrf_t      rt_vrf_old    [$];
 
        reg_idx_t  rt_xrf_index [$];
        xrf_t      rt_xrf_data  [$];
@@ -265,14 +267,14 @@ class rvs_transaction extends uvm_sequence_item;
     } else if(inst_type == ALU && alu_inst inside {VMSEQ, VMSNE, VMSLTU, VMSLT, VMSLEU, VMSLE, VMSGTU, VMSGT, VMADC, VMSBC}) {
       // Special case: For mask compare & carry produce inst, DUT will use vlmax==`VLEN/sew will vlmax, and calculate the result.
       if(vlmul[2]) // fraction_lmul
-        vlmax == (`VLENB >> vsew);
+        vlmax == (`VLENB(VLEN) >> vsew);
       else  
-        vlmax == ((`VLENB << vlmul) >> vsew);
+        vlmax == ((`VLENB(VLEN) << vlmul) >> vsew);
     } else {
       if(vlmul[2]) // fraction_lmul
-        vlmax == ((`VLENB >> (~vlmul +3'b1)) >> vsew);
+        vlmax == ((`VLENB(VLEN) >> (~vlmul +3'b1)) >> vsew);
       else  
-        vlmax == ((`VLENB << vlmul) >> vsew);
+        vlmax == ((`VLENB(VLEN) << vlmul) >> vsew);
     }
 
     vl <= vlmax_max;
@@ -285,7 +287,7 @@ class rvs_transaction extends uvm_sequence_item;
     // evl
     if(inst_type == ALU && alu_inst == VSMUL_VMVNRR && alu_type == OPIVI) {
       // vmv<nr>r
-      evl == ((alu_nreg + 1) * `VLENB) >> vsew;
+      evl == ((alu_nreg + 1) * `VLENB(VLEN)) >> vsew;
     } else if(inst_type inside {LD, ST} && lsu_mop == LSU_US && src2_type == FUNC && src2_idx == MASK) {
       // vlm/vsm
       if(vl%8 > 0) evl == int'(vl/8) + 1;
@@ -337,7 +339,6 @@ class rvs_transaction extends uvm_sequence_item;
       } else {
         vstart < vl;
       }
-    } else {
     }
   }
 
@@ -999,7 +1000,6 @@ class rvs_transaction extends uvm_sequence_item;
           -> (lsu_width inside {LSU_8BIT, LSU_16BIT, LSU_32BIT});
         }
       } // LD/ST
-    } else {
     }// if(!reserve_vtype_en)
   }
 
@@ -1157,6 +1157,10 @@ class rvs_transaction extends uvm_sequence_item;
         `uvm_field_int(rt_vrf_strobe[idx],UVM_ALL_ON)
         `uvm_field_int(rt_vrf_data[idx]  ,UVM_ALL_ON)
       end
+      // Separate loop: only the model fills this, so its size can differ from rt_vrf_index.
+      foreach(rt_vrf_old[idx]) begin
+        `uvm_field_int(rt_vrf_old[idx]   ,UVM_ALL_ON)
+      end
       foreach(rt_xrf_index[idx]) begin
         `uvm_field_int(rt_xrf_index[idx],UVM_ALL_ON)
         `uvm_field_int(rt_xrf_data[idx] ,UVM_ALL_ON)
@@ -1196,7 +1200,7 @@ class rvs_transaction extends uvm_sequence_item;
 
 endclass: rvs_transaction
 
-static function void rvs_transaction::set_mem_range(int unsigned mem_base, int unsigned mem_size);
+function void rvs_transaction::set_mem_range(int unsigned mem_base, int unsigned mem_size);
   mem_addr_lo = mem_base;
   mem_addr_hi = mem_base + mem_size -1;
 endfunction: set_mem_range
@@ -1249,7 +1253,7 @@ function void rvs_transaction::post_randomize();
     if(inst_type == ALU && alu_inst == VSMUL_VMVNRR && alu_type == OPIVI) begin
       // NO CHANGE
       // vmv<nr>r
-      // evl = ((alu_nreg + 1) * `VLENB) >> vsew;
+      // evl = ((alu_nreg + 1) * `VLENB(VLEN)) >> vsew;
     end else if(inst_type inside {LD, ST} && lsu_mop == LSU_US && src2_type == FUNC && src2_idx == MASK) begin
       // vlm/vsm
       if(vl%8 > 0) evl = int'(vl/8) + 1;
@@ -1825,14 +1829,14 @@ function void rvs_transaction::decode_vtype(bit dec_evl, bit dec_vlmax);
       vlmax = vlmax_max;  
     end else if(inst_type == ALU && alu_inst inside {VMSEQ, VMSNE, VMSLTU, VMSLT, VMSLEU, VMSLE, VMSGTU, VMSGT, VMADC, VMSBC}) begin
       if(vlmul[2]) // fraction_lmul
-        vlmax = (`VLENB >> vsew);
+        vlmax = (`VLENB(VLEN) >> vsew);
       else  
-        vlmax = ((`VLENB << vlmul) >> vsew);
+        vlmax = ((`VLENB(VLEN) << vlmul) >> vsew);
     end else begin
       if(vlmul[2]) // fraction_lmul
-        vlmax = ((`VLENB >> (~vlmul +3'b1)) >> vsew);
+        vlmax = ((`VLENB(VLEN) >> (~vlmul +3'b1)) >> vsew);
       else  
-        vlmax = ((`VLENB << vlmul) >> vsew);
+        vlmax = ((`VLENB(VLEN) << vlmul) >> vsew);
     end
   end
 

@@ -1,11 +1,14 @@
-#!/usr/bin/make  -f
+#!/usr/bin/env make -f
+
+SHELL := /usr/bin/env
+.SHELLFLAGS := bash -c
 
 # ------------------------------------------------------------------
 # Setting of project
 # ------------------------------------------------------------------
 RVV_WORKSPACE = $(shell pwd | sed 's/\(\S\+\)\/hdl\/verilog\/rvv/\1/')
 scfg ?= rvv_backend
-test ?= tb_debug_test
+test ?= alu_smoke_test
 PROJECT_NAME = rvv_backend_tb
 
 # ------------------------------------------------------------------

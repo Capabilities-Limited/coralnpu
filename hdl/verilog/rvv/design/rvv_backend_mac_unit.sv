@@ -8,7 +8,16 @@
 `include "rvv_backend.svh"
 `endif
 
-module rvv_backend_mac_unit (
+module rvv_backend_mac_unit#(
+  parameter int unsigned VLEN = `VLEN,
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  parameter type RegDataT=logic [31:0],
+  localparam int unsigned XLEN = $bits(RegDataT),
+  localparam type RVVXRM = RVVXRM_e,
+  localparam type MUL_RS_t = `MUL_RS_t(VLEN, PC_WIDTH),
+  localparam type PU2ROB_t = `PU2ROB_t(VLEN, PC_WIDTH)
+)
+(
   // Outputs
   mac2rob_uop_valid, 
   mac2rob_uop_data,
@@ -38,16 +47,16 @@ logic [`FUNCT6_WIDTH-1:0]             mac_uop_funct6;
 logic [`FUNCT3_WIDTH-1:0]             mac_uop_funct3;
 RVVXRM                                mac_uop_xrm;
 EEW_e                                 mac_top_vs_eew;
-logic [`VLEN-1:0]                     mac_uop_vs1_data;
-logic [`VLEN-1:0]                     mac_uop_vs2_data;
-logic [`XLEN-1:0]                     mac_uop_rs1_data;
-logic [`VLEN-1:0]                     mac_uop_vs3_data;
+logic [VLEN-1:0]                      mac_uop_vs1_data;
+logic [VLEN-1:0]                      mac_uop_vs2_data;
+logic [XLEN-1:0]                      mac_uop_rs1_data;
+logic [VLEN-1:0]                      mac_uop_vs3_data;
 logic                                 mac_uop_index;
 
 logic                                 is_vv; //1:op*vv; 0:op*vx
-logic [`VLEN-1:0]                     mac_src2;
-logic [`VLEN-1:0]                     mac_src1;
-logic [`VLEN-1:0]                     mac_addsrc;
+logic [VLEN-1:0]                      mac_src2;
+logic [VLEN-1:0]                      mac_src1;
+logic [VLEN-1:0]                      mac_addsrc;
 logic                                 mac_src2_is_signed;
 logic                                 mac_src1_is_signed;
 logic                                 mac_is_widen;
@@ -56,22 +65,22 @@ logic                                 mac_mul_reverse;
 logic                                 is_vsmul;
 logic                                 is_vmac;
 
-logic [`VLEN-1:0]                     mac_src2_mux;
-logic [`VLEN-1:0]                     mac_src1_mux;
-logic [`VLENB-1:0]                    mac_src2_is_signed_extend;
-logic [`VLENB-1:0]                    mac_src1_is_signed_extend;
+logic [VLEN-1:0]                      mac_src2_mux;
+logic [VLEN-1:0]                      mac_src1_mux;
+logic [`VLENB(VLEN)-1:0]              mac_src2_is_signed_extend;
+logic [`VLENB(VLEN)-1:0]              mac_src1_is_signed_extend;
 
-logic [`VLENB-1:0][`BYTE_WIDTH-1:0]   mac8_in0;
-logic [`VLENB-1:0]                    mac8_in0_is_signed;
-logic [`VLENB-1:0][`BYTE_WIDTH-1:0]   mac8_in1;
-logic [`VLENB-1:0]                    mac8_in1_is_signed;
-logic [`VLEN/2-1:0][`HWORD_WIDTH-1:0] mac8_out;  // `VLEN/`WORD_WIDTH tiles, each tile has 4*4 elements. Total: VLEN/2 elements
+logic [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0] mac8_in0;
+logic [`VLENB(VLEN)-1:0]                  mac8_in0_is_signed;
+logic [`VLENB(VLEN)-1:0][`BYTE_WIDTH-1:0] mac8_in1;
+logic [`VLENB(VLEN)-1:0]                  mac8_in1_is_signed;
+logic [VLEN/2-1:0][`HWORD_WIDTH-1:0]      mac8_out;  // VLEN/`WORD_WIDTH tiles, each tile has 4*4 elements. Total: VLEN/2 elements
 
-logic [`VLEN/2-1:0]                   mac8_en;
+logic [VLEN/2-1:0]                   mac8_en;
 // EX2 stage
-logic [`VLEN/2-1:0][`HWORD_WIDTH-1:0] mac8_out_d1;  
-logic [`VLEN-1:0]                     mac_addsrc_d1;
-logic [2*`VLEN-1:0]                   mac_addsrc_widen_d1;
+logic [VLEN/2-1:0][`HWORD_WIDTH-1:0] mac8_out_d1;  
+logic [VLEN-1:0]                     mac_addsrc_d1;
+logic [2*VLEN-1:0]                   mac_addsrc_widen_d1;
 
 logic                                 rs2mac_uop_valid_d1;
 logic                                 mac_src2_is_signed_d1;
@@ -85,66 +94,66 @@ RVVXRM                                mac_uop_xrm_d1;
 EEW_e                                 mac_top_vs_eew_d1;
 logic [`ROB_DEPTH_WIDTH-1:0]          mac_uop_rob_entry_d1;
 
-logic [`VLENB-1:0][`HWORD_WIDTH-1:0]  mac_rslt_full_eew8_d1;
-logic [2*`VLEN-1:0]                   mac_rslt_eew8_widen_d1;
-logic [`VLEN-1:0]                     mac_rslt_eew8_no_widen_d1;
-logic [`VLENB-1:0]                    vsmul_round_incr_eew8_d1;
-logic [`VLEN-1:0]                     vsmul_rslt_eew8_d1;
-logic [`VLENB-1:0]                    vsmul_sat_eew8_d1;
-logic [`VLEN-1:0]                     mac_rslt_eew8_d1;
-logic [`VLENB-1:0]                    update_vxsat_eew8_d1;
-logic [`VLENB-1:0][`BYTE_WIDTH:0]     vmac_mul_add_eew8_no_widen_d1;
-logic [`VLENB-1:0][`BYTE_WIDTH:0]     vmac_mul_sub_eew8_no_widen_d1;
-logic [`VLEN-1:0]                     vmac_rslt_eew8_no_widen_d1;
-logic [`VLENB-1:0][`HWORD_WIDTH:0]    vmac_mul_add_eew8_widen_d1;
-logic [`VLENB-1:0][`HWORD_WIDTH:0]    vmac_mul_sub_eew8_widen_d1;
-logic [2*`VLEN-1:0]                   vmac_rslt_eew8_widen_d1;
+logic [`VLENB(VLEN)-1:0][`HWORD_WIDTH-1:0]  mac_rslt_full_eew8_d1;
+logic [2*VLEN-1:0]                          mac_rslt_eew8_widen_d1;
+logic [VLEN-1:0]                            mac_rslt_eew8_no_widen_d1;
+logic [`VLENB(VLEN)-1:0]                    vsmul_round_incr_eew8_d1;
+logic [VLEN-1:0]                            vsmul_rslt_eew8_d1;
+logic [`VLENB(VLEN)-1:0]                    vsmul_sat_eew8_d1;
+logic [VLEN-1:0]                            mac_rslt_eew8_d1;
+logic [`VLENB(VLEN)-1:0]                    update_vxsat_eew8_d1;
+logic [`VLENB(VLEN)-1:0][`BYTE_WIDTH:0]     vmac_mul_add_eew8_no_widen_d1;
+logic [`VLENB(VLEN)-1:0][`BYTE_WIDTH:0]     vmac_mul_sub_eew8_no_widen_d1;
+logic [VLEN-1:0]                            vmac_rslt_eew8_no_widen_d1;
+logic [`VLENB(VLEN)-1:0][`HWORD_WIDTH:0]    vmac_mul_add_eew8_widen_d1;
+logic [`VLENB(VLEN)-1:0][`HWORD_WIDTH:0]    vmac_mul_sub_eew8_widen_d1;
+logic [2*VLEN-1:0]                          vmac_rslt_eew8_widen_d1;
 
-logic [`VLENH-1:0][17:0]              mac_rslt_part16_eew16_d1;
-logic [`VLENH-1:0][`WORD_WIDTH-1:0]   mac_rslt_full_eew16_d1;
-logic [2*`VLEN-1:0]                   mac_rslt_eew16_widen_d1;
-logic [`VLEN-1:0]                     mac_rslt_eew16_no_widen_d1;
-logic [`VLENH-1:0]                    vsmul_round_incr_eew16_d1;
-logic [`VLEN-1:0]                     vsmul_rslt_eew16_d1;
-logic [`VLENH-1:0]                    vsmul_sat_eew16_d1;
-logic [`VLEN-1:0]                     mac_rslt_eew16_d1;
-logic [`VLENB-1:0]                    update_vxsat_eew16_d1;
-logic [`VLENH-1:0][`HWORD_WIDTH:0]    vmac_mul_add_eew16_no_widen_d1;
-logic [`VLENH-1:0][`HWORD_WIDTH:0]    vmac_mul_sub_eew16_no_widen_d1;
-logic [`VLEN-1:0]                     vmac_rslt_eew16_no_widen_d1;
-logic [`VLENH-1:0][`WORD_WIDTH:0]     vmac_mul_add_eew16_widen_d1;
-logic [`VLENH-1:0][`WORD_WIDTH:0]     vmac_mul_sub_eew16_widen_d1;
-logic [2*`VLEN-1:0]                   vmac_rslt_eew16_widen_d1;
+logic [`VLENH(VLEN)-1:0][17:0]              mac_rslt_part16_eew16_d1;
+logic [`VLENH(VLEN)-1:0][`WORD_WIDTH-1:0]   mac_rslt_full_eew16_d1;
+logic [2*VLEN-1:0]                          mac_rslt_eew16_widen_d1;
+logic [VLEN-1:0]                            mac_rslt_eew16_no_widen_d1;
+logic [`VLENH(VLEN)-1:0]                    vsmul_round_incr_eew16_d1;
+logic [VLEN-1:0]                            vsmul_rslt_eew16_d1;
+logic [`VLENH(VLEN)-1:0]                    vsmul_sat_eew16_d1;
+logic [VLEN-1:0]                            mac_rslt_eew16_d1;
+logic [`VLENB(VLEN)-1:0]                    update_vxsat_eew16_d1;
+logic [`VLENH(VLEN)-1:0][`HWORD_WIDTH:0]    vmac_mul_add_eew16_no_widen_d1;
+logic [`VLENH(VLEN)-1:0][`HWORD_WIDTH:0]    vmac_mul_sub_eew16_no_widen_d1;
+logic [VLEN-1:0]                            vmac_rslt_eew16_no_widen_d1;
+logic [`VLENH(VLEN)-1:0][`WORD_WIDTH:0]     vmac_mul_add_eew16_widen_d1;
+logic [`VLENH(VLEN)-1:0][`WORD_WIDTH:0]     vmac_mul_sub_eew16_widen_d1;
+logic [2*VLEN-1:0]                          vmac_rslt_eew16_widen_d1;
 
 `ifndef CORALNPU_STRUCTURAL_DATAPATH
-logic [`VLENW-1:0][17:0]              mac_rslt_part16_eew32_d1;
-logic [`VLENW-1:0][33:0]              mac_rslt_part32_eew32_d1;
-logic [`VLENW-1:0][49:0]              mac_rslt_part48_eew32_d1;
-logic [`VLENW-1:0][2*`WORD_WIDTH-1:0] mac_rslt_full_eew32_d1;
+logic [`VLENW(VLEN)-1:0][17:0]              mac_rslt_part16_eew32_d1;
+logic [`VLENW(VLEN)-1:0][33:0]              mac_rslt_part32_eew32_d1;
+logic [`VLENW(VLEN)-1:0][49:0]              mac_rslt_part48_eew32_d1;
+logic [`VLENW(VLEN)-1:0][2*`WORD_WIDTH-1:0] mac_rslt_full_eew32_d1;
 `endif
-logic [2*`VLEN-1:0]                   mac_rslt_eew32_widen_d1;
-logic [`VLEN-1:0]                     mac_rslt_eew32_no_widen_d1;
+logic [2*VLEN-1:0]                          mac_rslt_eew32_widen_d1;
+logic [VLEN-1:0]                            mac_rslt_eew32_no_widen_d1;
 `ifndef CORALNPU_STRUCTURAL_DATAPATH
-logic [`VLENW-1:0]                    vsmul_round_incr_eew32_d1;
-logic [`VLEN-1:0]                     vsmul_rslt_eew32_d1;
+logic [`VLENW(VLEN)-1:0]                    vsmul_round_incr_eew32_d1;
+logic [VLEN-1:0]                            vsmul_rslt_eew32_d1;
 `endif
-logic [`VLENW-1:0]                    vsmul_sat_eew32_d1;
-logic [`VLEN-1:0]                     mac_rslt_eew32_d1;
-logic [`VLENB-1:0]                    update_vxsat_eew32_d1;
+logic [`VLENW(VLEN)-1:0]                    vsmul_sat_eew32_d1;
+logic [VLEN-1:0]                            mac_rslt_eew32_d1;
+logic [`VLENB(VLEN)-1:0]                    update_vxsat_eew32_d1;
 `ifndef CORALNPU_STRUCTURAL_DATAPATH
-logic [`VLENW-1:0][`WORD_WIDTH:0]     vmac_mul_add_eew32_no_widen_d1;
-logic [`VLENW-1:0][`WORD_WIDTH:0]     vmac_mul_sub_eew32_no_widen_d1;
-logic [`VLEN-1:0]                     vmac_rslt_eew32_no_widen_d1;
-logic [`VLENW-1:0][2*`WORD_WIDTH:0]   vmac_mul_add_eew32_widen_d1;
-logic [`VLENW-1:0][2*`WORD_WIDTH:0]   vmac_mul_sub_eew32_widen_d1;
-logic [2*`VLEN-1:0]                   vmac_rslt_eew32_widen_d1;
+logic [`VLENW(VLEN)-1:0][`WORD_WIDTH:0]     vmac_mul_add_eew32_no_widen_d1;
+logic [`VLENW(VLEN)-1:0][`WORD_WIDTH:0]     vmac_mul_sub_eew32_no_widen_d1;
+logic [VLEN-1:0]                            vmac_rslt_eew32_no_widen_d1;
+logic [`VLENW(VLEN)-1:0][2*`WORD_WIDTH:0]   vmac_mul_add_eew32_widen_d1;
+logic [`VLENW(VLEN)-1:0][2*`WORD_WIDTH:0]   vmac_mul_sub_eew32_widen_d1;
+logic [2*VLEN-1:0]                          vmac_rslt_eew32_widen_d1;
 `endif
 
-logic [`VLENB-1:0]                    update_vxsat;
+logic [`VLENB(VLEN)-1:0]                    update_vxsat;
 
 `ifdef TB_SUPPORT
-logic [`PC_WIDTH-1:0]                 mac_uop_pc;
-logic [`PC_WIDTH-1:0]                 mac_uop_pc_d1;
+logic [PC_WIDTH-1:0]                 mac_uop_pc;
+logic [PC_WIDTH-1:0]                 mac_uop_pc_d1;
 `endif
 
 //Int & Genvar
@@ -160,7 +169,7 @@ assign mac_top_vs_eew    = rs2mac_uop_data.vs2_eew;
 assign mac_uop_vs1_data  = rs2mac_uop_data.vs1_data;
 assign mac_uop_vs2_data  = rs2mac_uop_data.vs2_data;
 assign mac_uop_vs3_data  = rs2mac_uop_data.vs3_data;
-assign mac_uop_rs1_data  = rs2mac_uop_data.vs1_data[`XLEN-1:0];
+assign mac_uop_rs1_data  = rs2mac_uop_data.vs1_data[XLEN-1:0];
 assign mac_uop_index     = rs2mac_uop_data.uop_index;
 `ifdef TB_SUPPORT
 assign mac_uop_pc        = rs2mac_uop_data.uop_pc;
@@ -221,8 +230,8 @@ always@(*) begin
           is_vmac            = 1'b1;
         end
         VWMACCU : begin
-          mac_src2           = (`VLEN)'(mac_uop_vs2_data[mac_uop_index*(`VLEN/2) +: `VLEN/2]);
-          mac_src1           = (`VLEN)'(mac_uop_vs1_data[mac_uop_index*(`VLEN/2) +: `VLEN/2]);
+          mac_src2           = (VLEN)'(mac_uop_vs2_data[mac_uop_index*(VLEN/2) +: VLEN/2]);
+          mac_src1           = (VLEN)'(mac_uop_vs1_data[mac_uop_index*(VLEN/2) +: VLEN/2]);
           mac_addsrc         = mac_uop_vs3_data;
           mac_src2_is_signed = 1'b0;
           mac_src1_is_signed = 1'b0;
@@ -233,8 +242,8 @@ always@(*) begin
           is_vmac            = 1'b1;
         end
         VWMACC : begin
-          mac_src2           = (`VLEN)'(mac_uop_vs2_data[mac_uop_index*(`VLEN/2) +: `VLEN/2]);
-          mac_src1           = (`VLEN)'(mac_uop_vs1_data[mac_uop_index*(`VLEN/2) +: `VLEN/2]);
+          mac_src2           = (VLEN)'(mac_uop_vs2_data[mac_uop_index*(VLEN/2) +: VLEN/2]);
+          mac_src1           = (VLEN)'(mac_uop_vs1_data[mac_uop_index*(VLEN/2) +: VLEN/2]);
           mac_addsrc         = mac_uop_vs3_data;
           mac_src2_is_signed = 1'b1;
           mac_src1_is_signed = 1'b1;
@@ -245,8 +254,8 @@ always@(*) begin
           is_vmac            = 1'b1;
         end
         VWMACCSU : begin
-          mac_src2           = (`VLEN)'(mac_uop_vs2_data[mac_uop_index*(`VLEN/2) +: `VLEN/2]);
-          mac_src1           = (`VLEN)'(mac_uop_vs1_data[mac_uop_index*(`VLEN/2) +: `VLEN/2]);
+          mac_src2           = (VLEN)'(mac_uop_vs2_data[mac_uop_index*(VLEN/2) +: VLEN/2]);
+          mac_src1           = (VLEN)'(mac_uop_vs1_data[mac_uop_index*(VLEN/2) +: VLEN/2]);
           mac_addsrc         = mac_uop_vs3_data;
           mac_src2_is_signed = 1'b0;
           mac_src1_is_signed = 1'b1;
@@ -259,7 +268,7 @@ always@(*) begin
         VMUL: begin
           mac_src2           = mac_uop_vs2_data;
           mac_src1           = mac_uop_vs1_data;
-          mac_addsrc         = `VLEN'b0;
+          mac_addsrc         = (VLEN)'('b0);
           mac_src2_is_signed = 1'b1;
           mac_src1_is_signed = 1'b1;
           mac_is_widen       = 1'b0;
@@ -271,7 +280,7 @@ always@(*) begin
         VMULH : begin
           mac_src2           = mac_uop_vs2_data;
           mac_src1           = mac_uop_vs1_data;
-          mac_addsrc         = `VLEN'b0;
+          mac_addsrc         = (VLEN)'('b0);
           mac_src2_is_signed = 1'b1;
           mac_src1_is_signed = 1'b1;
           mac_is_widen       = 1'b0;
@@ -283,7 +292,7 @@ always@(*) begin
         VMULHU : begin
           mac_src2           = mac_uop_vs2_data;
           mac_src1           = mac_uop_vs1_data;
-          mac_addsrc         = `VLEN'b0;
+          mac_addsrc         = (VLEN)'('b0);
           mac_src2_is_signed = 1'b0;
           mac_src1_is_signed = 1'b0;
           mac_is_widen       = 1'b0;
@@ -295,7 +304,7 @@ always@(*) begin
         VMULHSU : begin
           mac_src2           = mac_uop_vs2_data;
           mac_src1           = mac_uop_vs1_data;
-          mac_addsrc         = `VLEN'b0;
+          mac_addsrc         = (VLEN)'('b0);
           mac_src2_is_signed = 1'b1;
           mac_src1_is_signed = 1'b0;
           mac_is_widen       = 1'b0;
@@ -305,9 +314,9 @@ always@(*) begin
           is_vmac            = 1'b0;
         end
         VWMUL : begin
-          mac_src2           = (`VLEN)'(mac_uop_vs2_data[mac_uop_index*(`VLEN/2) +: `VLEN/2]);
-          mac_src1           = (`VLEN)'(mac_uop_vs1_data[mac_uop_index*(`VLEN/2) +: `VLEN/2]);
-          mac_addsrc         = `VLEN'b0;
+          mac_src2           = (VLEN)'(mac_uop_vs2_data[mac_uop_index*(VLEN/2) +: VLEN/2]);
+          mac_src1           = (VLEN)'(mac_uop_vs1_data[mac_uop_index*(VLEN/2) +: VLEN/2]);
+          mac_addsrc         = (VLEN)'('b0);
           mac_src2_is_signed = 1'b1;
           mac_src1_is_signed = 1'b1;
           mac_is_widen       = 1'b1;
@@ -317,9 +326,9 @@ always@(*) begin
           is_vmac            = 1'b0;
         end
         VWMULU : begin
-          mac_src2           = (`VLEN)'(mac_uop_vs2_data[mac_uop_index*(`VLEN/2) +: `VLEN/2]);
-          mac_src1           = (`VLEN)'(mac_uop_vs1_data[mac_uop_index*(`VLEN/2) +: `VLEN/2]);
-          mac_addsrc         = `VLEN'b0;
+          mac_src2           = (VLEN)'(mac_uop_vs2_data[mac_uop_index*(VLEN/2) +: VLEN/2]);
+          mac_src1           = (VLEN)'(mac_uop_vs1_data[mac_uop_index*(VLEN/2) +: VLEN/2]);
+          mac_addsrc         = (VLEN)'('b0);
           mac_src2_is_signed = 1'b0;
           mac_src1_is_signed = 1'b0;
           mac_is_widen       = 1'b1;
@@ -329,9 +338,9 @@ always@(*) begin
           is_vmac            = 1'b0;
         end
         VWMULSU : begin
-          mac_src2           = (`VLEN)'(mac_uop_vs2_data[mac_uop_index*(`VLEN/2) +: `VLEN/2]);
-          mac_src1           = (`VLEN)'(mac_uop_vs1_data[mac_uop_index*(`VLEN/2) +: `VLEN/2]);
-          mac_addsrc         = `VLEN'b0;
+          mac_src2           = (VLEN)'(mac_uop_vs2_data[mac_uop_index*(VLEN/2) +: VLEN/2]);
+          mac_src1           = (VLEN)'(mac_uop_vs1_data[mac_uop_index*(VLEN/2) +: VLEN/2]);
+          mac_addsrc         = (VLEN)'('b0);
           mac_src2_is_signed = 1'b1;
           mac_src1_is_signed = 1'b0;
           mac_is_widen       = 1'b1;
@@ -359,7 +368,7 @@ always@(*) begin
       case (mac_uop_funct6) 
         VMACC : begin
           mac_src2           = mac_uop_vs2_data;
-          mac_src1           = {(`VLEN-`XLEN)'('b0),mac_uop_rs1_data}; //use rs1
+          mac_src1           = {(VLEN-XLEN)'('b0),mac_uop_rs1_data}; //use rs1
           mac_addsrc         = mac_uop_vs3_data;
           mac_src2_is_signed = 1'b1;
           mac_src1_is_signed = 1'b1;
@@ -371,7 +380,7 @@ always@(*) begin
         end
         VNMSAC : begin
           mac_src2           = mac_uop_vs2_data;
-          mac_src1           = {(`VLEN-`XLEN)'('b0),mac_uop_rs1_data}; //use rs1
+          mac_src1           = {(VLEN-XLEN)'('b0),mac_uop_rs1_data}; //use rs1
           mac_addsrc         = mac_uop_vs3_data;
           mac_src2_is_signed = 1'b1;
           mac_src1_is_signed = 1'b1;
@@ -383,7 +392,7 @@ always@(*) begin
         end
         VMADD : begin
           mac_src2           = mac_uop_vs3_data;
-          mac_src1           = {(`VLEN-`XLEN)'('b0),mac_uop_rs1_data}; //use rs1
+          mac_src1           = {(VLEN-XLEN)'('b0),mac_uop_rs1_data}; //use rs1
           mac_addsrc         = mac_uop_vs2_data;
           mac_src2_is_signed = 1'b1;
           mac_src1_is_signed = 1'b1;
@@ -395,7 +404,7 @@ always@(*) begin
         end
         VNMSUB : begin
           mac_src2           = mac_uop_vs3_data;
-          mac_src1           = {(`VLEN-`XLEN)'('b0),mac_uop_rs1_data}; //use rs1
+          mac_src1           = {(VLEN-XLEN)'('b0),mac_uop_rs1_data}; //use rs1
           mac_addsrc         = mac_uop_vs2_data;
           mac_src2_is_signed = 1'b1;
           mac_src1_is_signed = 1'b1;
@@ -406,8 +415,8 @@ always@(*) begin
           is_vmac            = 1'b1;
         end
         VWMACCU : begin
-          mac_src2           = (`VLEN)'(mac_uop_vs2_data[mac_uop_index*(`VLEN/2) +: `VLEN/2]);
-          mac_src1           = {(`VLEN-`XLEN)'('b0),mac_uop_rs1_data}; //use rs1
+          mac_src2           = (VLEN)'(mac_uop_vs2_data[mac_uop_index*(VLEN/2) +: VLEN/2]);
+          mac_src1           = {(VLEN-XLEN)'('b0),mac_uop_rs1_data}; //use rs1
           mac_addsrc         = mac_uop_vs3_data;
           mac_src2_is_signed = 1'b0;
           mac_src1_is_signed = 1'b0;
@@ -418,8 +427,8 @@ always@(*) begin
           is_vmac            = 1'b1;
         end
         VWMACC : begin
-          mac_src2           = (`VLEN)'(mac_uop_vs2_data[mac_uop_index*(`VLEN/2) +: `VLEN/2]);
-          mac_src1           = {(`VLEN-`XLEN)'('b0),mac_uop_rs1_data}; //use rs1
+          mac_src2           = (VLEN)'(mac_uop_vs2_data[mac_uop_index*(VLEN/2) +: VLEN/2]);
+          mac_src1           = {(VLEN-XLEN)'('b0),mac_uop_rs1_data}; //use rs1
           mac_addsrc         = mac_uop_vs3_data;
           mac_src2_is_signed = 1'b1;
           mac_src1_is_signed = 1'b1;
@@ -430,8 +439,8 @@ always@(*) begin
           is_vmac            = 1'b1;
         end
         VWMACCSU : begin
-          mac_src2           = (`VLEN)'(mac_uop_vs2_data[mac_uop_index*(`VLEN/2) +: `VLEN/2]);
-          mac_src1           = {(`VLEN-`XLEN)'('b0),mac_uop_rs1_data}; //use rs1
+          mac_src2           = (VLEN)'(mac_uop_vs2_data[mac_uop_index*(VLEN/2) +: VLEN/2]);
+          mac_src1           = {(VLEN-XLEN)'('b0),mac_uop_rs1_data}; //use rs1
           mac_addsrc         = mac_uop_vs3_data;
           mac_src2_is_signed = 1'b0;
           mac_src1_is_signed = 1'b1;
@@ -442,8 +451,8 @@ always@(*) begin
           is_vmac            = 1'b1;
         end
         VWMACCUS : begin
-          mac_src2           = (`VLEN)'(mac_uop_vs2_data[mac_uop_index*(`VLEN/2) +: `VLEN/2]);
-          mac_src1           = {(`VLEN-`XLEN)'('b0),mac_uop_rs1_data}; //use rs1
+          mac_src2           = (VLEN)'(mac_uop_vs2_data[mac_uop_index*(VLEN/2) +: VLEN/2]);
+          mac_src1           = {(VLEN-XLEN)'('b0),mac_uop_rs1_data}; //use rs1
           mac_addsrc         = mac_uop_vs3_data;
           mac_src2_is_signed = 1'b1;
           mac_src1_is_signed = 1'b0;
@@ -455,8 +464,8 @@ always@(*) begin
         end
         VMUL : begin
           mac_src2           = mac_uop_vs2_data;
-          mac_src1           = {(`VLEN-`XLEN)'('b0),mac_uop_rs1_data}; //use rs1
-          mac_addsrc         = `VLEN'b0;
+          mac_src1           = {(VLEN-XLEN)'('b0),mac_uop_rs1_data}; //use rs1
+          mac_addsrc         = (VLEN)'('b0);
           mac_src2_is_signed = 1'b1;
           mac_src1_is_signed = 1'b1;
           mac_is_widen       = 1'b0;
@@ -467,8 +476,8 @@ always@(*) begin
         end
         VMULH : begin
           mac_src2           = mac_uop_vs2_data;
-          mac_src1           = {(`VLEN-`XLEN)'('b0),mac_uop_rs1_data}; //use rs1
-          mac_addsrc         = `VLEN'b0;
+          mac_src1           = {(VLEN-XLEN)'('b0),mac_uop_rs1_data}; //use rs1
+          mac_addsrc         = (VLEN)'('b0);
           mac_src2_is_signed = 1'b1;
           mac_src1_is_signed = 1'b1;
           mac_is_widen       = 1'b0;
@@ -479,8 +488,8 @@ always@(*) begin
         end
         VMULHU : begin
           mac_src2           = mac_uop_vs2_data;
-          mac_src1           = {(`VLEN-`XLEN)'('b0),mac_uop_rs1_data}; //use rs1
-          mac_addsrc         = `VLEN'b0;
+          mac_src1           = {(VLEN-XLEN)'('b0),mac_uop_rs1_data}; //use rs1
+          mac_addsrc         = (VLEN)'('b0);
           mac_src2_is_signed = 1'b0;
           mac_src1_is_signed = 1'b0;
           mac_is_widen       = 1'b0;
@@ -491,8 +500,8 @@ always@(*) begin
         end
         VMULHSU : begin
           mac_src2           = mac_uop_vs2_data;
-          mac_src1           = {(`VLEN-`XLEN)'('b0),mac_uop_rs1_data}; //use rs1
-          mac_addsrc         = `VLEN'b0;
+          mac_src1           = {(VLEN-XLEN)'('b0),mac_uop_rs1_data}; //use rs1
+          mac_addsrc         = (VLEN)'('b0);
           mac_src2_is_signed = 1'b1;
           mac_src1_is_signed = 1'b0;
           mac_is_widen       = 1'b0;
@@ -502,9 +511,9 @@ always@(*) begin
           is_vmac            = 1'b0;
         end
         VWMUL : begin
-          mac_src2           = (`VLEN)'(mac_uop_vs2_data[mac_uop_index*(`VLEN/2) +: `VLEN/2]);
-          mac_src1           = {(`VLEN-`XLEN)'('b0),mac_uop_rs1_data}; //use rs1
-          mac_addsrc         = `VLEN'b0;
+          mac_src2           = (VLEN)'(mac_uop_vs2_data[mac_uop_index*(VLEN/2) +: VLEN/2]);
+          mac_src1           = {(VLEN-XLEN)'('b0),mac_uop_rs1_data}; //use rs1
+          mac_addsrc         = (VLEN)'('b0);
           mac_src2_is_signed = 1'b1;
           mac_src1_is_signed = 1'b1;
           mac_is_widen       = 1'b1;
@@ -514,9 +523,9 @@ always@(*) begin
           is_vmac            = 1'b0;
         end
         VWMULU : begin
-          mac_src2           = (`VLEN)'(mac_uop_vs2_data[mac_uop_index*(`VLEN/2) +: `VLEN/2]);
-          mac_src1           = {(`VLEN-`XLEN)'('b0),mac_uop_rs1_data}; //use rs1
-          mac_addsrc         = `VLEN'b0;
+          mac_src2           = (VLEN)'(mac_uop_vs2_data[mac_uop_index*(VLEN/2) +: VLEN/2]);
+          mac_src1           = {(VLEN-XLEN)'('b0),mac_uop_rs1_data}; //use rs1
+          mac_addsrc         = (VLEN)'('b0);
           mac_src2_is_signed = 1'b0;
           mac_src1_is_signed = 1'b0;
           mac_is_widen       = 1'b1;
@@ -526,9 +535,9 @@ always@(*) begin
           is_vmac            = 1'b0;
         end
         VWMULSU : begin
-          mac_src2           = (`VLEN)'(mac_uop_vs2_data[mac_uop_index*(`VLEN/2) +: `VLEN/2]);
-          mac_src1           = {(`VLEN-`XLEN)'('b0),mac_uop_rs1_data}; //use rs1
-          mac_addsrc         = `VLEN'b0;
+          mac_src2           = (VLEN)'(mac_uop_vs2_data[mac_uop_index*(VLEN/2) +: VLEN/2]);
+          mac_src1           = {(VLEN-XLEN)'('b0),mac_uop_rs1_data}; //use rs1
+          mac_addsrc         = (VLEN)'('b0);
           mac_src2_is_signed = 1'b1;
           mac_src1_is_signed = 1'b0;
           mac_is_widen       = 1'b1;
@@ -557,7 +566,7 @@ always@(*) begin
         VSMUL_VMVNRR : begin
           mac_src2           = mac_uop_vs2_data;
           mac_src1           = mac_uop_vs1_data;
-          mac_addsrc         = `VLEN'b0;
+          mac_addsrc         = (VLEN)'('b0);
           mac_src2_is_signed = 1'b1;
           mac_src1_is_signed = 1'b1;
           mac_is_widen       = 1'b0;
@@ -585,8 +594,8 @@ always@(*) begin
       case (mac_uop_funct6) 
         VSMUL_VMVNRR : begin
           mac_src2           = mac_uop_vs2_data;
-          mac_src1           = {(`VLEN-`XLEN)'('b0),mac_uop_rs1_data}; //use rs1
-          mac_addsrc         = `VLEN'b0;
+          mac_src1           = {(VLEN-XLEN)'('b0),mac_uop_rs1_data}; //use rs1
+          mac_addsrc         = (VLEN)'('b0);
           mac_src2_is_signed = 1'b1;
           mac_src1_is_signed = 1'b1;
           mac_is_widen       = 1'b0;
@@ -611,9 +620,9 @@ always@(*) begin
     end//end OPIVX
     default : begin
       is_vv              = 1'b1;
-      mac_src2           = `VLEN'b0;
-      mac_src1           = `VLEN'b0;
-      mac_addsrc         = `VLEN'b0;
+      mac_src2           = (VLEN)'('b0);
+      mac_src1           = (VLEN)'('b0);
+      mac_addsrc         = (VLEN)'('b0);
       mac_src2_is_signed = 1'b0;
       mac_src1_is_signed = 1'b0;
       mac_is_widen       = 1'b0;
@@ -632,26 +641,26 @@ always@(*) begin
   
   case (mac_top_vs_eew) 
     EEW16 : begin
-      mac_src1_mux              = is_vv ? mac_src1 : {(`VLENH){mac_src1[`HWORD_WIDTH-1:0]}};
-      mac_src2_is_signed_extend = {(`VLENH){mac_src2_is_signed,1'b0}};
-      mac_src1_is_signed_extend = {(`VLENH){mac_src1_is_signed,1'b0}};
+      mac_src1_mux              = is_vv ? mac_src1 : {(`VLENH(VLEN)){mac_src1[`HWORD_WIDTH-1:0]}};
+      mac_src2_is_signed_extend = {(`VLENH(VLEN)){mac_src2_is_signed,1'b0}};
+      mac_src1_is_signed_extend = {(`VLENH(VLEN)){mac_src1_is_signed,1'b0}};
     end//end eew16
     EEW32 : begin
-      mac_src1_mux              = is_vv ? mac_src1 : {(`VLENW){mac_src1[`WORD_WIDTH-1:0]}};
-      mac_src2_is_signed_extend = {(`VLENW){mac_src2_is_signed,3'b0}};
-      mac_src1_is_signed_extend = {(`VLENW){mac_src1_is_signed,3'b0}};
+      mac_src1_mux              = is_vv ? mac_src1 : {(`VLENW(VLEN)){mac_src1[`WORD_WIDTH-1:0]}};
+      mac_src2_is_signed_extend = {(`VLENW(VLEN)){mac_src2_is_signed,3'b0}};
+      mac_src1_is_signed_extend = {(`VLENW(VLEN)){mac_src1_is_signed,3'b0}};
     end//end eew32
     default : begin //default use eew8
-      mac_src1_mux              = is_vv ? mac_src1 : {`VLENB{mac_src1[`BYTE_WIDTH-1:0]}};
-      mac_src2_is_signed_extend = {`VLENB{mac_src2_is_signed}};
-      mac_src1_is_signed_extend = {`VLENB{mac_src1_is_signed}};
+      mac_src1_mux              = is_vv ? mac_src1 : {`VLENB(VLEN){mac_src1[`BYTE_WIDTH-1:0]}};
+      mac_src2_is_signed_extend = {`VLENB(VLEN){mac_src2_is_signed}};
+      mac_src1_is_signed_extend = {`VLENB(VLEN){mac_src1_is_signed}};
     end//end default
   endcase
 end
 
 // Before mac, always depart 128 bits into 16x8 sub-elements
 always@(*) begin
-  for (i=0; i<`VLENB; i=i+1) begin
+  for (i=0; i<`VLENB(VLEN); i=i+1) begin
       mac8_in0[i]           = mac_src2_mux[i*`BYTE_WIDTH +: `BYTE_WIDTH];
       mac8_in1[i]           = mac_src1_mux[i*`BYTE_WIDTH +: `BYTE_WIDTH];
       mac8_in0_is_signed[i] = mac_src2_is_signed_extend[i];
@@ -665,7 +674,7 @@ always_comb begin
 
   case (mac_top_vs_eew) 
     EEW8: begin
-      for(int i=0;i<`VLENW;i++) begin
+      for(int i=0;i<`VLENW(VLEN);i++) begin
         mac8_en[16*i]    = mac_pipe_data_en;
         mac8_en[16*i+5]  = mac_pipe_data_en;
         mac8_en[16*i+10] = mac_pipe_data_en;
@@ -673,7 +682,7 @@ always_comb begin
       end
     end
     EEW16: begin
-      for(int i=0;i<`VLENW;i++) begin
+      for(int i=0;i<`VLENW(VLEN);i++) begin
         mac8_en[16*i]    = mac_pipe_data_en;
         mac8_en[16*i+1]  = mac_pipe_data_en;
         mac8_en[16*i+4]  = mac_pipe_data_en;
@@ -684,14 +693,14 @@ always_comb begin
         mac8_en[16*i+15] = mac_pipe_data_en;
       end
     end
-    EEW32: mac8_en = {(`VLEN/2){mac_pipe_data_en}};
+    EEW32: mac8_en = {(VLEN/2){mac_pipe_data_en}};
   endcase
 end
 
 // mul alus with d1_reg
-// `VLEN/32 tiles
+// VLEN/32 tiles
 generate 
-  for (z=0; z<`VLENW; z=z+1) begin: cnt_tiles
+  for (z=0; z<`VLENW(VLEN); z=z+1) begin: cnt_tiles
     for (x=0; x<`WORD_WIDTH/`BYTE_WIDTH; x=x+1) begin: cnt_src0_axis
       for (y=0; y<`WORD_WIDTH/`BYTE_WIDTH; y=y+1) begin: cnt_src1_axis
         rvv_backend_mul_unit_mul8 
@@ -720,7 +729,7 @@ endgenerate
 
 cdffr #(.T(logic))              u_valid_delay (
   .clk(clk), .rst_n(rst_n), .c(trap_flush_rvv), .e(mac_pipe_vld_en), .d(rs2mac_uop_valid), .q(rs2mac_uop_valid_d1));
-edff  #(.T(logic [`VLEN-1:0]))  u_addsrc_delay (
+edff  #(.T(logic [VLEN-1:0]))  u_addsrc_delay (
   .clk(clk), .rst_n(rst_n), .e(!trap_flush_rvv&mac_pipe_data_en), .d(mac_addsrc), .q(mac_addsrc_d1));
 edff #(.T(logic))               u_src2_is_signed_delay (
   .clk(clk), .rst_n(rst_n), .e(!trap_flush_rvv&mac_pipe_data_en), .d(mac_src2_is_signed), .q(mac_src2_is_signed_d1));
@@ -743,7 +752,7 @@ edff #(.T(EEW_e))               u_eew_delay (
 edff #(.T(logic [`ROB_DEPTH_WIDTH-1:0]))  u_rob_entry_delay (
   .clk(clk), .rst_n(rst_n), .e(!trap_flush_rvv&mac_pipe_data_en), .d(mac_uop_rob_entry), .q(mac_uop_rob_entry_d1));
 `ifdef TB_SUPPORT
-edff #(.T(logic [`PC_WIDTH-1:0]))         u_PC_delay (
+edff #(.T(logic [PC_WIDTH-1:0]))         u_PC_delay (
   .clk(clk), .rst_n(rst_n), .e(!trap_flush_rvv&mac_pipe_data_en), .d(mac_uop_pc), .q(mac_uop_pc_d1));
 `endif
 
@@ -758,7 +767,7 @@ assign mac_addsrc_widen_d1 = {2{mac_addsrc_d1}};
 //eew8
 //full rslt is 16bit
 always@(*) begin
-  for (i=0; i<`VLENW; i=i+1) begin: tiles_eew8
+  for (i=0; i<`VLENW(VLEN); i=i+1) begin: tiles_eew8
     for (j=0; j<`WORD_WIDTH/`BYTE_WIDTH; j=j+1) begin // 
       mac_rslt_full_eew8_d1[i*4+j]                                   = mac8_out_d1[i*16+j*5];
       mac_rslt_eew8_widen_d1[2*`BYTE_WIDTH*(i*4+j) +: 2*`BYTE_WIDTH] = mac_rslt_full_eew8_d1[i*4+j];//widen, and convert to [255:0]
@@ -806,10 +815,10 @@ end
 
 always_comb begin
   casex({is_vmac_d1,mac_is_widen_d1,is_vsmul_d1,mac_is_widen_d1})
-    4'b11?? : mac_rslt_eew8_d1 = vmac_rslt_eew8_widen_d1[`VLEN-1:0];  //mac widen 
+    4'b11?? : mac_rslt_eew8_d1 = vmac_rslt_eew8_widen_d1[VLEN-1:0];   //mac widen 
     4'b10?? : mac_rslt_eew8_d1 = vmac_rslt_eew8_no_widen_d1;          //mac normal
     4'b0?1? : mac_rslt_eew8_d1 = vsmul_rslt_eew8_d1;                  //vsmul
-    4'b0?01 : mac_rslt_eew8_d1 = mac_rslt_eew8_widen_d1[`VLEN-1:0];   //mul widen
+    4'b0?01 : mac_rslt_eew8_d1 = mac_rslt_eew8_widen_d1[VLEN-1:0];    //mul widen
     4'b0?00 : mac_rslt_eew8_d1 = mac_rslt_eew8_no_widen_d1;           //mul normal
     default : mac_rslt_eew8_d1 = 'b0;
   endcase
@@ -820,7 +829,7 @@ assign update_vxsat_eew8_d1 = vsmul_sat_eew8_d1;
 //eew16
 //full rslt is 32bit
 always@(*) begin
-  for (i=0; i<`VLENW; i=i+1) begin: tiles_eew16
+  for (i=0; i<`VLENW(VLEN); i=i+1) begin: tiles_eew16
     for (j=0; j<`WORD_WIDTH/`HWORD_WIDTH; j=j+1) begin // 
       mac_rslt_part16_eew16_d1[2*i+j] = {{2{mac8_out_d1[i*16+j*10+4][15]&&mac_src1_is_signed_d1}},mac8_out_d1[i*16+j*10+4]} + 
                                         {{2{mac8_out_d1[i*16+j*10+1][15]&&mac_src2_is_signed_d1}},mac8_out_d1[i*16+j*10+1]} ;
@@ -876,17 +885,17 @@ end
 
 always_comb begin
   casex({is_vmac_d1,mac_is_widen_d1,is_vsmul_d1,mac_is_widen_d1})
-    4'b11?? : mac_rslt_eew16_d1 = vmac_rslt_eew16_widen_d1[`VLEN-1:0];  //mac widen 
+    4'b11?? : mac_rslt_eew16_d1 = vmac_rslt_eew16_widen_d1[VLEN-1:0];   //mac widen 
     4'b10?? : mac_rslt_eew16_d1 = vmac_rslt_eew16_no_widen_d1;          //mac normal
     4'b0?1? : mac_rslt_eew16_d1 = vsmul_rslt_eew16_d1;                  //vsmul
-    4'b0?01 : mac_rslt_eew16_d1 = mac_rslt_eew16_widen_d1[`VLEN-1:0];   //mul widen
+    4'b0?01 : mac_rslt_eew16_d1 = mac_rslt_eew16_widen_d1[VLEN-1:0];    //mul widen
     4'b0?00 : mac_rslt_eew16_d1 = mac_rslt_eew16_no_widen_d1;           //mul normal
     default : mac_rslt_eew16_d1 = 'b0;
   endcase
 end
 
 always_comb begin
-  for(int i=0;i<`VLENH;i++) begin
+  for(int i=0;i<`VLENH(VLEN);i++) begin
     update_vxsat_eew16_d1[2*i +: 2] = {vsmul_sat_eew16_d1[i],1'b0}; 
   end
 end
@@ -894,7 +903,7 @@ end
 //eew32
 `ifdef CORALNPU_STRUCTURAL_DATAPATH
 generate
-  for (genvar mac_i = 0; mac_i < `VLENW; mac_i = mac_i + 1) begin : gen_mac_eew32_lane
+  for (genvar mac_i = 0; mac_i < `VLENW(VLEN); mac_i = mac_i + 1) begin : gen_mac_eew32_lane
     rvv_backend_mac_eew32_datapath u_mac_eew32_lane (
       .mac8_out       (mac8_out_d1[mac_i*16 +: 16]),
       .src1_is_signed (mac_src1_is_signed_d1),
@@ -913,12 +922,12 @@ generate
   end
 endgenerate
 
-assign mac_rslt_eew32_d1 = mac_is_widen_d1 ? mac_rslt_eew32_widen_d1[`VLEN-1:0] :
+assign mac_rslt_eew32_d1 = mac_is_widen_d1 ? mac_rslt_eew32_widen_d1[VLEN-1:0] :
                                              mac_rslt_eew32_no_widen_d1;
 `else
 //full rslt is 64bit
 always@(*) begin
-  for (i=0; i<`VLENW; i=i+1) begin //z
+  for (i=0; i<`VLENW(VLEN); i=i+1) begin //z
     mac_rslt_part16_eew32_d1[i] = {{2{mac8_out_d1[i*16+12][15]&&mac_src1_is_signed_d1}},mac8_out_d1[i*16+12]} +
                                   {{2{mac8_out_d1[i*16+3 ][15]&&mac_src2_is_signed_d1}},mac8_out_d1[i*16+3 ]} ;    
     mac_rslt_part32_eew32_d1[i] = {{2{mac8_out_d1[i*16+13][15]&&mac_src1_is_signed_d1}},mac8_out_d1[i*16+13],mac8_out_d1[i*16+5]} +
@@ -975,10 +984,10 @@ end
 
 always_comb begin
   casex({is_vmac_d1,mac_is_widen_d1,is_vsmul_d1,mac_is_widen_d1})
-    4'b11?? : mac_rslt_eew32_d1 = vmac_rslt_eew32_widen_d1[`VLEN-1:0];  //mac widen 
+    4'b11?? : mac_rslt_eew32_d1 = vmac_rslt_eew32_widen_d1[VLEN-1:0];   //mac widen 
     4'b10?? : mac_rslt_eew32_d1 = vmac_rslt_eew32_no_widen_d1;          //mac normal
     4'b0?1? : mac_rslt_eew32_d1 = vsmul_rslt_eew32_d1;                  //vsmul
-    4'b0?01 : mac_rslt_eew32_d1 = mac_rslt_eew32_widen_d1[`VLEN-1:0];   //mul widen
+    4'b0?01 : mac_rslt_eew32_d1 = mac_rslt_eew32_widen_d1[VLEN-1:0];    //mul widen
     4'b0?00 : mac_rslt_eew32_d1 = mac_rslt_eew32_no_widen_d1;           //mul normal
     default : mac_rslt_eew32_d1 = 'b0;
   endcase
@@ -986,7 +995,7 @@ end
 
 `endif
 always_comb begin
-  for(int i=0;i<`VLENW;i++) begin
+  for(int i=0;i<`VLENW(VLEN);i++) begin
     update_vxsat_eew32_d1[4*i +: 4] = {vsmul_sat_eew32_d1[i],3'b0}; 
   end
 end

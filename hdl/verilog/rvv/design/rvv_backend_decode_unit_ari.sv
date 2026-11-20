@@ -4,7 +4,17 @@
 
 // TODO: tail uops
 
-module rvv_backend_decode_unit_ari
+module rvv_backend_decode_unit_ari#(
+  parameter int unsigned VLEN = `VLEN,
+  localparam type RVVSEW = RVVSEW_e,
+  localparam type RVVLMUL = RVVLMUL_e,
+  // Scalar Register Data
+  parameter type RegDataT=logic [31:0],
+  localparam int unsigned XLEN = $bits(RegDataT),
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type RVVCmd = `CMD_t(VLEN, XLEN, PC_WIDTH),
+  localparam type LCMD_t = `LCMD_t(VLEN, XLEN, PC_WIDTH)
+)
 (
   inst_valid,
   inst,
@@ -35,69 +45,69 @@ module rvv_backend_decode_unit_ari
   logic   [`REGIDX_WIDTH-1:0]     vs1_opcode;
   logic   [`REGIDX_WIDTH-1:0]     vs2_opcode;
    
-  logic   [`XLEN-1:0]             rs1;    
-  logic   [`XLEN-1:0]             offset; 
-  logic                           csr_vill;
-  logic   [`VSTART_WIDTH-1:0]     csr_vstart;
-  logic   [`VSTART_WIDTH:0]       evstart;
-  logic   [`VL_WIDTH-1:0]         csr_vl;
-  logic   [`VL_WIDTH-1:0]         evl;
-  RVVSEW                          csr_sew;
-  RVVLMUL                         csr_lmul;
-  RVVLMUL                         reduced_lmul;  
+  logic   [XLEN-1:0]                 rs1;    
+  logic   [XLEN-1:0]                 offset; 
+  logic                              csr_vill;
+  logic   [`VSTART_WIDTH(VLEN)-1:0]  csr_vstart;
+  logic   [`VSTART_WIDTH(VLEN):0]    evstart;
+  logic   [`VL_WIDTH(VLEN)-1:0]      csr_vl;
+  logic   [`VL_WIDTH(VLEN)-1:0]      evl;
+  RVVSEW                             csr_sew;
+  RVVLMUL                            csr_lmul;
+  RVVLMUL                            reduced_lmul;  
 `ifdef ZVT_ON
-  logic                           csr_altfmt;
-  logic   [1:0]                   csr_mtwiden;
-  logic   [$clog2(`TE):0]         csr_tm;
-  logic   [$clog2(`TE):0]         csr_tn;
-  logic   [2:0]                   csr_tk;
+  logic                              csr_altfmt;
+  logic   [1:0]                      csr_mtwiden;
+  logic   [$clog2(`TE(VLEN)):0]      csr_tm;
+  logic   [$clog2(`TE(VLEN)):0]      csr_tn;
+  logic   [2:0]                      csr_tk;
 `endif  
-  EMUL_e                          emul_vd;          
-  EMUL_e                          emul_vs2;          
-  EMUL_e                          emul_vs1;          
-  EMUL_e                          emul_max; 
-  EEW_e                           eew_vd;          
+  EMUL_e                             emul_vd;          
+  EMUL_e                             emul_vs2;          
+  EMUL_e                             emul_vs1;          
+  EMUL_e                             emul_max; 
+  EEW_e                              eew_vd;          
 `ifdef ZVT_ON
-  EEW_e                           eew_mt;
+  EEW_e                              eew_mt;
 `endif
-  EEW_e                           eew_vs2;          
-  EEW_e                           eew_vs1;
-  EEW_e                           eew_max;          
-  logic                           valid_opi;
-  logic                           valid_opm;
+  EEW_e                              eew_vs2;          
+  EEW_e                              eew_vs1;
+  EEW_e                              eew_max;          
+  logic                              valid_opi;
+  logic                              valid_opm;
 `ifdef ZVE32F_ON
-  logic                           valid_opf;
+  logic                              valid_opf;
 `endif
-  logic                           inst_encoding_correct;
-  logic                           check_special;
-  logic                           check_vd_overlap_v0;
-  logic                           check_vd_part_overlap_vs2;
-  logic                           check_vd_part_overlap_vs1;
-  logic                           check_vd_overlap_vs2;
-  logic                           check_vd_overlap_vs1;
-  logic                           check_vs2_part_overlap_vd_2_1;
-  logic                           check_vs1_part_overlap_vd_2_1;
-  logic                           check_vs2_part_overlap_vd_4_1;
+  logic                              inst_encoding_correct;
+  logic                              check_special;
+  logic                              check_vd_overlap_v0;
+  logic                              check_vd_part_overlap_vs2;
+  logic                              check_vd_part_overlap_vs1;
+  logic                              check_vd_overlap_vs2;
+  logic                              check_vd_overlap_vs1;
+  logic                              check_vs2_part_overlap_vd_2_1;
+  logic                              check_vs1_part_overlap_vd_2_1;
+  logic                              check_vs2_part_overlap_vd_4_1;
 `ifdef ZVT_ON
-  logic                           check_mtd_align;
-  logic                           check_vme_vs1_align;
-  logic                           check_vme_vs2_align;
-  logic                           check_tm;
-  logic                           check_tn;
-  logic                           check_tk;
-  logic                           isVmeAlu;
+  logic                              check_mtd_align;
+  logic                              check_vme_vs1_align;
+  logic                              check_vme_vs2_align;
+  logic                              check_tm;
+  logic                              check_tn;
+  logic                              check_tk;
+  logic                              isVmeAlu;
 `endif
-  logic                           check_common;
-  logic                           check_vd_align;
-  logic                           check_vs2_align;
-  logic                           check_vs1_align;
-  logic                           check_sew;
-  logic                           check_lmul;
-  logic                           check_vl_not_0;
-  logic                           check_vstart_sle_vl;
-  logic                           check_frm;
-  logic   [`UOP_INDEX_WIDTH-1:0]  uop_vstart;         
-  logic   [`UOP_INDEX_WIDTH-1:0]  uop_index_max;         
+  logic                              check_common;
+  logic                              check_vd_align;
+  logic                              check_vs2_align;
+  logic                              check_vs1_align;
+  logic                              check_sew;
+  logic                              check_lmul;
+  logic                              check_vl_not_0;
+  logic                              check_vstart_sle_vl;
+  logic                              check_frm;
+  logic   [`UOP_INDEX_WIDTH-1:0]     uop_vstart;         
+  logic   [`UOP_INDEX_WIDTH-1:0]     uop_index_max;         
 
   logic                           force_vma_agnostic; 
   logic                           force_vta_agnostic; 
@@ -129,7 +139,7 @@ module rvv_backend_decode_unit_ari
   assign csr_altfmt     = inst_valid ? inst.arch_state.altfmt : 'b0;
   assign csr_mtwiden    = inst_valid ? inst.arch_state.mtwiden : 'b0;
   assign csr_tm         = inst_valid ? inst.arch_state.tm : 'b0;
-  assign csr_tn         = csr_vl[$clog2(`TE):0];
+  assign csr_tn         = csr_vl[$clog2(`TE(VLEN)):0];
   assign csr_tk         = inst_valid ? inst.arch_state.tk : 'b0;
 `endif
 
@@ -3233,8 +3243,8 @@ module rvv_backend_decode_unit_ari
     endcase
   end
 
-  assign check_tm = (|csr_tm) && (csr_tm<=`TE);  // 0<tm<=`TE
-  assign check_tn = (|csr_tn) && (csr_tn<=`TE);  // 0<tm<=`TE
+  assign check_tm = (|csr_tm) && (csr_tm<=`TE(VLEN));  // 0<tm<=`TE(VLEN)
+  assign check_tn = (|csr_tn) && (csr_tn<=`TE(VLEN));  // 0<tm<=`TE(VLEN)
 
   always_comb begin
     case(csr_sew)
@@ -3880,7 +3890,7 @@ module rvv_backend_decode_unit_ari
   assign check_lmul = (emul_max != EMUL_NONE);
 
   // effect vstart
-  assign offset = inst_funct3==OPIVI ? `XLEN'(inst_imm) : rs1;
+  assign offset = inst_funct3==OPIVI ? XLEN'(inst_imm) : rs1;
 
   always_comb begin
     evstart = {1'b0, csr_vstart};
@@ -3892,22 +3902,22 @@ module rvv_backend_decode_unit_ari
           VSLIDEUP_RGATHEREI16: begin 
             case(csr_sew)
               SEW8 : begin
-                if (|offset[`XLEN-1:`VSTART_WIDTH])
-                  evstart = (`VL_WIDTH)'('1);
-                else if (csr_vstart < offset[`VSTART_WIDTH-1:0])
-                  evstart = {1'b0, offset[`VSTART_WIDTH-1:0]};
+                if (|offset[XLEN-1:`VSTART_WIDTH(VLEN)])
+                  evstart = (`VL_WIDTH(VLEN))'('1);
+                else if (csr_vstart < offset[`VSTART_WIDTH(VLEN)-1:0])
+                  evstart = {1'b0, offset[`VSTART_WIDTH(VLEN)-1:0]};
               end
               SEW16: begin
-                if ((|offset[`XLEN-1:`VSTART_WIDTH-1]) || csr_vstart[`VSTART_WIDTH-1])
-                  evstart = (`VL_WIDTH)'('1);
-                else if (csr_vstart[`VSTART_WIDTH-2:0] < offset[`VSTART_WIDTH-2:0])
-                  evstart = {2'b0, offset[`VSTART_WIDTH-2:0]};
+                if ((|offset[XLEN-1:`VSTART_WIDTH(VLEN)-1]) || csr_vstart[`VSTART_WIDTH(VLEN)-1])
+                  evstart = (`VL_WIDTH(VLEN))'('1);
+                else if (csr_vstart[`VSTART_WIDTH(VLEN)-2:0] < offset[`VSTART_WIDTH(VLEN)-2:0])
+                  evstart = {2'b0, offset[`VSTART_WIDTH(VLEN)-2:0]};
               end
               default: begin // SEW32
-                if ((|offset[`XLEN-1:`VSTART_WIDTH-2]) || (|csr_vstart[`VSTART_WIDTH-2]))
-                  evstart = (`VL_WIDTH)'('1);
-                else if (csr_vstart[`VSTART_WIDTH-3:0] < offset[`VSTART_WIDTH-3:0])
-                  evstart = {3'b0, offset[`VSTART_WIDTH-3:0]};
+                if ((|offset[XLEN-1:`VSTART_WIDTH(VLEN)-2]) || (|csr_vstart[`VSTART_WIDTH(VLEN)-2]))
+                  evstart = (`VL_WIDTH(VLEN))'('1);
+                else if (csr_vstart[`VSTART_WIDTH(VLEN)-3:0] < offset[`VSTART_WIDTH(VLEN)-3:0])
+                  evstart = {3'b0, offset[`VSTART_WIDTH(VLEN)-3:0]};
               end
             endcase
           end
@@ -3954,52 +3964,52 @@ module rvv_backend_decode_unit_ari
               EMUL1: begin
                 case(eew_max)
                   EEW8: begin
-                    evl = 1*`VLEN/8;
+                    evl = 1*VLEN/8;
                   end
                   EEW16: begin
-                    evl = 1*`VLEN/16;
+                    evl = 1*VLEN/16;
                   end
                   EEW32: begin
-                    evl = 1*`VLEN/32;
+                    evl = 1*VLEN/32;
                   end
                 endcase
               end
               EMUL2: begin
                 case(eew_max)
                   EEW8: begin
-                    evl = 2*`VLEN/8;
+                    evl = 2*VLEN/8;
                   end
                   EEW16: begin
-                    evl = 2*`VLEN/16;
+                    evl = 2*VLEN/16;
                   end
                   EEW32: begin
-                    evl = 2*`VLEN/32;
+                    evl = 2*VLEN/32;
                   end
                 endcase
               end
               EMUL4: begin
                 case(eew_max)
                   EEW8: begin
-                    evl = 4*`VLEN/8;
+                    evl = 4*VLEN/8;
                   end
                   EEW16: begin
-                    evl = 4*`VLEN/16;
+                    evl = 4*VLEN/16;
                   end
                   EEW32: begin
-                    evl = 4*`VLEN/32;
+                    evl = 4*VLEN/32;
                   end
                 endcase
               end
               EMUL8: begin
                 case(eew_max)
                   EEW8: begin
-                    evl = 8*`VLEN/8;
+                    evl = 8*VLEN/8;
                   end
                   EEW16: begin
-                    evl = 8*`VLEN/16;
+                    evl = 8*VLEN/16;
                   end
                   EEW32: begin
-                    evl = 8*`VLEN/32;
+                    evl = 8*VLEN/32;
                   end
                 endcase
               end
@@ -4117,13 +4127,13 @@ module rvv_backend_decode_unit_ari
     else begin
       case(eew_max)
         EEW8: begin
-          uop_vstart = (`UOP_INDEX_WIDTH)'(evstart[$clog2(`VLENB) +: `UOP_INDEX_WIDTH_ALU]);
+          uop_vstart = (`UOP_INDEX_WIDTH)'(evstart[$clog2(`VLENB(VLEN)) +: `UOP_INDEX_WIDTH_ALU]);
         end
         EEW16: begin
-          uop_vstart = (`UOP_INDEX_WIDTH)'(evstart[$clog2(`VLENH) +: `UOP_INDEX_WIDTH_ALU]);
+          uop_vstart = (`UOP_INDEX_WIDTH)'(evstart[$clog2(`VLENH(VLEN)) +: `UOP_INDEX_WIDTH_ALU]);
         end
         EEW32: begin
-          uop_vstart = (`UOP_INDEX_WIDTH)'(evstart[$clog2(`VLENW) +: `UOP_INDEX_WIDTH_ALU]);
+          uop_vstart = (`UOP_INDEX_WIDTH)'(evstart[$clog2(`VLENW(VLEN)) +: `UOP_INDEX_WIDTH_ALU]);
         end
         default: begin
           uop_vstart = 'b0;

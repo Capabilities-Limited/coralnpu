@@ -122,7 +122,7 @@ class rvv_backend_test extends uvm_test;
   virtual task rand_vrf();
     logic [`VLEN-1:0] value;
     for(int reg_idx=0; reg_idx<32; reg_idx++) begin
-      for(int j=0; j<`VLENB; j++) begin
+      for(int j=0; j<`VLENB(VLEN); j++) begin
         value[j*8+:8] = $urandom_range(0, 8'hFF);
       end
       set_mdl_vrf(reg_idx, value);
@@ -150,6 +150,7 @@ endclass: rvv_backend_test
 class tb_debug_test extends rvv_backend_test;
 
   zero_seq rvs_seq;
+  rvs_last_sequence rvs_last_seq;
 
   `uvm_component_utils(tb_debug_test)
 
@@ -176,6 +177,8 @@ class tb_debug_test extends rvv_backend_test;
     rvs_seq = zero_seq::type_id::create("rvs_seq", this);
     rvs_seq.start(env.rvs_agt.rvs_sqr);
 
+    rvs_last_seq = rvs_last_sequence::type_id::create("rvs_last_seq", this);
+    rvs_last_seq.start(env.rvs_agt.rvs_sqr);
 
     `uvm_info(get_type_name(), "Complete test ...", UVM_LOW)
   endtask
@@ -200,6 +203,7 @@ class alu_smoke_test extends rvv_backend_test;
   alu_smoke_vmunary0_seq rvs_vmunary0_seq;
   alu_smoke_vwxunary0_seq rvs_vwxunary0_seq;
   alu_smoke_vred_seq rvs_vred_seq;
+  rvs_last_sequence rvs_last_seq;
 
   `uvm_component_utils(alu_smoke_test)
 
@@ -320,7 +324,7 @@ class alu_smoke_test extends rvv_backend_test;
     if($test$plusargs("case11") || $test$plusargs("all_case")) begin
       rvs_vv_seq.run_inst(VWMACCU , env.rvs_agt.rvs_sqr);
       rvs_vv_seq.run_inst(VWMACC  , env.rvs_agt.rvs_sqr);
-      rvs_vv_seq.run_inst(VWMACCUS, env.rvs_agt.rvs_sqr);
+      rvs_vx_seq.run_inst(VWMACCUS, env.rvs_agt.rvs_sqr);
       rvs_vv_seq.run_inst(VWMACCSU, env.rvs_agt.rvs_sqr);
     end
 
@@ -396,6 +400,8 @@ class alu_smoke_test extends rvv_backend_test;
     // Last inst  
     rvs_vv_seq.run_inst(VAND, env.rvs_agt.rvs_sqr);
 
+    rvs_last_seq = rvs_last_sequence::type_id::create("rvs_last_seq", this);
+    rvs_last_seq.start(env.rvs_agt.rvs_sqr);
 
   endtask
 
@@ -2759,5 +2765,36 @@ class lsu_fof_test_trap_en extends lsu_fof_test;
     super.final_phase(phase);
   endfunction
 endclass: lsu_fof_test_trap_en
+
+//==========================================================
+// Fault-only-first fault tests
+//==========================================================
+// Faults on an element after the first trim vl and do not trap.
+class lsu_fof_fault_test extends lsu_fof_test;
+  `uvm_component_utils(lsu_fof_fault_test)
+
+  function new(string name, uvm_component parent);
+    super.new(name, parent);
+  endfunction
+
+  function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    uvm_config_db#(bit)::set(uvm_root::get(), "*", "fof_fault_en", 1'b1);
+  endfunction
+endclass: lsu_fof_fault_test
+
+// As above, and a fault on element 0 takes a trap.
+class lsu_fof_fault_test_trap_en extends lsu_fof_fault_test;
+  `uvm_component_utils(lsu_fof_fault_test_trap_en)
+
+  function new(string name, uvm_component parent);
+    super.new(name, parent);
+  endfunction
+
+  function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    uvm_config_db#(bit)::set(uvm_root::get(), "*", "trap_en", 1'b1);
+  endfunction
+endclass: lsu_fof_fault_test_trap_en
 `endif // RVV_BACKEND_TEST__SV
 

@@ -20,7 +20,6 @@ class alu_div_zero_seq extends base_sequence;
       req = new("req");
       start_item(req);
       assert(req.randomize() with {
-        pc == inst_cnt;
 
         vlmul inside {LMUL1_2, LMUL1, LMUL2};
 
@@ -33,6 +32,7 @@ class alu_div_zero_seq extends base_sequence;
         (src1_type == XRF) -> (rs1_data dist {0:=95, [1:$]:/5});
         vm dist {1:=80, 0:=20}; // to do more calcualtion
       });
+      req.pc = inst_cnt;
       finish_item(req);
       inst_cnt++;
     end
@@ -102,20 +102,20 @@ class alu_large_vstart_seq extends base_sequence;
       start_item(req);
       req.c_vl_vstart.constraint_mode(0);
       assert(req.randomize() with {
-        pc == inst_cnt;
 
         inst_type == ALU;
         alu_inst inside {VMAND, VMOR, VMXOR, VMORN, VMNAND, VMNOR, VMANDN, VMXNOR};
         
         if(vlmul[2]) // fraction_lmul
-          vlmax == ((`VLENB >> (~vlmul +3'b1)) >> vsew);
+          vlmax == ((`VLENB(VLEN) >> (~vlmul +3'b1)) >> vsew);
         else  
-          vlmax == ((`VLENB << vlmul) >> vsew);
+          vlmax == ((`VLENB(VLEN) << vlmul) >> vsew);
 
         vl == vlmax_max;
         vstart <= vlmax_max-1;
 
       });
+      req.pc = inst_cnt;
       finish_item(req);
       inst_cnt++;
     end
@@ -185,7 +185,6 @@ class alu_div_overflow_seq extends base_sequence;
     req = new("req");
     start_item(req);
     assert(req.randomize() with {
-      pc == inst_cnt;
       use_vlmax == 1;
 
       vlmul == LMUL1;
@@ -199,12 +198,12 @@ class alu_div_overflow_seq extends base_sequence;
       src1_type == VRF; src1_idx == 1;
       vm == 1;
     });
+    req.pc = inst_cnt;
     finish_item(req);
     inst_cnt++;
     req = new("req");
     start_item(req);
     assert(req.randomize() with {
-      pc == inst_cnt;
       use_vlmax == 1;
 
       vlmul == LMUL1;
@@ -218,12 +217,12 @@ class alu_div_overflow_seq extends base_sequence;
       src1_type == VRF; src1_idx == 1;
       vm == 1;
     });
+    req.pc = inst_cnt;
     finish_item(req);
     inst_cnt++;
     req = new("req");
     start_item(req);
     assert(req.randomize() with {
-      pc == inst_cnt;
       use_vlmax == 1;
 
       vlmul == LMUL1;
@@ -237,12 +236,12 @@ class alu_div_overflow_seq extends base_sequence;
       src1_type == XRF; rs1_data == -1;
       vm == 1;
     });
+    req.pc = inst_cnt;
     finish_item(req);
     inst_cnt++;
     req = new("req");
     start_item(req);
     assert(req.randomize() with {
-      pc == inst_cnt;
       use_vlmax == 1;
 
       vlmul == LMUL1;
@@ -256,6 +255,7 @@ class alu_div_overflow_seq extends base_sequence;
       src1_type == XRF; rs1_data == -1;
       vm == 1;
     });
+    req.pc = inst_cnt;
     finish_item(req);
     inst_cnt++;
 
@@ -263,7 +263,6 @@ class alu_div_overflow_seq extends base_sequence;
     req = new("req");
     start_item(req);
     assert(req.randomize() with {
-      pc == inst_cnt;
       use_vlmax == 1;
 
       vlmul == LMUL1;
@@ -277,12 +276,12 @@ class alu_div_overflow_seq extends base_sequence;
       src1_type == VRF; src1_idx == 1;
       vm == 1;
     });
+    req.pc = inst_cnt;
     finish_item(req);
     inst_cnt++;
     req = new("req");
     start_item(req);
     assert(req.randomize() with {
-      pc == inst_cnt;
       use_vlmax == 1;
 
       vlmul == LMUL1;
@@ -296,6 +295,7 @@ class alu_div_overflow_seq extends base_sequence;
       src1_type == VRF; src1_idx == 1;
       vm == 1;
     });
+    req.pc = inst_cnt;
     finish_item(req);
     inst_cnt++;
   endtask
@@ -498,7 +498,6 @@ class alu_cont_div_seq extends base_sequence;
       req = new("req");
       start_item(req);
       assert(req.randomize() with {
-        pc == inst_cnt;
 
         vlmul inside {LMUL1_2, LMUL1, LMUL2};
         vsew inside {vsew_set};
@@ -511,6 +510,7 @@ class alu_cont_div_seq extends base_sequence;
         src1_type == VRF; src1_idx inside {[22:31]};
         vm dist {1:=80, 0:=20}; // to do more calcualtion
       });
+      req.pc = inst_cnt;
       finish_item(req);
       inst_cnt++;
     end
@@ -554,7 +554,7 @@ class alu_cont_div_test extends rvv_backend_test;
     // Unsigned test - sew8
     // vs2
     temp = $urandom_range(0, 8'hFF);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*8+:8] = temp;
     end
     for(int i=12; i<22; i++) begin
@@ -562,7 +562,7 @@ class alu_cont_div_test extends rvv_backend_test;
     end
     // vs1
     temp = $urandom_range(0, 8'hFF);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*8+:8] = temp;
     end
     for(int i=22; i<32; i++) begin
@@ -584,7 +584,7 @@ class alu_cont_div_test extends rvv_backend_test;
     // Unsigned test - sew16
     // vs2
     temp = $urandom_range(0, 16'hFFFF);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*16+:16] = temp;
     end
     for(int i=12; i<22; i++) begin
@@ -592,7 +592,7 @@ class alu_cont_div_test extends rvv_backend_test;
     end
     // vs1
     temp = $urandom_range(0, 16'hFFFF);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*16+:16] = temp;
     end
     for(int i=22; i<32; i++) begin
@@ -614,7 +614,7 @@ class alu_cont_div_test extends rvv_backend_test;
     // Unsigned test - sew32
     // vs2
     temp = $urandom_range(0, 32'hFFFFFFFF);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*32+:32] = temp;
     end
     for(int i=12; i<22; i++) begin
@@ -622,7 +622,7 @@ class alu_cont_div_test extends rvv_backend_test;
     end
     // vs1
     temp = $urandom_range(0, 32'hFFFFFFFF);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*32+:32] = temp;
     end
     for(int i=22; i<32; i++) begin
@@ -644,7 +644,7 @@ class alu_cont_div_test extends rvv_backend_test;
     // Signed test - sew8
     // vs2
     temp = $urandom_range(0, 8'hFF);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*8+:8] = temp;
     end
     for(int i=12; i<22; i++) begin
@@ -652,7 +652,7 @@ class alu_cont_div_test extends rvv_backend_test;
     end
     // vs1
     temp = $urandom_range(0, 8'hFF);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*8+:8] = temp;
     end
     for(int i=22; i<32; i++) begin
@@ -674,7 +674,7 @@ class alu_cont_div_test extends rvv_backend_test;
     // Signed test - sew16
     // vs2
     temp = $urandom_range(0, 16'hFFFF);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*16+:16] = temp;
     end
     for(int i=12; i<22; i++) begin
@@ -682,7 +682,7 @@ class alu_cont_div_test extends rvv_backend_test;
     end
     // vs1
     temp = $urandom_range(0, 16'hFFFF);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*16+:16] = temp;
     end
     for(int i=22; i<32; i++) begin
@@ -704,7 +704,7 @@ class alu_cont_div_test extends rvv_backend_test;
     // Signed test - sew32
     // vs2
     temp = $urandom_range(0, 32'hFFFFFFFF);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*32+:32] = temp;
     end
     for(int i=12; i<22; i++) begin
@@ -712,7 +712,7 @@ class alu_cont_div_test extends rvv_backend_test;
     end
     // vs1
     temp = $urandom_range(0, 32'hFFFFFFFF);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*32+:32] = temp;
     end
     for(int i=22; i<32; i++) begin
@@ -734,7 +734,7 @@ class alu_cont_div_test extends rvv_backend_test;
     // Signed & unsigned mix test - sew8
     // vs2
     temp = $urandom_range(0, 8'h7F);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*8+:8] = temp;
     end
     for(int i=12; i<22; i++) begin
@@ -742,7 +742,7 @@ class alu_cont_div_test extends rvv_backend_test;
     end
     // vs1
     temp = $urandom_range(0, 8'h7F);
-    for(int j=0; j<`VLENB; j++) begin
+    for(int j=0; j<`VLENB(VLEN); j++) begin
       value[j*8+:8] = temp;
     end
     for(int i=22; i<32; i++) begin
@@ -764,7 +764,7 @@ class alu_cont_div_test extends rvv_backend_test;
     // Signed & unsigned mix test - sew16
     // vs2
     temp = $urandom_range(0, 16'h7FFF);
-    for(int j=0; j<`VLENB/2; j++) begin
+    for(int j=0; j<`VLENB(VLEN)/2; j++) begin
       value[j*16+:16] = temp;
     end
     for(int i=12; i<22; i++) begin
@@ -772,7 +772,7 @@ class alu_cont_div_test extends rvv_backend_test;
     end
     // vs1
     temp = $urandom_range(0, 16'h7FFF);
-    for(int j=0; j<`VLENB/2; j++) begin
+    for(int j=0; j<`VLENB(VLEN)/2; j++) begin
       value[j*16+:16] = temp;
     end
     for(int i=22; i<32; i++) begin
@@ -794,7 +794,7 @@ class alu_cont_div_test extends rvv_backend_test;
     // Signed & unsigned mix test - sew32
     // vs2
     temp = $urandom_range(0, 32'h7FFF_FFFF);
-    for(int j=0; j<`VLENB/4; j++) begin
+    for(int j=0; j<`VLENB(VLEN)/4; j++) begin
       value[j*32+:32] = temp;
     end
     for(int i=12; i<22; i++) begin
@@ -802,7 +802,7 @@ class alu_cont_div_test extends rvv_backend_test;
     end
     // vs1
     temp = $urandom_range(0, 32'h7FFF_FFFF);
-    for(int j=0; j<`VLENB/4; j++) begin
+    for(int j=0; j<`VLENB(VLEN)/4; j++) begin
       value[j*32+:32] = temp;
     end
     for(int i=22; i<32; i++) begin
@@ -872,9 +872,9 @@ class rvv_reset_test extends rvv_backend_test;
       rvs_seq_lib.start(env.rvs_agt.rvs_sqr);
       begin
         repeat(50) @(posedge rvs_if.clk);
-        rvs_if.rst_n = 0;
+        rvv_backend_top.rst_n = 0;
         repeat(10) @(posedge rvs_if.clk);
-        rvs_if.rst_n = 1;
+        rvv_backend_top.rst_n = 1;
       end
     join
     
@@ -901,7 +901,6 @@ class inst_rvv_zve32x_viota_m_vm1_large_vl_seq extends base_sequence;
     start_item(req);
     assert(req.randomize() with {
       // normal set
-      pc == inst_cnt;
       
       // special set
       use_vlmax == 1;
@@ -918,6 +917,7 @@ class inst_rvv_zve32x_viota_m_vm1_large_vl_seq extends base_sequence;
       src1_type ==   FUNC; src1_idx == 5'b10000;
       vm inside {1};
     });
+    req.pc = inst_cnt;
     finish_item(req);
     inst_cnt++;
   endtask: body
@@ -937,7 +937,6 @@ class inst_rvv_zve32x_vcpop_m_vm1_large_vl_seq extends base_sequence;
     start_item(req);
     assert(req.randomize() with {
       // normal set
-      pc == inst_cnt;
       
       // special set
       use_vlmax == 1;
@@ -954,6 +953,7 @@ class inst_rvv_zve32x_vcpop_m_vm1_large_vl_seq extends base_sequence;
       src1_type ==   FUNC; src1_idx == 5'b10000;
       vm inside {1};
     });
+    req.pc = inst_cnt;
     finish_item(req);
     inst_cnt++;
   endtask: body

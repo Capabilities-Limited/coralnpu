@@ -2,7 +2,17 @@
 `include "rvv_backend.svh"
 `endif
 
-module rvv_backend_decode_unit_lsu
+module rvv_backend_decode_unit_lsu#(
+  parameter int unsigned VLEN = `VLEN,
+  localparam type RVVSEW = RVVSEW_e,
+  localparam type RVVLMUL = RVVLMUL_e,
+  // Scalar Register Data
+  parameter type RegDataT=logic [31:0],
+  localparam int unsigned XLEN = $bits(RegDataT),
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type RVVCmd = `CMD_t(VLEN, XLEN, PC_WIDTH),
+  localparam type LCMD_t = `LCMD_t(VLEN, XLEN, PC_WIDTH)
+)
 (
   inst_valid,
   inst,
@@ -28,56 +38,56 @@ module rvv_backend_decode_unit_lsu
   logic   [`UMOP_WIDTH-1:0]       inst_umop;        // inst original encoding[24:20]
   logic   [`FUNCT3_WIDTH-1:0]     inst_funct3;      // inst original encoding[14:12]
   logic   [`REGIDX_WIDTH-1:0]     inst_vd;          // inst original encoding[11:7]
-  RVVOpCode                       inst_opcode;      // inst original encoding[6:0]
+  OPCODE_t                        inst_opcode;      // inst original encoding[6:0]
 
-  logic   [`XLEN-1:0]             rs1;    
-  logic   [`VSTART_WIDTH-1:0]     csr_vstart;
-  logic   [`VL_WIDTH-1:0]         csr_vl;
-  logic   [`VL_WIDTH-1:0]         evl;
-  RVVSEW                          csr_sew;
-  RVVLMUL                         csr_lmul;
-  RVVLMUL                         reduced_lmul;  
+  logic   [XLEN-1:0]                 rs1;    
+  logic   [`VSTART_WIDTH(VLEN)-1:0]  csr_vstart;
+  logic   [`VL_WIDTH(VLEN)-1:0]      csr_vl;
+  logic   [`VL_WIDTH(VLEN)-1:0]      evl;
+  RVVSEW                             csr_sew;
+  RVVLMUL                            csr_lmul;
+  RVVLMUL                            reduced_lmul;  
 `ifdef ZVT_ON
-  logic   [1:0]                   csr_mtwiden;
-  logic   [$clog2(`TE):0]         csr_tm;
+  logic   [1:0]                      csr_mtwiden;
+  logic   [$clog2(`TE(VLEN)):0]      csr_tm;
 `endif  
-  EMUL_e                          emul_vd;          
-  EMUL_e                          emul_vs2;          
-  EMUL_e                          emul_vd_nf; 
-  EMUL_e                          emul_max; 
-  logic   [`UOP_INDEX_WIDTH-1:0]  uop_index_max;         
-  EEW_e                           eew_vd;          
+  EMUL_e                             emul_vd;          
+  EMUL_e                             emul_vs2;          
+  EMUL_e                             emul_vd_nf; 
+  EMUL_e                             emul_max; 
+  logic   [`UOP_INDEX_WIDTH-1:0]     uop_index_max;         
+  EEW_e                              eew_vd;          
 `ifdef ZVT_ON
-  EEW_e                           eew_mt;
+  EEW_e                              eew_mt;
 `endif
-  EEW_e                           eew_vs2;          
-  EEW_e                           eew_max;         
-  logic                           valid_lsu;
-  logic                           valid_lsu_opcode;
-  logic                           valid_lsu_mop;
-  logic                           inst_encoding_correct;
-  logic                           check_special;
-  logic                           check_vd_overlap_v0;
-  logic                           check_vd_part_overlap_vs2;
-  logic   [`REGIDX_WIDTH:0]       vd_index_start;
-  logic   [`REGIDX_WIDTH:0]       vd_index_end;
-  logic   [`REGIDX_WIDTH-1:0]     vd_index_offset;
-  logic                           check_vd_overlap_vs2;
-  logic                           check_vs2_part_overlap_vd_2_1;
-  logic                           check_vs2_part_overlap_vd_4_1;
-  logic                           check_common;
-  logic                           check_vd_align;
-  logic                           check_vs2_align;
-  logic                           check_vd_in_range;
-  logic   [`REGIDX_WIDTH-1:0]     check_vd_cmp;
-  logic                           check_sew;
-  logic                           check_lmul;
-  logic                           check_evl_not_0;
-  logic                           check_vstart_sle_evl;
-  FUNCT6_u                        funct6_lsu;
-  logic                           force_vma_agnostic; 
-  logic                           force_vta_agnostic; 
-  genvar                          j;
+  EEW_e                              eew_vs2;          
+  EEW_e                              eew_max;         
+  logic                              valid_lsu;
+  logic                              valid_lsu_opcode;
+  logic                              valid_lsu_mop;
+  logic                              inst_encoding_correct;
+  logic                              check_special;
+  logic                              check_vd_overlap_v0;
+  logic                              check_vd_part_overlap_vs2;
+  logic   [`REGIDX_WIDTH:0]          vd_index_start;
+  logic   [`REGIDX_WIDTH:0]          vd_index_end;
+  logic   [`REGIDX_WIDTH-1:0]        vd_index_offset;
+  logic                              check_vd_overlap_vs2;
+  logic                              check_vs2_part_overlap_vd_2_1;
+  logic                              check_vs2_part_overlap_vd_4_1;
+  logic                              check_common;
+  logic                              check_vd_align;
+  logic                              check_vs2_align;
+  logic                              check_vd_in_range;
+  logic   [`REGIDX_WIDTH-1:0]        check_vd_cmp;
+  logic                              check_sew;
+  logic                              check_lmul;
+  logic                              check_evl_not_0;
+  logic                              check_vstart_sle_evl;
+  FUNCT6_u                           funct6_lsu;
+  logic                              force_vma_agnostic; 
+  logic                              force_vta_agnostic; 
+  genvar                             j;
   
   // local parameter for SEW in original endocing[14:12]
   localparam  SEW_8     = 3'b000;
@@ -3053,15 +3063,15 @@ module rvv_backend_decode_unit_lsu
             end
             TILESEW16: begin
               emul_max      = EMUL2;
-              uop_index_max = (csr_vl > (`TE/2)) ? (`UOP_INDEX_WIDTH)'('d1) : (`UOP_INDEX_WIDTH)'('d0);
+              uop_index_max = (csr_vl > (`TE(VLEN)/2)) ? (`UOP_INDEX_WIDTH)'('d1) : (`UOP_INDEX_WIDTH)'('d0);
             end
             TILESEW32: begin
               emul_max      = EMUL4;
-              if (csr_vl > (`TE*3/4))
+              if (csr_vl > (`TE(VLEN)*3/4))
                 uop_index_max = (`UOP_INDEX_WIDTH)'('d3);
-              else if (csr_vl > (`TE/2))
+              else if (csr_vl > (`TE(VLEN)/2))
                 uop_index_max = (`UOP_INDEX_WIDTH)'('d2);
-              else if (csr_vl > (`TE/4))
+              else if (csr_vl > (`TE(VLEN)/4))
                 uop_index_max = (`UOP_INDEX_WIDTH)'('d1);
               else
                 uop_index_max = (`UOP_INDEX_WIDTH)'('d0);
@@ -3480,52 +3490,52 @@ module rvv_backend_decode_unit_lsu
               EMUL1: begin
                 case(eew_max)
                   EEW8: begin
-                    evl = 1*`VLEN/8;
+                    evl = 1*VLEN/8;
                   end
                   EEW16: begin
-                    evl = 1*`VLEN/16;
+                    evl = 1*VLEN/16;
                   end
                   EEW32: begin
-                    evl = 1*`VLEN/32;
+                    evl = 1*VLEN/32;
                   end
                 endcase
               end
               EMUL2: begin
                 case(eew_max)
                   EEW8: begin
-                    evl = 2*`VLEN/8;
+                    evl = 2*VLEN/8;
                   end
                   EEW16: begin
-                    evl = 2*`VLEN/16;
+                    evl = 2*VLEN/16;
                   end
                   EEW32: begin
-                    evl = 2*`VLEN/32;
+                    evl = 2*VLEN/32;
                   end
                 endcase
               end
               EMUL4: begin
                 case(eew_max)
                   EEW8: begin
-                    evl = 4*`VLEN/8;
+                    evl = 4*VLEN/8;
                   end
                   EEW16: begin
-                    evl = 4*`VLEN/16;
+                    evl = 4*VLEN/16;
                   end
                   EEW32: begin
-                    evl = 4*`VLEN/32;
+                    evl = 4*VLEN/32;
                   end
                 endcase
               end
               EMUL8: begin
                 case(eew_max)
                   EEW8: begin
-                    evl = 8*`VLEN/8;
+                    evl = 8*VLEN/8;
                   end
                   EEW16: begin
-                    evl = 8*`VLEN/16;
+                    evl = 8*VLEN/16;
                   end
                   EEW32: begin
-                    evl = 8*`VLEN/32;
+                    evl = 8*VLEN/32;
                   end
                 endcase
               end
@@ -3533,13 +3543,13 @@ module rvv_backend_decode_unit_lsu
           end
           US_MASK: begin       
             // evl = ceil(vl/8)
-            evl = {3'b0,csr_vl[`VL_WIDTH-1:3]} + (csr_vl[2:0]!='b0);
+            evl = {3'b0,csr_vl[`VL_WIDTH(VLEN)-1:3]} + (csr_vl[2:0]!='b0);
           end
         endcase
       end
       `ifdef ZVT_ON
       TILE_LDST: begin
-        evl = (csr_vl > `TE) ? `TE : csr_vl;
+        evl = (csr_vl > `TE(VLEN)) ? `TE(VLEN) : csr_vl;
       end
     `endif
     endcase
