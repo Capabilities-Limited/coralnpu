@@ -13,6 +13,7 @@ module zvt_pe_mulbulk #(
   parameter fpnew_pkg::pipe_config_t PIPE_CONFIG      = fpnew_pkg::BEFORE, // Pipeline layout.
   parameter type                     TAG_TYPE         = logic,             // Extra information pipeline.
   parameter                          REMV_PIPE_BUBBLE = 0,
+  parameter                          LOCKSTEP         = 0,
   // Do not change
   localparam int unsigned WIDTH      = 32'd32  // originally fpnew_pkg::max_fp_width(FP_FMT_CONFIG), will error with int and without FP32 support
 ) (
@@ -55,7 +56,8 @@ module zvt_pe_mulbulk #(
   logic [NUM_PIPE_REGS-1:0] reg_enable;  // reg_ena[i] indicates data reg enable signal on i-th stage
   handshake_multistage_ctrl#(
     .NUM_PIPE_REGS(NUM_PIPE_REGS),
-    .REMV_PIPE_BUBBLE(REMV_PIPE_BUBBLE)
+    .REMV_PIPE_BUBBLE(REMV_PIPE_BUBBLE),
+    .LOCKSTEP(LOCKSTEP)
   ) u_handshake (
     .clk        (clk),
     .rst_n      (rst_n),

@@ -192,6 +192,7 @@ module zvt_pe_array#(
   logic [$clog2(`TE(VLEN)):0]                 tmsub1, tnsub1;
   logic [$clog2(`PROCESS_DELAY(VLEN))-1:0]    cnt, cntMax00, cntMax10;
   logic                                       cntEn, cntCr;
+  logic                                       gstall;
   logic                                       vaHiActive, vbHiActive;
   logic                                       pipeLaEn, pipeHa0En, pipeHa1En, pipeLbEn, pipeHb0En, pipeHb1En;
   logic                                       pipeLaVld, pipeHa0Vld, pipeHa1Vld, pipeLbVld, pipeHb0Vld, pipeHb1Vld;
@@ -215,11 +216,11 @@ module zvt_pe_array#(
 
   // ready to start up. 
   assign canStart = &peCmdVld[3:0] && peCmd[0].first_uop_valid && peCmd[3].last_uop_valid & !hitRaw;
-  assign peCmdRdy = {4{canStart && cntCr}};
+  assign peCmdRdy = {4{canStart && cntCr && blkCmdRdy[0]}};
 
   // counter
   cdffr #(.T(logic [$clog2(`PROCESS_DELAY(VLEN))-1:0]))
-  counter (.q(cnt), .clk(clk), .rst_n(rst_n), .e(cntEn), .c(cntCr), .d(cnt+($clog2(`PROCESS_DELAY(VLEN)))'('d1)));
+  counter (.q(cnt), .clk(clk), .rst_n(rst_n), .e(cntEn), .c(cntCr && cntEn), .d(cnt+($clog2(`PROCESS_DELAY(VLEN)))'('d1)));
   
   assign tmsub1   = peCmd[0].tm - 'd1;
   assign tnsub1   = peCmd[0].vl - 'd1;
@@ -229,13 +230,13 @@ module zvt_pe_array#(
 
   // block 1
   assign vbHiActive = tnsub1[$clog2(`TE(VLEN))-1];
-  assign pipeLaEn   = canStart & vbHiActive;
-  assign pipeHb0En  = canStart & vbHiActive;
+  assign pipeLaEn   = cntEn & vbHiActive;
+  assign pipeHb0En  = cntEn & vbHiActive;
   // block 2
   assign vaHiActive = tmsub1[$clog2(`TE(VLEN))-1];
   assign cntMax10   = tmsub1[$clog2(`TE(VLEN)/2)-1:$clog2(`TE(VLEN)/2*`COMPRATIO(VLEN))];
-  assign pipeHa0En  = canStart & vaHiActive & (cnt<=cntMax10);
-  assign pipeLbEn   = canStart & vaHiActive;
+  assign pipeHa0En  = cntEn & vaHiActive & (cnt<=cntMax10);
+  assign pipeLbEn   = cntEn & vaHiActive;
   // block 3
   assign pipeHa1En  = pipeHa0Vld & pipeHb0Vld;
   assign pipeHb1En  = pipeHa0Vld & pipeHb0Vld;
@@ -251,7 +252,7 @@ module zvt_pe_array#(
   assign vaInfoLo.readMtId   = cnt;
   assign vaInfoHi.readMtId   = cnt;
   assign vaInfoLo.lastUopVld = cntCr;
-  assign vaInfoHi.lastUopVld = cntCr;
+  assign vaInfoHi.lastUopVld = (cnt == cntMax10);
 
   always_comb begin
     vaInfoLo.op      = INTMUL;
@@ -319,19 +320,19 @@ module zvt_pe_array#(
   assign vbInfoHi.vbMask = vbMaskHi;
   
   // systolic pipeline register
-  dff regLaVld  (.q(pipeLaVld ), .clk(clk), .rst_n(rst_n), .d(pipeLaEn));
-  dff regHa0Vld (.q(pipeHa0Vld), .clk(clk), .rst_n(rst_n), .d(pipeHa0En));
-  dff regHa1Vld (.q(pipeHa1Vld), .clk(clk), .rst_n(rst_n), .d(pipeHa1En));
-  dff regLbVld  (.q(pipeLbVld ), .clk(clk), .rst_n(rst_n), .d(pipeLbEn));
-  dff regHb0Vld (.q(pipeHb0Vld), .clk(clk), .rst_n(rst_n), .d(pipeHb0En));
-  dff regHb1Vld (.q(pipeHb1Vld), .clk(clk), .rst_n(rst_n), .d(pipeHb1En));
+  edff regLaVld  (.q(pipeLaVld), .clk(clk), .rst_n(rst_n), .e(!gstall), .d(pipeLaEn));
+  edff regHa0Vld (.q(pipeHa0Vld), .clk(clk), .rst_n(rst_n), .e(!gstall), .d(pipeHa0En));
+  edff regHa1Vld (.q(pipeHa1Vld), .clk(clk), .rst_n(rst_n), .e(!gstall), .d(pipeHa1En));
+  edff regLbVld  (.q(pipeLbVld), .clk(clk), .rst_n(rst_n), .e(!gstall), .d(pipeLbEn));
+  edff regHb0Vld (.q(pipeHb0Vld), .clk(clk), .rst_n(rst_n), .e(!gstall), .d(pipeHb0En));
+  edff regHb1Vld (.q(pipeHb1Vld), .clk(clk), .rst_n(rst_n), .e(!gstall), .d(pipeHb1En));
 
-  edff #(.T(PEVAINFO_t)) regLaData  (.q(vaInfoLoD1), .clk(clk), .rst_n(rst_n), .e(pipeLaEn ), .d(vaInfoLo));
-  edff #(.T(PEVAINFO_t)) regHa0Data (.q(vaInfoHiD1), .clk(clk), .rst_n(rst_n), .e(pipeHa0En), .d(vaInfoHi));
-  edff #(.T(PEVAINFO_t)) regHa1Data (.q(vaInfoHiD2), .clk(clk), .rst_n(rst_n), .e(pipeHa1En), .d(vaInfoHiD1));
-  edff #(.T(PEVBINFO_t)) regLbData  (.q(vbInfoLoD1), .clk(clk), .rst_n(rst_n), .e(pipeLbEn  && (cnt=='d0)), .d(vbInfoLo));
-  edff #(.T(PEVBINFO_t)) regHb0Data (.q(vbInfoHiD1), .clk(clk), .rst_n(rst_n), .e(pipeHb0En && (cnt=='d0)), .d(vbInfoHi));
-  edff #(.T(PEVBINFO_t)) regHb1Data (.q(vbInfoHiD2), .clk(clk), .rst_n(rst_n), .e(pipeHb1En && (cnt=='d1)), .d(vbInfoHiD1));
+  edff #(.T(PEVAINFO_t)) regLaData  (.q(vaInfoLoD1), .clk(clk), .rst_n(rst_n), .e(pipeLaEn  && !gstall), .d(vaInfoLo));
+  edff #(.T(PEVAINFO_t)) regHa0Data (.q(vaInfoHiD1), .clk(clk), .rst_n(rst_n), .e(pipeHa0En && !gstall), .d(vaInfoHi));
+  edff #(.T(PEVAINFO_t)) regHa1Data (.q(vaInfoHiD2), .clk(clk), .rst_n(rst_n), .e(pipeHa1En && !gstall), .d(vaInfoHiD1));
+  edff #(.T(PEVBINFO_t)) regLbData  (.q(vbInfoLoD1), .clk(clk), .rst_n(rst_n), .e(pipeLbEn  && (cnt=='d0) && !gstall), .d(vbInfoLo));
+  edff #(.T(PEVBINFO_t)) regHb0Data (.q(vbInfoHiD1), .clk(clk), .rst_n(rst_n), .e(pipeHb0En && (cnt=='d0) && !gstall), .d(vbInfoHi));
+  edff #(.T(PEVBINFO_t)) regHb1Data (.q(vbInfoHiD2), .clk(clk), .rst_n(rst_n), .e(pipeHb1En && (cnt=='d1) && !gstall), .d(vbInfoHiD1));
 
   // Block Command
   assign blkCmdVld[0] = canStart   && blkCmdRdy[0];
@@ -352,6 +353,78 @@ module zvt_pe_array#(
   logic    [`NUM_BLK-1:0] fpexpBlkVld;
   RVFEXP_t [`NUM_BLK-1:0] fpexpBlk;
   logic    [`NUM_BLK-1:0] blkBusy;
+
+// Per-block retire: one in-order completion pulse per instruction per block; a block
+// that does not take part in an instruction completes it at the head of its queue.
+  typedef struct packed {
+    logic                       act;
+    logic [$clog2(`NUM_MT)-1:0] mtIdx;
+  `ifdef TB_SUPPORT
+    logic [PC_WIDTH-1:0]        pc;
+  `endif
+  } RTACT_t;
+
+  logic   [`NUM_BLK-1:0]       blkRtVldRaw;
+  logic   [`NUM_BLK-1:0]       rtActEmpty;
+  logic   [`NUM_BLK-1:0]       rtActSynth;
+  RTACT_t [`NUM_BLK-1:0]       rtActHead;
+  RTACT_t                      rtActIn [`NUM_BLK-1:0];
+`ifdef RVVI_ON
+  PE_RTINFO_t [`NUM_BLK-1:0]   blkRtInfoRaw;
+`endif
+  logic                        instAccept;
+  assign instAccept = canStart && cntCr && blkCmdRdy[0];
+
+  for(genvar i=0; i<`NUM_BLK; i++) begin: rtTrack
+    always_comb begin
+      rtActIn[i].act   = (i==0) ? 1'b1 : (i==1) ? vbHiActive : (i==2) ? vaHiActive : (vaHiActive && vbHiActive);
+      rtActIn[i].mtIdx = peCmd[0].dst_index[4:1];
+    `ifdef TB_SUPPORT
+      rtActIn[i].pc    = peCmd[0].uop_pc;
+    `endif
+    end
+
+    multi_fifo #(
+      .T            (RTACT_t),
+      .M            (1),
+      .N            (1),
+      .DEPTH        (8),
+      .ASYNC_RSTN   (1'b1)
+    ) rtActQ (
+      .clk          (clk),
+      .rst_n        (rst_n),
+      .push         (instAccept),
+      .datain       (rtActIn[i]),
+      .pushRdy      (),
+      .pop          (peRtVld[i]),
+      .dataout      (rtActHead[i]),
+      .full         (),
+      .almost_full  (),
+      .empty        (),
+      .almost_empty (rtActEmpty[i]),
+      .fifo_data    (),
+      .wptr         (),
+      .rptr         (),
+      .entry_count  (),
+      .clear        (flush)
+    );
+
+    assign rtActSynth[i] = !rtActEmpty[i] && !rtActHead[i].act;
+    assign peRtVld[i]    = rtActSynth[i] | blkRtVldRaw[i];
+  `ifdef RVVI_ON
+    always_comb begin
+      peRtInfo[i] = blkRtInfoRaw[i];
+      if(rtActSynth[i]) begin
+      `ifdef TB_SUPPORT
+        peRtInfo[i].uop_pc = rtActHead[i].pc;
+      `endif
+        peRtInfo[i].mtIdx  = rtActHead[i].mtIdx;
+        peRtInfo[i].status = 'b0;
+      end
+    end
+  `endif
+  end
+
 
   for(genvar i=0; i<`NUM_BLK; i++) begin: peBlkID
     zvt_pe_block #(
@@ -380,9 +453,10 @@ module zvt_pe_array#(
       .fpexpVld         (fpexpBlkVld[i]),
       .fpexp            (fpexpBlk[i]),
       .fpexpRdy         (fpexpRdy),
-      .blkRtVld         (peRtVld[i]),
+      .stall            (gstall),
+      .blkRtVld         (blkRtVldRaw[i]),
     `ifdef RVVI_ON
-      .blkRtInfo        (peRtInfo[i]),
+      .blkRtInfo        (blkRtInfoRaw[i]),
     `endif
       .flush            (flush),
       .busy             (blkBusy[i])
@@ -390,6 +464,8 @@ module zvt_pe_array#(
   end
 
 // floating-point exceptions.
+  assign gstall = fpexpVld && !fpexpRdy;
+
   always_comb begin
     fpexpVld = |fpexpBlkVld;
     fpexp    = 'b0;

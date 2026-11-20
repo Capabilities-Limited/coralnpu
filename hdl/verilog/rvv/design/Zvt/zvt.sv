@@ -143,7 +143,7 @@ module zvt#(
     .vmelsuresRdy     (vmelsuresRdy),
     .peCmdVld         (peCmdVld),
     .peCmdRdy         (peCmdRdy),
-    .peBusy           (peBusy || (|blkRtVld)),
+    .peBusy           (peBusy || (|peRtVld) || (|blkRtVld)),
     .peReadMtIdx      (peReadMtIdx),
     .peReadSubIdx     (peReadSubIdx),
   `ifdef TB_SUPPORT
@@ -260,10 +260,7 @@ module zvt#(
 
 // Retire Cmd
   logic         vmeRtCmdVld;
-  logic         vmeRtCmdVldD1;
   VME_RTCMD_t   vmeRtCmd;
-  VME_RTCMD_t   vmeRtCmdD1;
-  logic         vmeRtCmdPop;
   logic         rtCmdAempty;
 
   // cmd queue
@@ -279,7 +276,7 @@ module zvt#(
     .push         (rtCmdVld),
     .datain       (rtCmd),
     .pushRdy      (rtCmdRdy),
-    .pop          (vmeRtCmdPop),   
+    .pop          (vmeRtVld&vmeRtRdy),   
     .dataout      (vmeRtCmd),
     .full         (),
     .almost_full  (),
@@ -294,24 +291,14 @@ module zvt#(
 
   assign vmeRtCmdVld = ~rtCmdAempty;
 
-  always_comb begin
-    if(vmeRtCmdVld) 
-      vmeRtCmdPop = vmeRtCmd.isPe ? blkRtVld[3] : miscRtVldD1;
-    else 
-      vmeRtCmdPop = 'b0;
-  end
-  
-  // delay 1 cycle for retiring.
-  dff                     regVmeRtCmdVldD1 (.q(vmeRtCmdVldD1), .d(vmeRtCmdPop), .clk(clk), .rst_n(rst_n));
-  edff #(.T(VME_RTCMD_t)) regVmeRtCmdD1    (.q(vmeRtCmdD1), .d(vmeRtCmd), .e(vmeRtCmdPop), .clk(clk), .rst_n(rst_n));
-
   // register rt valid
   dff regMiscRtVld (.q(miscRtVldD1), .clk(clk), .rst_n(rst_n), .d(miscRtVld));
+  logic [$bits(rtCmd.eew_mt)-1:0] miscRtEewD1;
+  dff #(.WIDTH($bits(rtCmd.eew_mt))) regMiscRtEew (.q(miscRtEewD1), .clk(clk), .rst_n(rst_n), .d(rtCmd.eew_mt));
   dff regBlk0RtVld (.q(blkRtVld[0]), .clk(clk), .rst_n(rst_n), .d(peRtVld[0]));
-  dff regBlk1RtVld (.q(blkRtVld[1]), .clk(clk), .rst_n(rst_n), .d(blkRtVld[0]));
-  dff regBlk3RtVld (.q(blkRtVld[3]), .clk(clk), .rst_n(rst_n), .d(blkRtVld[1]));
-
-  assign blkRtVld[2] = blkRtVld[1];
+  dff regBlk1RtVld (.q(blkRtVld[1]), .clk(clk), .rst_n(rst_n), .d(peRtVld[1]));
+  dff regBlk2RtVld (.q(blkRtVld[2]), .clk(clk), .rst_n(rst_n), .d(peRtVld[2]));
+  dff regBlk3RtVld (.q(blkRtVld[3]), .clk(clk), .rst_n(rst_n), .d(peRtVld[3]));
 
 `ifdef RVVI_ON
   // Block pc
@@ -350,10 +337,9 @@ module zvt#(
 
   dff #(.WIDTH($clog2(`NUM_MT))) regMiscRtMtIdx (.q(miscRtMtIdxD1 ), .clk(clk), .rst_n(rst_n), .d(miscRtInfo.mtIdx));
   dff #(.WIDTH($clog2(`NUM_MT))) regBlk0RtMtIdx (.q(blk0RtMtIdx   ), .clk(clk), .rst_n(rst_n), .d(peRtInfo[0].mtIdx));
-  dff #(.WIDTH($clog2(`NUM_MT))) regBlk1RtMtIdx (.q(blk1RtMtIdx   ), .clk(clk), .rst_n(rst_n), .d(blk0RtMtIdx));
-  dff #(.WIDTH($clog2(`NUM_MT))) regBlk3RtMtIdx (.q(blk3RtMtIdx   ), .clk(clk), .rst_n(rst_n), .d(blk1RtMtIdx));
-
-  assign blk2RtMtIdx = blk1RtMtIdx;
+  dff #(.WIDTH($clog2(`NUM_MT))) regBlk1RtMtIdx (.q(blk1RtMtIdx   ), .clk(clk), .rst_n(rst_n), .d(peRtInfo[1].mtIdx));
+  dff #(.WIDTH($clog2(`NUM_MT))) regBlk2RtMtIdx (.q(blk2RtMtIdx   ), .clk(clk), .rst_n(rst_n), .d(peRtInfo[2].mtIdx));
+  dff #(.WIDTH($clog2(`NUM_MT))) regBlk3RtMtIdx (.q(blk3RtMtIdx   ), .clk(clk), .rst_n(rst_n), .d(peRtInfo[3].mtIdx));
 
   // MT accessing
   logic [`NUM_BLK-1:0][3:0][$clog2(`NUM_MT)-1:0]                                      rvviMtIdx;
@@ -372,7 +358,7 @@ module zvt#(
     rvviSubIdx = 'x;
 
     if(miscRtVldD1) begin
-      case(vmeRtCmd.eew_mt)
+      case(miscRtEewD1)
         EEW8: begin
           rvviMtIdx[BLKID0][0] = miscRtMtIdxD1; 
           rvviMtIdx[BLKID1][0] = miscRtMtIdxD1; 
@@ -486,26 +472,36 @@ module zvt#(
         end
       end
 
-      if(blkRtVld[1] || blkRtVld[2]) begin
+      if(blkRtVld[1]) begin
         // default: EEW32
         rvviMtIdx[BLKID1][0] = blk1RtMtIdx; 
         rvviMtIdx[BLKID1][1] = blk1RtMtIdx + 'd1; 
         rvviMtIdx[BLKID1][2] = blk1RtMtIdx + 'd2; 
         rvviMtIdx[BLKID1][3] = blk1RtMtIdx + 'd3; 
-        rvviMtIdx[BLKID2][0] = blk1RtMtIdx; 
-        rvviMtIdx[BLKID2][1] = blk1RtMtIdx + 'd1; 
-        rvviMtIdx[BLKID2][2] = blk1RtMtIdx + 'd2; 
-        rvviMtIdx[BLKID2][3] = blk1RtMtIdx + 'd3; 
 
         for(int i=0;i<`TE(VLEN)/4;i++) begin
           for(int j=0;j<`TE(VLEN)/8;j++) begin
             rvviSubVld[BLKID1][0][i*`TE(VLEN)/8+j] = 1'b1;
             rvviSubVld[BLKID1][1][i*`TE(VLEN)/8+j] = 1'b1;
-            rvviSubVld[BLKID2][2][i*`TE(VLEN)/8+j] = 1'b1;
-            rvviSubVld[BLKID2][3][i*`TE(VLEN)/8+j] = 1'b1;
 
             rvviSubIdx[BLKID1][0][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + `TE(VLEN)/8 + j;
             rvviSubIdx[BLKID1][1][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + `TE(VLEN)/8 + j;
+          end
+        end
+      end
+
+      if(blkRtVld[2]) begin
+        // default: EEW32
+        rvviMtIdx[BLKID2][0] = blk2RtMtIdx; 
+        rvviMtIdx[BLKID2][1] = blk2RtMtIdx + 'd1; 
+        rvviMtIdx[BLKID2][2] = blk2RtMtIdx + 'd2; 
+        rvviMtIdx[BLKID2][3] = blk2RtMtIdx + 'd3; 
+
+        for(int i=0;i<`TE(VLEN)/4;i++) begin
+          for(int j=0;j<`TE(VLEN)/8;j++) begin
+            rvviSubVld[BLKID2][2][i*`TE(VLEN)/8+j] = 1'b1;
+            rvviSubVld[BLKID2][3][i*`TE(VLEN)/8+j] = 1'b1;
+
             rvviSubIdx[BLKID2][2][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + j;
             rvviSubIdx[BLKID2][3][i*`TE(VLEN)/8+j] = i*`TE(VLEN)/4 + j;
           end
@@ -606,41 +602,41 @@ module zvt#(
   end
 
   // all info is ready
-  assign vmeRtVld = vmeRtCmdVldD1 && (&mtRtInfoVld);
+  assign vmeRtVld = vmeRtCmdVld && (&mtRtInfoVld);
 
 `ifdef TB_SUPPORT
-  assign vmeRt.inst_pc = vmeRtCmdD1.inst_pc;
+  assign vmeRt.inst_pc = vmeRtCmd.inst_pc;
 `endif
-  assign vmeRt.rob_tag = vmeRtCmdD1.rob_tag;
-  assign vmeRt.isStore = vmeRtCmdD1.isStore;
+  assign vmeRt.rob_tag = vmeRtCmd.rob_tag;
+  assign vmeRt.isStore = vmeRtCmd.isStore;
   // mt_index
   always_comb begin
-    case(vmeRtCmdD1.eew_mt)
+    case(vmeRtCmd.eew_mt)
       EEW8: begin   
-        vmeRt.mtIdxVld = vmeRtCmdD1.isStore ? 'b0 : 4'b0001;
+        vmeRt.mtIdxVld = vmeRtCmd.isStore ? 'b0 : 4'b0001;
       end
       EEW16: begin  
-        if(vmeRtCmdD1.isStore)
+        if(vmeRtCmd.isStore)
           vmeRt.mtIdxVld = 'b0;
-        else if(vmeRtCmdD1.isMv2Vme && !vmeRtCmdD1.tssPattern)
-          vmeRt.mtIdxVld = vmeRtCmdD1.tssIndex[1] ? 4'b0010 : 4'b0001;
+        else if(vmeRtCmd.isMv2Vme && !vmeRtCmd.tssPattern)
+          vmeRt.mtIdxVld = vmeRtCmd.tssIndex[1] ? 4'b0010 : 4'b0001;
         else 
           vmeRt.mtIdxVld = 4'b0011;
       end
       default: begin
-        if(vmeRtCmdD1.isStore)
+        if(vmeRtCmd.isStore)
           vmeRt.mtIdxVld = 'b0;
-        else if(vmeRtCmdD1.isMv2Vme && !vmeRtCmdD1.tssPattern)
-          vmeRt.mtIdxVld = vmeRtCmdD1.tssIndex[$clog2(`TE(VLEN)/2)] ? 4'b1100 : 4'b0011;
-        else if(vmeRtCmdD1.isMv2Vme && vmeRtCmdD1.tssPattern)
-          vmeRt.mtIdxVld = vmeRtCmdD1.tssIndex[1] ? 4'b1010 : 4'b0101;
+        else if(vmeRtCmd.isMv2Vme && !vmeRtCmd.tssPattern)
+          vmeRt.mtIdxVld = vmeRtCmd.tssIndex[$clog2(`TE(VLEN)/2)] ? 4'b1100 : 4'b0011;
+        else if(vmeRtCmd.isMv2Vme && vmeRtCmd.tssPattern)
+          vmeRt.mtIdxVld = vmeRtCmd.tssIndex[1] ? 4'b1010 : 4'b0101;
         else
           vmeRt.mtIdxVld = 4'b1111;
       end
     endcase
   end
 
-  assign vmeRt.mtIdx = vmeRtCmdD1.mtIdx;
+  assign vmeRt.mtIdx = vmeRtCmd.mtIdx;
 
 `ifdef RVVI_ON
   // status
