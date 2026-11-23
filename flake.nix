@@ -58,8 +58,8 @@
       };
     in {
       devShells.${system} = rec {
-        default = fhs;
-        fhs = fhsEnv.env;
+        default = hdl;
+        bazel = fhsEnv.env;
         hdl = pkgs.mkShell {
           packages = with pkgs; [ 
             yosys
