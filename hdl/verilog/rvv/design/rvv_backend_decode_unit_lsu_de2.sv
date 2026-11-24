@@ -7,7 +7,17 @@
 
 // TODO: tail uops
 
-module rvv_backend_decode_unit_lsu_de2
+module rvv_backend_decode_unit_lsu_de2#(
+  parameter int unsigned VLEN = `VLEN,
+  localparam type RVVLMUL = RVVLMUL_e,
+  localparam type RVVConfigState = `CONFIG_STATE_t(VLEN),
+  // Scalar Register Data
+  parameter type RegDataT=logic [31:0],
+  localparam int unsigned XLEN = $bits(RegDataT),
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type LCMD_t = `LCMD_t(VLEN, XLEN, PC_WIDTH),
+  localparam type UOP_QUEUE_t = `UOP_QUEUE_t(VLEN, XLEN, PC_WIDTH)
+)
 (
   lcmd_valid,
   lcmd,
@@ -35,11 +45,11 @@ module rvv_backend_decode_unit_lsu_de2
   logic   [`UMOP_WIDTH-1:0]                         inst_umop;        // inst original encoding[24:20]
   logic   [`FUNCT3_WIDTH-1:0]                       inst_funct3;      // inst original encoding[14:12]
   logic   [`REGIDX_WIDTH-1:0]                       inst_vd;          // inst original encoding[11:7]
-  RVVOpCode                                         inst_opcode;      // inst original encoding[6:0]
+  OPCODE_t                                          inst_opcode;      // inst original encoding[6:0]
   logic                                             lsu_is_store;
   RVVConfigState                                    vector_csr_lsu;
-  logic   [`VSTART_WIDTH-1:0]                       csr_vstart;
-  logic   [`XLEN-1:0]                               rs1;
+  logic   [`VSTART_WIDTH(VLEN)-1:0]                 csr_vstart;
+  logic   [XLEN-1:0]                                rs1;
   logic   [`UOP_INDEX_WIDTH-1:0]                    uop_index_max;         
   RVVLMUL                                           reduced_lmul;  
   EMUL_e                                            emul_vd;          
@@ -250,37 +260,37 @@ module rvv_backend_decode_unit_lsu_de2
         case({eew_vd,eew_vs2})
           // index load with eew_vd<eew_vs2
           {EEW8 ,EEW16}: begin
-            vector_csr[i].vstart  = (`VSTART_WIDTH)'({uop_index[i][`UOP_INDEX_WIDTH-1:1],($clog2(`VLENB)'('b0))}) < csr_vstart ? 
+            vector_csr[i].vstart  = (`VSTART_WIDTH(VLEN))'({uop_index[i][`UOP_INDEX_WIDTH-1:1],($clog2(`VLENB(VLEN))'('b0))}) < csr_vstart ? 
                                       csr_vstart : 
-                                      (`VSTART_WIDTH)'({uop_index[i][`UOP_INDEX_WIDTH-1:1],($clog2(`VLENB)'('b0))});
+                                      (`VSTART_WIDTH(VLEN))'({uop_index[i][`UOP_INDEX_WIDTH-1:1],($clog2(`VLENB(VLEN))'('b0))});
           end
           {EEW16,EEW32}: begin
-            vector_csr[i].vstart  = (`VSTART_WIDTH)'({uop_index[i][`UOP_INDEX_WIDTH-1:1],($clog2(`VLEN/`HWORD_WIDTH)'('b0))}) < csr_vstart ? 
+            vector_csr[i].vstart  = (`VSTART_WIDTH(VLEN))'({uop_index[i][`UOP_INDEX_WIDTH-1:1],($clog2(VLEN/`HWORD_WIDTH)'('b0))}) < csr_vstart ? 
                                       csr_vstart : 
-                                      (`VSTART_WIDTH)'({uop_index[i][`UOP_INDEX_WIDTH-1:1],($clog2(`VLEN/`HWORD_WIDTH)'('b0))});
+                                      (`VSTART_WIDTH(VLEN))'({uop_index[i][`UOP_INDEX_WIDTH-1:1],($clog2(VLEN/`HWORD_WIDTH)'('b0))});
           end
           {EEW8 ,EEW32}: begin
-            vector_csr[i].vstart  = (`VSTART_WIDTH)'({uop_index[i][`UOP_INDEX_WIDTH-1:2],($clog2(`VLENB)'('b0))}) < csr_vstart ? 
+            vector_csr[i].vstart  = (`VSTART_WIDTH(VLEN))'({uop_index[i][`UOP_INDEX_WIDTH-1:2],($clog2(`VLENB(VLEN))'('b0))}) < csr_vstart ? 
                                       csr_vstart : 
-                                      (`VSTART_WIDTH)'({uop_index[i][`UOP_INDEX_WIDTH-1:2],($clog2(`VLENB)'('b0))});
+                                      (`VSTART_WIDTH(VLEN))'({uop_index[i][`UOP_INDEX_WIDTH-1:2],($clog2(`VLENB(VLEN))'('b0))});
           end
           // other situations
           default: begin
             case(eew_max)
               EEW8: begin
-                vector_csr[i].vstart  = (`VSTART_WIDTH)'({uop_index[i][`UOP_INDEX_WIDTH-1:0],($clog2(`VLENB)'('b0))}) < csr_vstart ? 
+                vector_csr[i].vstart  = (`VSTART_WIDTH(VLEN))'({uop_index[i][`UOP_INDEX_WIDTH-1:0],($clog2(`VLENB(VLEN))'('b0))}) < csr_vstart ? 
                                           csr_vstart : 
-                                          (`VSTART_WIDTH)'({uop_index[i][`UOP_INDEX_WIDTH-1:0],($clog2(`VLENB)'('b0))});
+                                          (`VSTART_WIDTH(VLEN))'({uop_index[i][`UOP_INDEX_WIDTH-1:0],($clog2(`VLENB(VLEN))'('b0))});
               end
               EEW16: begin
-                vector_csr[i].vstart  = (`VSTART_WIDTH)'({uop_index[i][`UOP_INDEX_WIDTH-1:0],($clog2(`VLEN/`HWORD_WIDTH)'('b0))}) < csr_vstart ? 
+                vector_csr[i].vstart  = (`VSTART_WIDTH(VLEN))'({uop_index[i][`UOP_INDEX_WIDTH-1:0],($clog2(VLEN/`HWORD_WIDTH)'('b0))}) < csr_vstart ? 
                                           csr_vstart : 
-                                          (`VSTART_WIDTH)'({uop_index[i][`UOP_INDEX_WIDTH-1:0],($clog2(`VLEN/`HWORD_WIDTH)'('b0))});
+                                          (`VSTART_WIDTH(VLEN))'({uop_index[i][`UOP_INDEX_WIDTH-1:0],($clog2(VLEN/`HWORD_WIDTH)'('b0))});
               end
               EEW32: begin
-                vector_csr[i].vstart  = (`VSTART_WIDTH)'({uop_index[i][`UOP_INDEX_WIDTH-1:0],($clog2(`VLEN/`WORD_WIDTH)'('b0))}) < csr_vstart ? 
+                vector_csr[i].vstart  = (`VSTART_WIDTH(VLEN))'({uop_index[i][`UOP_INDEX_WIDTH-1:0],($clog2(VLEN/`WORD_WIDTH)'('b0))}) < csr_vstart ? 
                                           csr_vstart : 
-                                          (`VSTART_WIDTH)'({uop_index[i][`UOP_INDEX_WIDTH-1:0],($clog2(`VLEN/`WORD_WIDTH)'('b0))});
+                                          (`VSTART_WIDTH(VLEN))'({uop_index[i][`UOP_INDEX_WIDTH-1:0],($clog2(VLEN/`WORD_WIDTH)'('b0))});
               end
             endcase
           end

@@ -16,7 +16,14 @@
 `include "rvv_backend_sva.svh"
 `endif
 
-module rvv_backend_mulmac (
+module rvv_backend_mulmac#(
+  parameter int unsigned VLEN = `VLEN,
+  parameter type RegDataT=logic [31:0],
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type MUL_RS_t = `MUL_RS_t(VLEN, PC_WIDTH),
+  localparam type PU2ROB_t = `PU2ROB_t(VLEN, PC_WIDTH)
+)
+(
   clk,
   rst_n,
   trap_flush_rvv,
@@ -100,6 +107,9 @@ assign mac_pipe_data_en = mac_valid;                                      // ena
 generate
   for(i=0;i<`NUM_MUL;i++) begin: INST_MAC
     rvv_backend_mac_unit #(
+      .VLEN(VLEN),
+      .RegDataT(RegDataT),
+      .PC_WIDTH(PC_WIDTH)
     ) u_mac (
       // Outputs
       .mac2rob_uop_valid  (res_valid_ex2rob[i]),

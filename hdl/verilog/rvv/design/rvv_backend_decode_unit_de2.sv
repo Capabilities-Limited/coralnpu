@@ -6,7 +6,15 @@
 `include "rvv_backend_sva.svh"
 `endif
 
-module rvv_backend_decode_unit_de2
+module rvv_backend_decode_unit_de2#(
+  parameter int unsigned VLEN = `VLEN,
+  // Scalar Register Data
+  parameter type RegDataT=logic [31:0],
+  localparam int unsigned XLEN = $bits(RegDataT),
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type LCMD_t = `LCMD_t(VLEN, XLEN, PC_WIDTH),
+  localparam type UOP_QUEUE_t = `UOP_QUEUE_t(VLEN, XLEN, PC_WIDTH)
+)
 (
   lcmd_valid,
   lcmd,
@@ -46,8 +54,11 @@ module rvv_backend_decode_unit_de2
   assign valid_ari  = lcmd_valid & (lcmd.cmd.opcode==RVV);
   
   // decode LSU instruction 
-  rvv_backend_decode_unit_lsu_de2 u_lsu_decode_de2
-  (
+  rvv_backend_decode_unit_lsu_de2#(
+    .VLEN(VLEN),
+    .RegDataT(RegDataT),
+    .PC_WIDTH(PC_WIDTH)
+  ) u_lsu_decode_de2 (
     .lcmd_valid         (valid_lsu),
     .lcmd               (lcmd),
     .uop_index_remain   (uop_index_remain),
@@ -56,8 +67,11 @@ module rvv_backend_decode_unit_de2
   );
 
   // decode arithmetic instruction
-  rvv_backend_decode_unit_ari_de2 u_ari_decode_de2
-  (
+  rvv_backend_decode_unit_ari_de2#(
+    .VLEN(VLEN),
+    .RegDataT(RegDataT),
+    .PC_WIDTH(PC_WIDTH)
+  ) u_ari_decode_de2 (
     .lcmd_valid         (valid_ari),
     .lcmd               (lcmd),
     .uop_index_remain   (uop_index_remain),

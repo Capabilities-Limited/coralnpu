@@ -25,7 +25,7 @@ class rvs_driver extends uvm_driver # (rvs_transaction);
   
   int             inst_tx_queue_depth = 4;
   rvs_transaction inst_tx_queue[$];
-  RVVCmd          inst     [`ISSUE_LANE-1:0];
+  `CMD_t(`VLEN, `XLEN, `PC_WIDTH) inst     [`ISSUE_LANE-1:0];
   logic           inst_vld [`ISSUE_LANE-1:0];
   bit             stall_tx;
 
@@ -188,6 +188,8 @@ task rvs_driver::inst_manage();
       inst[i].arch_state.ta         = inst_tx_queue[i].vta;
       assert($cast(inst[i].arch_state.sew,  inst_tx_queue[i].vsew));
       assert($cast(inst[i].arch_state.lmul, inst_tx_queue[i].vlmul));
+      // The LSU/ARI decode units read lmul_orig (the architectural vtype LMUL).
+      assert($cast(inst[i].arch_state.lmul_orig, inst_tx_queue[i].vlmul));
       inst_vld[i] = 1'b1;
     end else begin
       inst[i] = inst[i];
@@ -309,7 +311,7 @@ task rvs_driver::vrf_driver();
           `uvm_info(get_type_name(),$sformatf("Got rvv status %s",rvv_state.name()),UVM_HIGH)
           `uvm_info(get_type_name(), "Start to randomize vrf", UVM_HIGH)
           for(int reg_idx=0; reg_idx<32; reg_idx++) begin
-            for(int j=0; j<`VLENB; j++) begin
+            for(int j=0; j<`VLENB(VLEN); j++) begin
               value[j*8+:8] = $urandom_range(0, 8'hFF);
             end
             test_top.set_mdl_vrf(reg_idx, value);

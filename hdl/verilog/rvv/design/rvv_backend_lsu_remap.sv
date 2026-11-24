@@ -5,7 +5,13 @@
 `include "rvv_backend_sva.svh"
 `endif
 
-module rvv_backend_lsu_remap
+module rvv_backend_lsu_remap#(
+  parameter int unsigned VLEN = `VLEN,
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type PU2ROB_t = `PU2ROB_t(VLEN, PC_WIDTH),
+  localparam type LSU_MAP_INFO_t = `LSU_MAP_INFO_t(PC_WIDTH),
+  localparam type UOP_LSU_t = `UOP_LSU_t(VLEN, PC_WIDTH)
+)
 (
   mapinfo_valid,
   mapinfo,
@@ -34,10 +40,10 @@ module rvv_backend_lsu_remap
   output  logic           [`NUM_LSU-1:0]  pop_lsu_res;
 
   // submit LSU result to ROB
-  output  logic           [`NUM_LSU-1:0]                    result_valid;
-  output  PU2ROB_t        [`NUM_LSU-1:0]                    result;
-  output  logic           [`NUM_LSU-1:0][$clog2(`VLENB):0]  ff_tail_index;  
-  input   logic           [`NUM_LSU-1:0]                    result_ready;
+  output  logic           [`NUM_LSU-1:0]                          result_valid;
+  output  PU2ROB_t        [`NUM_LSU-1:0]                          result;
+  output  logic           [`NUM_LSU-1:0][$clog2(`VLENB(VLEN)):0]  ff_tail_index;  
+  input   logic           [`NUM_LSU-1:0]                          result_ready;
 
   // submit trap to ROB
   output  logic                           trap_valid_rmp2rob;

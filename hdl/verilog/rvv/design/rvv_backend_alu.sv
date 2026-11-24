@@ -3,7 +3,7 @@
 //
 // feature list:
 // 1. The number of ALU units (`NUM_ALU) is configurable.
-// 2. The size of vector length (`VLEN) is configurable.
+// 2. The size of vector length (VLEN) is configurable.
 
 `ifndef HDL_VERILOG_RVV_DESIGN_RVV_SVH
 `include "rvv_backend.svh"
@@ -12,7 +12,14 @@
 `include "rvv_backend_sva.svh"
 `endif
 
-module rvv_backend_alu
+module rvv_backend_alu#(
+  parameter int unsigned VLEN = `VLEN,
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  parameter type RegDataT=logic [31:0],
+  localparam int unsigned XLEN = $bits(RegDataT),
+  localparam type ALU_RS_t = `ALU_RS_t(VLEN, PC_WIDTH),
+  localparam type PU2ROB_t = `PU2ROB_t(VLEN, PC_WIDTH)
+)
 (
   clk,
   rst_n,
@@ -93,6 +100,9 @@ module rvv_backend_alu
   end
   
   rvv_backend_alu_unit #(
+    .VLEN(VLEN),
+    .RegDataT(RegDataT),
+    .PC_WIDTH(PC_WIDTH),
     .CMP_SUPPORT    (1'b1)
   ) u_alu_cmp_unit (
     // inputs
@@ -112,8 +122,11 @@ module rvv_backend_alu
   // instantiate
   generate
     for (i=1;i<`NUM_ALU;i=i+1) begin: ALU_UNIT
-      rvv_backend_alu_unit u_alu_unit
-        (
+      rvv_backend_alu_unit#(
+            .VLEN(VLEN),
+            .RegDataT(RegDataT),
+            .PC_WIDTH(PC_WIDTH)
+      ) u_alu_unit (
           // inputs
           .clk            (clk),
           .rst_n          (rst_n),

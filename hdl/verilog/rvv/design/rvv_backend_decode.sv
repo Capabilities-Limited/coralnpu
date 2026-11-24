@@ -6,7 +6,16 @@
 `include "rvv_backend_sva.svh"
 `endif
 
-module rvv_backend_decode
+module rvv_backend_decode#(
+  parameter int unsigned VLEN = `VLEN,
+  // Scalar Register Data
+  parameter type RegDataT=logic [31:0],
+  localparam int unsigned XLEN = $bits(RegDataT),
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type RVVCmd = `CMD_t(VLEN, XLEN, PC_WIDTH),
+  localparam type LCMD_t = `LCMD_t(VLEN, XLEN, PC_WIDTH),
+  localparam type ROB2RT_t = `ROB2RT_t(VLEN, PC_WIDTH)
+)
 (
   inst_valid,
   inst,
@@ -34,8 +43,11 @@ module rvv_backend_decode
   // decode unit
   generate 
     for(genvar i=0;i<`NUM_DE_INST;i=i+1) begin: DECODE_UNIT
-      rvv_backend_decode_unit u_decode_unit
-      (
+      rvv_backend_decode_unit#(
+        .VLEN(VLEN),
+        .RegDataT(RegDataT),
+        .PC_WIDTH(PC_WIDTH)
+      ) u_decode_unit (
         .inst_valid   (inst_valid[i]),
         .inst         (inst[i]),
         .lcmd_valid   (lcmd_valid[i]),
@@ -63,7 +75,7 @@ module rvv_backend_decode
       de2rt_data[i].w_index           = 'b0;
       de2rt_data[i].w_data            = 'b0; 
       de2rt_data[i].w_type            = VRF; 
-      de2rt_data[i].vd_type           = {`VLENB{NOT_CHANGE}};
+      de2rt_data[i].vd_type           = {`VLENB(VLEN){NOT_CHANGE}};
       de2rt_data[i].trap_flag         = 'b0;
       de2rt_data[i].vector_csr        = inst[i].arch_state;
       de2rt_data[i].vxsaturate        = 'b0;

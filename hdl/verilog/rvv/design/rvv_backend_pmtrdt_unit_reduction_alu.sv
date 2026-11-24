@@ -10,17 +10,20 @@
 `include "rvv_backend_pmtrdt.svh"
 `endif
 
-module rvv_backend_pmtrdt_unit_reduction_alu
+module rvv_backend_pmtrdt_unit_reduction_alu#(
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type RDT_ALU_t = `RDT_ALU_t(PC_WIDTH),
+
+// ---parameter definition--------------------------------------------
+  parameter  ALU_WIDTH = 32,
+  localparam int ALU_BYTE = int'(ALU_WIDTH/8)
+)
 (
   src1,
   src2,
   ctrl,
   dst
 );
-
-// ---parameter definition--------------------------------------------
-  parameter  ALU_WIDTH = 32;
-  localparam int ALU_BYTE = int'(ALU_WIDTH/8);
 
 // ---port definition-------------------------------------------------
   input [ALU_BYTE-1:0][7:0] src1, src2;

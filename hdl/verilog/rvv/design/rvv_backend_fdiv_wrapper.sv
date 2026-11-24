@@ -5,7 +5,16 @@
 `include "rvv_backend_sva.svh"
 `endif
 
-module rvv_backend_fdiv_wrapper(
+module rvv_backend_fdiv_wrapper#(
+  parameter int unsigned VLEN = `VLEN,
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  localparam type DIV_RS_t = `DIV_RS_t(VLEN, PC_WIDTH),
+  localparam type PU2ROB_t = `PU2ROB_t(VLEN, PC_WIDTH)
+`ifdef ZVE32F_ON
+  ,localparam type FDIV_RES_t = `FDIV_RES_t(PC_WIDTH)
+`endif
+)
+(
   clk,
   rst_n,
   fdiv_uop_valid,
@@ -36,19 +45,19 @@ module rvv_backend_fdiv_wrapper(
 //
 // internal signals
 //
-  fpnew_pkg::operation_e              op_type;
-  logic [`VLEN-1:0]                   src2;
-  logic [`VLEN-1:0]                   src1;
-  logic                               fdiv_busy_e;
-  logic                               fdiv_busy;
-  FDIV_RES_t                          uop_info;
-  FDIV_RES_t                          uop_info_d1;
-  fpnew_pkg::roundmode_e              frm;
-  logic [`VLENW-1:0]                  fdiv_ready32;
-  logic [`VLEN-1:0]                   sub_result;
-  logic [`VLENW-1:0]                  sub_result_vld;
-  fpnew_pkg::status_t  [`VLENW-1:0]   sub_fpexp;
-  genvar                              i;
+  fpnew_pkg::operation_e                    op_type;
+  logic [VLEN-1:0]                          src2;
+  logic [VLEN-1:0]                          src1;
+  logic                                     fdiv_busy_e;
+  logic                                     fdiv_busy;
+  FDIV_RES_t                                uop_info;
+  FDIV_RES_t                                uop_info_d1;
+  fpnew_pkg::roundmode_e                    frm;
+  logic [`VLENW(VLEN)-1:0]                  fdiv_ready32;
+  logic [VLEN-1:0]                          sub_result;
+  logic [`VLENW(VLEN)-1:0]                  sub_result_vld;
+  fpnew_pkg::status_t  [`VLENW(VLEN)-1:0]   sub_fpexp;
+  genvar                                    i;
   
   // prepare source data
   always_comb begin
@@ -64,11 +73,11 @@ module rvv_backend_fdiv_wrapper(
         if(fdiv_uop.uop_funct3==OPFVV) 
           src1  = fdiv_uop.vs1_data;
         else 
-          src1  = {`VLENW{fdiv_uop.vs1_data[`WORD_WIDTH-1:0]}};
+          src1  = {`VLENW(VLEN){fdiv_uop.vs1_data[`WORD_WIDTH-1:0]}};
       end
       VFRDIV: begin
         op_type = fpnew_pkg::DIV;
-        src2    = {`VLENW{fdiv_uop.vs1_data[`WORD_WIDTH-1:0]}};
+        src2    = {`VLENW(VLEN){fdiv_uop.vs1_data[`WORD_WIDTH-1:0]}};
         src1    = fdiv_uop.vs2_data;
       end
       VFUNARY1: begin
@@ -124,7 +133,7 @@ module rvv_backend_fdiv_wrapper(
   end
 
   generate
-    for(i=0;i<`VLENW;i++) begin:fdiv
+    for(i=0;i<`VLENW(VLEN);i++) begin:fdiv
       fpnew_divsqrt_th_64_multi #(
         .FpFmtConfig        (5'b10000),
         .NumPipeRegs        (1),

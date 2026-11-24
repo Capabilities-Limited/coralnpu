@@ -6,7 +6,14 @@
 `include "rvv_backend_sva.svh"
 `endif
 
-module rvv_backend_alu_unit_mask
+module rvv_backend_alu_unit_mask#(
+  parameter int unsigned VLEN = `VLEN,
+  parameter int unsigned PC_WIDTH = `PC_WIDTH,
+  parameter type RegDataT=logic [31:0],
+  localparam int unsigned XLEN = $bits(RegDataT),
+  localparam type ALU_RS_t = `ALU_RS_t(VLEN, PC_WIDTH),
+  localparam type PU2ROB_t = `PU2ROB_t(VLEN, PC_WIDTH)
+)
 (
   alu_uop_valid,
   alu_uop,
@@ -28,45 +35,45 @@ module rvv_backend_alu_unit_mask
 // internal signals
 //
   // ALU_RS_t struct signals
-  logic   [`ROB_DEPTH_WIDTH-1:0]  rob_entry;
-  FUNCT6_u                        uop_funct6;
-  logic   [`FUNCT3_WIDTH-1:0]     uop_funct3;
-  logic   [`VSTART_WIDTH-1:0]     vstart;
-  logic   [`VLEN-1:0]             vstart_elements_tmp;
-  logic   [`VLEN-1:0]             vstart_elements;
-  logic   [`VL_WIDTH-1:0]         vl;       
-  logic   [`VLEN-1:0]             v0_data;           
-  logic   [`VLEN-1:0]             vd_data;           
-  EEW_e                           vd_eew;
-  logic   [`REGIDX_WIDTH-1:0]     vs1_opcode;              
-  logic   [`VLEN-1:0]             vs1_data;           
-  logic   [`VLEN-1:0]             vs2_data;	        
+  logic   [`ROB_DEPTH_WIDTH-1:0]     rob_entry;
+  FUNCT6_u                           uop_funct6;
+  logic   [`FUNCT3_WIDTH-1:0]        uop_funct3;
+  logic   [`VSTART_WIDTH(VLEN)-1:0]  vstart;
+  logic   [VLEN-1:0]                 vstart_elements_tmp;
+  logic   [VLEN-1:0]                 vstart_elements;
+  logic   [`VL_WIDTH(VLEN)-1:0]      vl;       
+  logic   [VLEN-1:0]                 v0_data;           
+  logic   [VLEN-1:0]                 vd_data;           
+  EEW_e                              vd_eew;
+  logic   [`REGIDX_WIDTH-1:0]        vs1_opcode;              
+  logic   [VLEN-1:0]                 vs1_data;           
+  logic   [VLEN-1:0]             vs2_data;	        
   EEW_e                           vs2_eew;
-  logic   [`XLEN-1:0] 	          rs1_data;        
+  logic   [XLEN-1:0] 	          rs1_data;        
   logic   [$clog2(`EMUL_MAX)-1:0] uop_index;          
 
   // execute 
-  logic   [`VLEN-1:0]             src2_data;
-  logic   [`VLEN-1:0]             src2_data_sub1;
-  logic   [`VLEN-1:0]             src1_data;
-  logic   [`VLEN-1:0]             tail_mask;
-  logic   [`VLEN-1:0]             result_data;
-  logic   [`VLEN-1:0]             result_data_andn;
-  logic   [`VLEN-1:0]             result_data_and; 
-  logic   [`VLEN-1:0]             result_data_or;  
-  logic   [`VLEN-1:0]             result_data_xor; 
-  logic   [`VLEN-1:0]             result_data_orn; 
-  logic   [`VLEN-1:0]             result_data_nand;
-  logic   [`VLEN-1:0]             result_data_nor; 
-  logic   [`VLEN-1:0]             result_data_xnor;
-  logic   [`VLEN-1:0]             result_data_vmsof;
-  logic   [`VLEN-1:0]             result_vmsif;
-  logic   [`VLEN-1:0]             result_data_vmsif;
-  logic   [`VLEN-1:0]             result_data_vmsbf;
-  logic   [`VLEN-1:0]             result_data_vfirst;
-  logic   [`VLEN-1:0]             result_data_vid8;
-  logic   [`VLEN-1:0]             result_data_vid16;
-  logic   [`VLEN-1:0]             result_data_vid32;
+  logic   [VLEN-1:0]             src2_data;
+  logic   [VLEN-1:0]             src2_data_sub1;
+  logic   [VLEN-1:0]             src1_data;
+  logic   [VLEN-1:0]             tail_mask;
+  logic   [VLEN-1:0]             result_data;
+  logic   [VLEN-1:0]             result_data_andn;
+  logic   [VLEN-1:0]             result_data_and; 
+  logic   [VLEN-1:0]             result_data_or;  
+  logic   [VLEN-1:0]             result_data_xor; 
+  logic   [VLEN-1:0]             result_data_orn; 
+  logic   [VLEN-1:0]             result_data_nand;
+  logic   [VLEN-1:0]             result_data_nor; 
+  logic   [VLEN-1:0]             result_data_xnor;
+  logic   [VLEN-1:0]             result_data_vmsof;
+  logic   [VLEN-1:0]             result_vmsif;
+  logic   [VLEN-1:0]             result_data_vmsif;
+  logic   [VLEN-1:0]             result_data_vmsbf;
+  logic   [VLEN-1:0]             result_data_vfirst;
+  logic   [VLEN-1:0]             result_data_vid8;
+  logic   [VLEN-1:0]             result_data_vid16;
+  logic   [VLEN-1:0]             result_data_vid32;
 
   // for-loop
   genvar                              j;
@@ -87,7 +94,7 @@ module rvv_backend_alu_unit_mask
   assign  vd_eew         = alu_uop.vd_eew;
   assign  vs1_opcode     = alu_uop.vs1;
   assign  vs1_data       = alu_uop.vs1_data;
-  assign  rs1_data       = alu_uop.vs1_data[`XLEN-1:0];
+  assign  rs1_data       = alu_uop.vs1_data[XLEN-1:0];
   assign  vs2_data       = alu_uop.vs2_data;
   assign  vs2_eew        = alu_uop.vs2_eew;
   assign  uop_index      = alu_uop.uop_index;
@@ -96,9 +103,9 @@ module rvv_backend_alu_unit_mask
 // prepare source data 
 //
   // get tail mask
-  //assign tail_mask = vl[`VL_WIDTH-1] ? '1 ((`VLEN)'('b1)<<vl[`VL_WIDTH-2:0]) - 1'b1;
+  //assign tail_mask = vl[`VL_WIDTH(VLEN)-1] ? '1 ((VLEN)'('b1)<<vl[`VL_WIDTH(VLEN)-2:0]) - 1'b1;
   generate
-    for(j=0;j<`VLEN;j++) assign tail_mask[j] = j[`VL_WIDTH-1:0] < vl;
+    for(j=0;j<VLEN;j++) assign tail_mask[j] = j[`VL_WIDTH(VLEN)-1:0] < vl;
   endgenerate
 
   // prepare valid signal
@@ -179,7 +186,7 @@ module rvv_backend_alu_unit_mask
           VOR,
           VXOR: begin
             src2_data = vs2_data;
-            for(int i=0;i<`VLEN/`WORD_WIDTH;i++) begin
+            for(int i=0;i<VLEN/`WORD_WIDTH;i++) begin
               case(vs2_eew) 
                 EEW8: begin
                   src1_data[i*`WORD_WIDTH +: `WORD_WIDTH] = {(`WORD_WIDTH/`BYTE_WIDTH){rs1_data[0 +: `BYTE_WIDTH]}};
@@ -250,39 +257,39 @@ module rvv_backend_alu_unit_mask
   assign src2_data_sub1    = src2_data - 1'b1;
   assign result_data_vmsof = src2_data & (~src2_data_sub1);
   assign result_vmsif      = src2_data ^ src2_data_sub1;
-  assign result_data_vmsif = (src2_data==0) ? {`VLEN{1'b1}} : result_vmsif;  
-  assign result_data_vmsbf = (src2_data==0) ? {`VLEN{1'b1}} : {1'b0,result_vmsif[`VLEN-1:1]}; 
+  assign result_data_vmsif = (src2_data==0) ? {VLEN{1'b1}} : result_vmsif;  
+  assign result_data_vmsbf = (src2_data==0) ? {VLEN{1'b1}} : {1'b0,result_vmsif[VLEN-1:1]}; 
  
   // vfirst
   always_comb begin
     result_data_vfirst = 'b0;
     
     if (src2_data=='b0) 
-      result_data_vfirst = {`VLEN{1'b1}};
+      result_data_vfirst = {VLEN{1'b1}};
     else begin
-      for(int i=0;i<`VLEN;i++) begin
+      for(int i=0;i<VLEN;i++) begin
         if (result_data_vmsof[i]==1'b1)
-          result_data_vfirst = (`VLEN)'(i);         // one-hot to 8421BCD. get the index of first 1
+          result_data_vfirst = (VLEN)'(i);         // one-hot to 8421BCD. get the index of first 1
       end
     end
   end
 
   // vid
   generate
-    for(j=0;j<`VLENB;j++) begin: GET_VID8
-      assign result_data_vid8[j*`BYTE_WIDTH +: `BYTE_WIDTH] = (`BYTE_WIDTH)'({uop_index, j[$clog2(`VLENB)-1:0]});
+    for(j=0;j<`VLENB(VLEN);j++) begin: GET_VID8
+      assign result_data_vid8[j*`BYTE_WIDTH +: `BYTE_WIDTH] = (`BYTE_WIDTH)'({uop_index, j[$clog2(`VLENB(VLEN))-1:0]});
     end
   endgenerate
 
   generate
-    for(j=0;j<`VLEN/`HWORD_WIDTH;j++) begin: GET_VID16
-      assign result_data_vid16[j*`HWORD_WIDTH +: `HWORD_WIDTH] = (`HWORD_WIDTH)'({uop_index, j[$clog2(`VLEN/`HWORD_WIDTH)-1:0]});
+    for(j=0;j<VLEN/`HWORD_WIDTH;j++) begin: GET_VID16
+      assign result_data_vid16[j*`HWORD_WIDTH +: `HWORD_WIDTH] = (`HWORD_WIDTH)'({uop_index, j[$clog2(VLEN/`HWORD_WIDTH)-1:0]});
     end
   endgenerate
 
   generate
-    for(j=0;j<`VLEN/`WORD_WIDTH;j++) begin: GET_VID32
-      assign result_data_vid32[j*`WORD_WIDTH +: `WORD_WIDTH] = (`WORD_WIDTH)'({uop_index, j[$clog2(`VLEN/`WORD_WIDTH)-1:0]});
+    for(j=0;j<VLEN/`WORD_WIDTH;j++) begin: GET_VID32
+      assign result_data_vid32[j*`WORD_WIDTH +: `WORD_WIDTH] = (`WORD_WIDTH)'({uop_index, j[$clog2(VLEN/`WORD_WIDTH)-1:0]});
     end
   endgenerate
 
@@ -375,8 +382,8 @@ module rvv_backend_alu_unit_mask
 //
 // submit result to ROB
 //
-  barrel_shifter #(.DATA_WIDTH(`VLEN)) 
-  u_prestart (.din((`VLEN)'('1)), .shift_amount(vstart[$clog2(`VLEN)-1:0]), .shift_mode(2'b00), .dout(vstart_elements_tmp));
+  barrel_shifter #(.DATA_WIDTH(VLEN)) 
+  u_prestart (.din((VLEN)'('1)), .shift_amount(vstart[$clog2(VLEN)-1:0]), .shift_mode(2'b00), .dout(vstart_elements_tmp));
   assign vstart_elements  = ~vstart_elements_tmp;
 
   always_comb begin
