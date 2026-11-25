@@ -13,6 +13,10 @@
   typedef class alu_processor;
   typedef class lsu_processor;
   typedef class pmt_processor;
+  typedef class fp_processor;
+`ifdef ZVT_ON
+  typedef class zvt_processor;
+`endif
 
 //------------------------------------------------------------------------------
 // CLASS: rvv_behavior_model
@@ -89,6 +93,13 @@ class rvv_behavior_model extends uvm_component;
 
   lsu_processor lsu_proc;
   pmt_processor pmt_inst;
+  fp_processor fp_proc;
+`ifdef ZVT_ON
+  zvt_processor zvt_proc;
+  typedef virtual vme_interface v_if5;
+  v_if5 vme_if;
+`endif
+  logic [4:0] fflags;            // OR of the flags of the active elements of the instruction
 
   // Memory
   rvv_mem mem;
@@ -142,6 +153,10 @@ class rvv_behavior_model extends uvm_component;
 
 endclass: rvv_behavior_model
 
+`ifdef ZVT_ON
+`include "rvv_zvt_proc.sv"
+`endif
+
 // Phases --------------------------------------------------
   function rvv_behavior_model::new(string name = "rvv_behavior_model", uvm_component parent);
     super.new(name, parent);
@@ -188,6 +203,10 @@ endclass: rvv_behavior_model
 
     lsu_proc = lsu_processor::type_id::create("lsu_proc", this);
     pmt_inst = pmt_processor::type_id::create("pmt_isnt", this);
+    fp_proc = fp_processor::type_id::create("fp_proc", this);
+`ifdef ZVT_ON
+    zvt_proc = new();
+`endif
 
     // mem
     mem = new("mdl_mem", this);
@@ -209,6 +228,11 @@ endclass: rvv_behavior_model
     if(!uvm_config_db#(v_if3)::get(this, "", "vrf_if", vrf_if)) begin
       `uvm_fatal("MDL/NOVIF", "No virtual interface specified for this agent instance")
     end
+`ifdef ZVT_ON
+    if(!uvm_config_db#(v_if5)::get(this, "", "vme_if", vme_if)) begin
+      `uvm_fatal("MDL/NOVIF", "No vme interface specified for this agent instance")
+    end
+`endif
   endfunction:connect_phase
 
   task rvv_behavior_model::reset_phase(uvm_phase phase);
@@ -345,6 +369,10 @@ endclass: rvv_behavior_model
         foreach(rvs_if.rt_uop[i]) begin
           exe_inst_num += rvs_if.rt_last_uop[i] || rvs_if.rt_uop[i] & rvs_if.vcsr_valid & rvs_if.vcsr_ready;
         end
+`ifdef ZVT_ON
+        // Zvt instructions that retire through vmeRt
+        if(vme_if.vmeRtVld && vme_if.vmeRtRdy && inst_queue.size() > 0 && inst_queue[0].is_zvt_vme) exe_inst_num++;
+`endif
         while(exe_inst_num > 0) begin
           // --------------------------------------------------
           // 0. Get inst and update VCSR
@@ -358,6 +386,7 @@ endclass: rvv_behavior_model
             vl          = inst_tr.vl;
             vstart      = inst_tr.vstart;
             vxrm        = inst_tr.vxrm;
+            fflags      = '0;
             vxsat       = '0;
             vxsat_valid = '0;
 
@@ -437,7 +466,7 @@ endclass: rvv_behavior_model
           // --------------------------------------------------
           // 2. Prepare operand
           // 2.1 Update XRF & IMM values
-          if(inst_tr.src1_type == XRF) xrf[inst_tr.src1_idx] = inst_tr.rs1_data;
+          if(inst_tr.src1_type == XRF || inst_tr.src1_type == FRF) xrf[inst_tr.src1_idx] = inst_tr.rs1_data;
           if(inst_tr.src2_type == XRF) xrf[inst_tr.src2_idx] = inst_tr.rs2_data;
           if(inst_tr.src1_type == IMM) begin 
             imm_data = $signed(inst_tr.src1_idx);
@@ -481,6 +510,17 @@ endclass: rvv_behavior_model
           if(is_permutation_inst == 1) begin //is_permutation_inst
             pmt_inst.PMT_INIT(this,inst_tr);
             pmt_inst.pmt_func(this,inst_tr);
+`ifdef ZVT_ON
+          end else if(inst_tr.is_zvt_inst) begin
+            zvt_proc.exe(this, inst_tr);
+            // vector results (vtmv.v.t) are written back like those of the other instructions
+            vrf = vrf_temp;
+            for(int i=0; i<32; i++) begin
+              for(int j=0; j<`VLENB(VLEN); j++) begin
+                vrf_byte_strobe_temp[i][j] = |vrf_bit_strobe_temp[i][j*8 +: 8];
+              end
+            end
+`endif
           end else if(inst_tr.inst_type inside {LD, ST}) begin
             lsu_proc.exe(this, inst_tr);
             // Writeback whole vrf
@@ -566,6 +606,9 @@ endclass: rvv_behavior_model
 
               // 3.2 Execute & Writeback 
               // Prepare processor handler
+              if(inst_tr.is_fp_inst) begin
+                alu_handler = fp_proc;
+              end else
               case({dest_eew, src2_eew, src1_eew})
                 { EEW8,  EEW8,  EEW8}: alu_handler = alu_08_08_08;
                 {EEW16, EEW16, EEW16}: alu_handler = alu_16_16_16;
@@ -684,6 +727,10 @@ endclass: rvv_behavior_model
                       `uvm_info("MDL", $sformatf("element[%2d]: body-active, vxsat has been set to 1.", elm_idx), UVM_LOW)
                     end
                     vxsat = vxsat ? vxsat : alu_handler.get_saturate();
+                    if(inst_tr.is_fp_inst) begin
+                      fp_processor fp_h;
+                      if($cast(fp_h, alu_handler)) fflags |= fp_h.get_fflags();
+                    end
 
                     elm_writeback(dest, inst_tr.dest_type, dest_reg_idx_base, elm_idx, dest_eew);
                  end 
@@ -722,6 +769,30 @@ endclass: rvv_behavior_model
           rt_tr   = new("rt_tr");
           rt_tr.copy(inst_tr);
           rt_tr.is_rt = 1;
+`ifdef ZVT_ON
+          if(inst_tr.is_zvt_inst) begin
+            // Zvt: a vector destination (vtmv.v.t) retires like any other VRF write, the tile
+            // bytes the instruction wrote are what the scoreboard checks against vmeRt.
+            if(rt_tr.dest_type == VRF) begin
+              for(int reg_idx=dest_reg_idx_base; reg_idx<dest_reg_idx_base+int'($ceil(dest_emul)); reg_idx++) begin
+                if((reg_idx - dest_reg_idx_base) >= (vstart / (`VLEN / dest_eew))) begin
+                  rt_tr.rt_vrf_index.push_back(reg_idx);
+                  rt_tr.rt_vrf_strobe.push_back(vrf_byte_strobe_temp[reg_idx]);
+                  rt_tr.rt_vrf_data.push_back(vrf_temp[reg_idx]);
+                  rt_tr.rt_vrf_old.push_back(vrf_old_temp[reg_idx]);
+                end
+              end
+            end
+            rt_tr.exp_mt_ptile  = zvt_proc.dst_ptile;
+            rt_tr.exp_mt_nptile = zvt_proc.dst_nptile;
+            rt_tr.exp_mt_val    = zvt_proc.dst_val;
+            rt_tr.exp_mt_req    = zvt_proc.dst_req;
+            fflags = zvt_proc.flags;
+            vxsat_valid = 0;
+            rt_tr.vxsat = 0;
+            rt_tr.vxsat_valid = 0;
+          end else
+`endif
           if( is_permutation_inst == 1) begin //is_permutation_inst
             rt_tr   = new("rt_tr");
             rt_tr.copy(inst_tr);
@@ -735,7 +806,7 @@ endclass: rvv_behavior_model
 
             if(rt_tr.dest_type == VRF || rt_tr.dest_type == SCALAR) begin
               for(int reg_idx=dest_reg_idx_base; reg_idx<dest_reg_idx_base+int'($ceil(dest_emul)); reg_idx++) begin
-                if(inst_tr.inst_type == ALU && (inst_tr.alu_inst inside {VSLIDEUP_RGATHEREI16, VSLIDE1UP, VRGATHER})) begin
+                if(inst_tr.inst_type == ALU && (inst_tr.alu_inst inside {VSLIDEUP_RGATHEREI16, VSLIDE1UP, VFSLIDE1UP, VRGATHER})) begin
                   // Special case: for slideup/gather inst, we will retire all uop for now, including all-prestart uops.
                   rt_tr.rt_vrf_index.push_back(reg_idx);
                   rt_tr.rt_vrf_strobe.push_back(vrf_byte_strobe_temp[reg_idx]);
@@ -829,6 +900,13 @@ endclass: rvv_behavior_model
 
           end // else end is_permutation_inst
           
+          // Floating point results: flags of all active elements, and the f register of vfmv.f.s
+          rt_tr.fflags = fflags;
+          if(rt_tr.dest_type == FRF) begin
+            rt_tr.rt_frf_index.push_back(rt_tr.dest_idx);
+            rt_tr.rt_frf_data.push_back(this.xrf[rt_tr.dest_idx]);
+          end
+
           `uvm_info("MDL",$sformatf("Complete calculation:\n%s",rt_tr.sprint()),UVM_LOW)
           rt_ap.write(rt_tr);
           this.executed_inst++;
@@ -863,7 +941,7 @@ endclass: rvv_behavior_model
                                    : this.vrf_temp[reg_idx][i]; // Always use element 0.
         end
       end
-      XRF: begin
+      XRF, FRF: begin
         for(int i=0; i<bit_count; i++) begin
           result[i] = this.xrf[reg_idx][i]; 
         end
@@ -2137,6 +2215,10 @@ class pmt_processor extends uvm_component;
     case({inst_tr.alu_inst,inst_tr.alu_type})
       {VWXUNARY0,OPMVV}: VMV_X_S(rvv_behavior_model_inst);
       {VWXUNARY0,OPMVX}: VMV_S_X(rvv_behavior_model_inst);
+      {VWFUNARY0,OPFVV}: VMV_X_S(rvv_behavior_model_inst);   // vfmv.f.s: raw 32-bit copy, SEW is always 32
+      {VWFUNARY0,OPFVF}: VMV_S_X(rvv_behavior_model_inst);   // vfmv.s.f
+      {VFSLIDE1UP,OPFVF}: VSLIDE1UP_F(rvv_behavior_model_inst,rvv_behavior_model_inst.xrf[src1_reg_idx]);
+      {VFSLIDE1DOWN,OPFVF}: VSLIDE1DOWN_F(rvv_behavior_model_inst,rvv_behavior_model_inst.xrf[src1_reg_idx]);
       {VSLIDEUP_RGATHEREI16,OPIVX}: VSLIDEUP(rvv_behavior_model_inst,rvv_behavior_model_inst.xrf[src1_reg_idx]);
       {VSLIDEUP_RGATHEREI16,OPIVI}: VSLIDEUP(rvv_behavior_model_inst,inst_tr.src1_idx);
       {VSLIDEDOWN,OPIVX}: VSLIDEDOWN_F(rvv_behavior_model_inst,rvv_behavior_model_inst.xrf[src1_reg_idx]);
@@ -3315,5 +3397,7 @@ endclass: pmt_processor
                 `uvm_info("pmt_processor",$sformatf("VMV8R FUNC Dest vrf[%0d] == %0x", dest_reg_idx+7, rvm.vrf[dest_reg_idx+7]),UVM_LOW)
     endfunction
 
+
+`include "rvv_fp_model.sv"
 
 `endif // RVV_BEHAVIOR_MODEL

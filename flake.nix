@@ -58,8 +58,8 @@
       };
     in {
       devShells.${system} = rec {
-        default = fhs;
-        fhs = fhsEnv.env;
+        default = hdl;
+        bazel = fhsEnv.env;
         hdl = pkgs.mkShell {
           packages = with pkgs; [ 
             yosys
@@ -72,6 +72,14 @@
             pkg-config
             re2
             abseil-cpp
+            (bender.overrideAttrs (old: {
+              postPatch =
+                (old.postPatch or "")
+                + ''
+                  substituteInPlace crates/bender-slang/build.rs \
+                    --replace-fail '("SLANG_USE_MIMALLOC", "1")' '("SLANG_USE_MIMALLOC", "0")'
+                '';
+            }))
           ];
           env = {
             UVM_HOME=pkgs.fetchFromGitHub {

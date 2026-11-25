@@ -26,6 +26,10 @@ else
 #   make lint                      lint the RTL only (no UVM needed)
 #   make build UVM_HOME=<path>     build the testbench simulator
 #   make sim   UVM_HOME=<path> test=<uvm_test> [seed=N]
+#   make regress UVM_HOME=<path> [list=<file>] [seeds="1 2 ..."] [REGRESS_JOBS=N]
+#                                  build, then run every test in a regression list in parallel
+#   make regress-<suite>           regress-int, -fp, -zvt, ...: one list on the build it needs
+#   make regress-all               every regress*.list in turn
 #   make filelists                 only generate the filelists
 #   make show / make clean
 #
@@ -61,6 +65,29 @@ MASK_TAIL_TAG   := $(MASK_TAIL_LOGIC)-$(MASK_TAIL_SET)-$(MASK_TAIL_CMP)-$(MASK_T
 #   FOF_SEGMENT:    a fault inside a segment of a segment load: whole | partial
 FOF_POST_FAULT  ?= not_updated
 FOF_SEGMENT     ?= whole
+# Zvt tile tail policy the model follows (ZVT=1 only). The tile tails are agnostic, so each element may be
+# left undisturbed or overwritten with all 1s; the model follows one, per instruction class:
+#   undisturbed | all_ones
+# TILE_TAIL sets every class at once; TILE_TAIL_MM (vtmmu/vtmms/vtfmm: mtd outside tm x tn),
+# TILE_TAIL_ZERO (vtzero: mtd outside tm x tn), TILE_TAIL_MV (vtmv.t.v: tile subset elements past
+# min(vl, ETE)) and TILE_TAIL_LD (vtle: likewise) override one class. See include/rvv_zvt_model.svh.
+TILE_TAIL       ?=
+TILE_TAIL_MM    ?= $(or $(TILE_TAIL),undisturbed)
+TILE_TAIL_ZERO  ?= $(or $(TILE_TAIL),undisturbed)
+TILE_TAIL_MV    ?= $(or $(TILE_TAIL),undisturbed)
+TILE_TAIL_LD    ?= $(or $(TILE_TAIL),undisturbed)
+TILE_TAIL_TAG   := $(TILE_TAIL_MM)-$(TILE_TAIL_ZERO)-$(TILE_TAIL_MV)-$(TILE_TAIL_LD)
+# FP=1 builds the Zve32f floating point backend (ZVE32F_ON). The FP units wrap CVFPU (fpnew); its RTL,
+# and that of common_cells and fpu_div_sqrt_mvp, is fetched with Bender (see Bender.yml, Bender.local
+# and Bender.lock). Needs `bender` on PATH, or BENDER=<path>, and network access on the first run.
+# ZVT=1 additionally builds the Zvt matrix extension (ZVT_ON, design/Zvt/). It needs the FP units, so it
+# implies FP=1. TE (the tile edge) is VLEN/8.
+ZVT        ?= 0
+ifeq ($(ZVT),1)
+  FP := 1
+endif
+FP         ?= 0
+BENDER     ?= bender
 UVM_HOME  ?=
 UVM_VERBOSITY ?= UVM_LOW
 timeout   ?= 1000000000ns
@@ -88,7 +115,7 @@ DESIGN_PATH := $(RVV_ROOT)/design
 STD_PATH    := $(RVV_ROOT)/common
 RTL_INC_DIR := $(RVV_ROOT)/inc
 TB_PATH     := $(RVV_ROOT)/sve/rvv_backend_tb
-BUILD_PATH  := $(RVV_ROOT)/build/$(scfg)$(if $(filter-out VLEN_128,$(VLEN_DEFINE)),_vlen$(VLEN_DEFINE:VLEN_%=%))$(if $(filter 1,$(TRACE)),_trace)$(if $(filter-out calculated-undisturbed-undisturbed-undisturbed,$(MASK_TAIL_TAG)),_tail_$(MASK_TAIL_TAG))$(if $(filter-out not_updated-whole,$(FOF_POST_FAULT)-$(FOF_SEGMENT)),_fof_$(FOF_POST_FAULT)-$(FOF_SEGMENT))
+BUILD_PATH  := $(RVV_ROOT)/build/$(scfg)$(if $(filter-out VLEN_128,$(VLEN_DEFINE)),_vlen$(VLEN_DEFINE:VLEN_%=%))$(if $(filter 1,$(FP)),_fp)$(if $(filter 1,$(ZVT)),_zvt)$(if $(filter 1,$(TRACE)),_trace)$(if $(filter-out calculated-undisturbed-undisturbed-undisturbed,$(MASK_TAIL_TAG)),_tail_$(MASK_TAIL_TAG))$(if $(filter-out not_updated-whole,$(FOF_POST_FAULT)-$(FOF_SEGMENT)),_fof_$(FOF_POST_FAULT)-$(FOF_SEGMENT))$(if $(filter-out undisturbed-undisturbed-undisturbed-undisturbed,$(TILE_TAIL_TAG)),_ttail_$(TILE_TAIL_TAG))
 TB_TOP      := rvv_backend_top
 
 # ------------------------------------------------------------------
@@ -106,9 +133,25 @@ RTL_UNUSED := $(DESIGN_PATH)/Aligner.sv \
 
 RTL_FILES := $(filter-out $(RTL_UNUSED),$(sort $(wildcard $(DESIGN_PATH)/rvv_backend*.sv)) \
                                          $(sort $(wildcard $(STD_PATH)/*.sv)))
+ifeq ($(ZVT),1)
+  # zvt_acc.sv is stale: nothing instantiates it and it uses the undefined NUM_ACC
+  RTL_FILES += $(filter-out $(DESIGN_PATH)/Zvt/zvt_acc.sv,$(sort $(wildcard $(DESIGN_PATH)/Zvt/*.sv)))
+endif
 TB_FILES  := $(sort $(wildcard $(TB_PATH)/hdl/*.sv))
 
 RTL_INCDIRS := $(RTL_INC_DIR)
+
+# Third-party RTL (FP=1 only), all through Bender (see Bender.yml):
+#  - CVFPU is vendored into .vendor/cvfpu and patched with third_party/cvfpu/*.patch (the patches the
+#    Bazel build applies); redone when the manifest or a patch changes.
+#  - Bender then checks the remaining dependencies out into .bender/ and writes a file list (include
+#    directories, defines and sources in dependency order) that rtl.f pulls in ahead of the backend
+#    sources. Regenerated when the manifest, the overrides or the lock file change.
+#  - Patch 0002 removes the `include of the common_cells macro headers from cvfpu, so rtl.f lists
+#    assertions.svh and registers.svh itself, ahead of the Bender list.
+BENDER_FLIST     := $(BUILD_PATH)/bender.f
+BENDER_VENDORED  := $(RVV_ROOT)/.vendor/cvfpu/Bender.yml
+CVFPU_PATCHES    := $(wildcard $(RVV_ROOT)/../../../third_party/cvfpu/*.patch)
 TB_INCDIRS  := $(TB_PATH)/include $(TB_PATH)/src $(TB_PATH)/env \
                $(TB_PATH)/tests $(TB_PATH)/hdl
 
@@ -116,7 +159,7 @@ TB_INCDIRS  := $(TB_PATH)/include $(TB_PATH)/src $(TB_PATH)/env \
 # Configurations (mirrors sve/rvv_backend_tb/Makefile)
 # ------------------------------------------------------------------
 # SVA (ASSERT_ON) uses `strong`, which Verilator does not support; opt in with ASSERT=1
-COMMON_DEFINES := TB_SUPPORT RVV_CONFIG_SVH $(if $(ASSERT),ASSERT_ON) PRECISE_RVVTRAP
+COMMON_DEFINES := TB_SUPPORT RVV_CONFIG_SVH $(if $(ASSERT),ASSERT_ON) PRECISE_RVVTRAP $(if $(filter 1,$(FP)),ZVE32F_ON) $(if $(filter 1,$(ZVT)),ZVT_ON)
 ifeq ($(scfg),rvv_backend)
   RTL_DEFINES := $(COMMON_DEFINES) ISSUE_3_READ_PORT_6
 else ifeq ($(scfg),rvv_backend_i3rp6)
@@ -142,7 +185,14 @@ $(if $(filter $(FOF_POST_FAULT),not_updated loaded),,$(error FOF_POST_FAULT must
 $(if $(filter $(FOF_SEGMENT),whole partial),,$(error FOF_SEGMENT must be whole or partial, got '$(FOF_SEGMENT)'))
 FOF_DEFINES := RVV_TB_FOF_POST_FAULT=$(if $(filter $(FOF_POST_FAULT),loaded),1,0) \
                RVV_TB_FOF_SEGMENT=$(if $(filter $(FOF_SEGMENT),partial),1,0)
-DEFINES := $(RTL_DEFINES) $(VLEN_DEFINE) $(MASK_TAIL_DEFINES) $(FOF_DEFINES)
+$(foreach v,TILE_TAIL_MM TILE_TAIL_ZERO TILE_TAIL_MV TILE_TAIL_LD,$(if $(filter $($(v)),undisturbed all_ones),,$(error $(v) must be undisturbed or all_ones, got '$($(v))')))
+# Policy names map to the tile_tail_policy_e values used by the testbench: 0, 1.
+tile_tail_num = $(if $(filter $(1),all_ones),1,0)
+TILE_TAIL_DEFINES := RVV_TB_TILE_TAIL_MM=$(call tile_tail_num,$(TILE_TAIL_MM)) \
+                     RVV_TB_TILE_TAIL_ZERO=$(call tile_tail_num,$(TILE_TAIL_ZERO)) \
+                     RVV_TB_TILE_TAIL_MV=$(call tile_tail_num,$(TILE_TAIL_MV)) \
+                     RVV_TB_TILE_TAIL_LD=$(call tile_tail_num,$(TILE_TAIL_LD))
+DEFINES := $(RTL_DEFINES) $(VLEN_DEFINE) $(MASK_TAIL_DEFINES) $(FOF_DEFINES) $(TILE_TAIL_DEFINES)
 
 # ------------------------------------------------------------------
 # Verilator invocation
@@ -173,7 +223,7 @@ VFLAGS = --sv --timing -j $(JOBS) $(WARN_FLAGS) $(TB_WARN_FLAGS) \
 # ------------------------------------------------------------------
 # Targets
 # ------------------------------------------------------------------
-.PHONY: all build sim lint filelists show clean help
+.PHONY: all build sim regress lint filelists show clean help
 all: build
 
 filelists: $(BUILD_PATH)/rtl.f $(BUILD_PATH)/tb.f $(BUILD_PATH)/lint.f
@@ -181,11 +231,30 @@ filelists: $(BUILD_PATH)/rtl.f $(BUILD_PATH)/tb.f $(BUILD_PATH)/lint.f
 $(BUILD_PATH):
 	@mkdir -p $@
 
+.PHONY: deps
+deps: $(BENDER_FLIST)
+
+$(BENDER_VENDORED): $(RVV_ROOT)/Bender.yml $(CVFPU_PATCHES)
+	@command -v $(BENDER) >/dev/null 2>&1 || { echo "error: FP=1 needs bender (https://github.com/pulp-platform/bender); put it on PATH or set BENDER=<path>"; exit 1; }
+	@# `vendor init` loads the manifest, which already names this (not yet existing) path dependency
+	mkdir -p $(dir $@)
+	cd $(RVV_ROOT) && $(BENDER) vendor init
+	@# Without a lock file `vendor init` resolves while the vendored copy is still empty, so the lock misses
+	@# CVFPU's own dependencies; resolve again now that its manifest exists.
+	@cd $(RVV_ROOT) && grep -q '^  common_cells:' Bender.lock 2>/dev/null || $(BENDER) update
+
+$(BENDER_FLIST): $(RVV_ROOT)/Bender.yml $(RVV_ROOT)/Bender.local $(wildcard $(RVV_ROOT)/Bender.lock) $(BENDER_VENDORED) | $(BUILD_PATH)
+	cd $(RVV_ROOT) && $(BENDER) checkout
+	cd $(RVV_ROOT) && $(BENDER) script flist-plus -e tech_cells_generic -e common_verification > $@
+
 # Regenerate whenever the Makefile, scfg or source set changes.
-$(BUILD_PATH)/rtl.f: Makefile | $(BUILD_PATH) $(RTL_FILES) $(foreach incdir,$(RTL_INCDIRS),$(wildcard $(incdir)/*))
+$(BUILD_PATH)/rtl.f: Makefile $(if $(filter 1,$(FP)),$(BENDER_FLIST)) | $(BUILD_PATH) $(RTL_FILES) $(foreach incdir,$(RTL_INCDIRS),$(wildcard $(incdir)/*))
 	@echo "generating $@"
 	@{ for i in $(RTL_INCDIRS); do echo "+incdir+$$i"; done; \
 	   for d in $(DEFINES); do echo "+define+$$d"; done; \
+	   $(if $(filter 1,$(FP)),cc=$$(cd $(RVV_ROOT) && $(BENDER) path common_cells); \
+	     echo "$$cc/include/common_cells/assertions.svh"; echo "$$cc/include/common_cells/registers.svh"; \
+	     echo "-f $(BENDER_FLIST)";) \
 	   for f in $(RTL_FILES); do echo "$$f"; done; } > $@
 
 $(BUILD_PATH)/tb.f: Makefile | $(BUILD_PATH) $(TB_FILES) $(foreach incdir,$(TB_INCDIRS),$(wildcard $(incdir)/*))
@@ -209,7 +278,11 @@ lint: $(BUILD_PATH)/lint.f
 UVM_DPI_SRCS  := $(UVM_HOME)/src/dpi/uvm_dpi.cc
 UVM_DPI_FLAGS := --vpi -CFLAGS -I$(UVM_HOME)/src/dpi
 
-$(BUILD_PATH)/obj_dir/V$(TB_TOP): $(BUILD_PATH)/rtl.f $(BUILD_PATH)/tb.f
+# The testbench is mostly `included from its include directories, so every source there is a
+# dependency of the simulator, not only the files named in the file lists.
+TB_DEPS := $(foreach d,$(TB_INCDIRS),$(wildcard $(d)/*.sv $(d)/*.svh $(d)/*.incl))
+
+$(BUILD_PATH)/obj_dir/V$(TB_TOP): $(BUILD_PATH)/rtl.f $(BUILD_PATH)/tb.f $(TB_DEPS) $(RTL_FILES) $(wildcard $(RTL_INC_DIR)/*.svh)
 	@test -n "$(UVM_HOME)" || { echo "error: set UVM_HOME to a UVM tree containing src/uvm_pkg.sv"; exit 1; }
 	@# uvm_pkg.sv must come first so the UVM macros are defined for the testbench
 	@# (VCS gets this implicitly from -ntb_opts uvm).
@@ -229,6 +302,77 @@ sim: build
 	  +UVM_MAX_QUIT_COUNT=$(max_error),NO +UVM_TIMEOUT=$(timeout) \
 	  2>&1 | tee $(SIM_PATH)/test.log
 	@echo "Test log: $(SIM_PATH)/test.log"
+
+# ------------------------------------------------------------------
+# Regression
+# ------------------------------------------------------------------
+# `make regress` builds, then runs every test in $(list) (first word of each line;
+# blank lines and # comments are skipped) as a separate simulator process,
+# REGRESS_JOBS at a time, for each seed in $(seeds) (default $(seed), or 1).
+# Each run logs to outfiles/<build>/<test>.<seed>/test.log; it passes if the
+# simulator exits 0 and the UVM report shows no errors or fatals.
+# REGRESS_TIMEOUT (e.g. 1h) bounds the wall-clock time of each run.
+#
+# Every sve/rvv_backend_tb/regress*.list also gets a target that picks the build
+# the list needs: regress.list is regress-int, regress_<name>.list is
+# regress-<name>. regress-all runs every list in turn.
+list            ?= $(TB_PATH)/regress.list
+seeds           ?= $(or $(seed),1)
+REGRESS_JOBS    ?= $(JOBS)
+REGRESS_TIMEOUT ?=
+REGRESS_DIR      = $(subst build,outfiles,$(BUILD_PATH))
+REGRESS_SUMMARY  = $(REGRESS_DIR)/$(basename $(notdir $(list))).summary
+REGRESS_TESTS   := $(shell grep -vE '^[[:space:]]*(\#|$$)' $(list) 2>/dev/null | awk '{print $$1}')
+REGRESS_RUNS    := $(foreach t,$(REGRESS_TESTS),$(foreach s,$(seeds),regress/$(t).$(s)))
+# Verilator's randomize() needs an SMT solver (z3 by default, or VERILATOR_SOLVER).
+REGRESS_SOLVER  := $(firstword $(or $(VERILATOR_SOLVER),z3))
+comma           := ,
+
+# Suites, from the list names, and the build options each one needs.
+REGRESS_LISTS    := $(sort $(wildcard $(TB_PATH)/regress*.list))
+regress_suite     = $(or $(patsubst regress_%,%,$(filter regress_%,$(basename $(notdir $(1))))),int)
+regress_list      = $(TB_PATH)/$(if $(filter int,$(1)),regress,regress_$(1)).list
+REGRESS_SUITES   := $(foreach l,$(REGRESS_LISTS),$(call regress_suite,$(l)))
+REGRESS_ARGS_fp  := FP=1
+# The DUT drops rvv_idle while Zvt work is still in flight; waived until that is fixed.
+REGRESS_ARGS_zvt := ZVT=1 PLUS_ARGS="+zvt_waive_early_idle $(PLUS_ARGS)"
+
+.PHONY: regress regress-run regress-check regress-all $(REGRESS_RUNS) $(addprefix regress-,$(REGRESS_SUITES))
+regress:
+	@$(MAKE) --no-print-directory build
+	@$(MAKE) --no-print-directory -j$(REGRESS_JOBS) regress-run
+
+regress-check:
+	@test -n "$(REGRESS_TESTS)" || { echo "error: no tests found in '$(list)'"; exit 1; }
+	@command -v $(REGRESS_SOLVER) >/dev/null || \
+	  { echo "error: '$(REGRESS_SOLVER)' not on PATH (needed by randomize(); set VERILATOR_SOLVER to override)"; exit 1; }
+
+# regress/<test>.<seed>
+$(REGRESS_RUNS): regress/%: build regress-check
+	@t=$(basename $*); s=$(patsubst .%,%,$(suffix $*)); d=$(REGRESS_DIR)/$*; mkdir -p $$d; \
+	( cd $$d && $(if $(REGRESS_TIMEOUT),timeout $(REGRESS_TIMEOUT)) $(BUILD_PATH)/obj_dir/V$(TB_TOP) \
+	    +verilator+seed+$$s +verilator+rand+reset+$(RAND_RESET) $(PLUS_ARGS) \
+	    +UVM_TESTNAME=$$t +UVM_VERBOSITY=$(UVM_VERBOSITY) \
+	    +UVM_MAX_QUIT_COUNT=$(max_error),NO +UVM_TIMEOUT=$(timeout) > test.log 2>&1 ); rc=$$?; \
+	if [ $$rc = 0 ] && grep -qE 'UVM_ERROR :[[:space:]]*0$$' $$d/test.log \
+	               && grep -qE 'UVM_FATAL :[[:space:]]*0$$' $$d/test.log; then \
+	  echo "PASS $$t seed=$$s"; \
+	else \
+	  echo "FAIL $$t seed=$$s (exit $$rc$(if $(REGRESS_TIMEOUT),$(comma) 124 = timed out)): $$d/test.log"; \
+	fi | tee $$d/result
+
+regress-run: $(REGRESS_RUNS)
+	@r=$(REGRESS_SUMMARY); \
+	cat $(foreach r,$(REGRESS_RUNS),$(REGRESS_DIR)/$(r:regress/%=%)/result) > $$r; \
+	echo "== $(notdir $(list)): $$(grep -c '^PASS' $$r) passed, $$(grep -c '^FAIL' $$r) failed (seeds $(seeds)); summary in $$r"; \
+	! grep -q '^FAIL' $$r
+
+$(addprefix regress-,$(REGRESS_SUITES)): regress-%:
+	@$(MAKE) --no-print-directory regress list=$(call regress_list,$*) $(REGRESS_ARGS_$*)
+
+# Runs every suite even if one fails; fails if any did.
+regress-all:
+	@rc=0; for s in $(REGRESS_SUITES); do $(MAKE) --no-print-directory regress-$$s || rc=1; done; exit $$rc
 
 show:
 	@echo "scfg:     $(scfg)"

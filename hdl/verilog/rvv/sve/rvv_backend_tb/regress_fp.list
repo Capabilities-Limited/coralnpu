@@ -1,0 +1,12 @@
+# Floating point (Zve32f) tests. Only valid on a build with FP=1 (ZVE32F_ON).
+fp_addmul_test
+fp_div_test
+fp_fma_test
+fp_minmax_sgnj_test
+fp_cmp_test
+fp_unary_test
+fp_cvt_test
+fp_red_test
+fp_move_test
+fp_random_mix_test
+fp_illegal_test

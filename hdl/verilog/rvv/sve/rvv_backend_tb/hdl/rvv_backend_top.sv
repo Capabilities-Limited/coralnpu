@@ -41,6 +41,14 @@ module rvv_backend_top();
   vrf_interface vrf_if(clk,rst_n);
 
   rvv_intern_interface rvv_intern_if(clk,rst_n);
+`ifdef ZVT_ON
+  vme_interface vme_if(clk,rst_n);
+`endif
+`ifdef ZVT_ON
+  // the matrix unit's floating-point flags on their way to fcsr (zvt_pe_array -> retire -> rt2fcsr)
+  assign vme_if.zvt_fpexp_fire = DUT.zvtFpexpVld & DUT.zvtFpexpRdy;
+  assign vme_if.zvt_fpexp      = DUT.zvtFpexp;
+`endif
   
   rvv_backend_tb_mod test(); 
   
@@ -70,6 +78,23 @@ module rvv_backend_top();
     .uop_lsu_lsu2rvv          (lsu_if.uop_lsu_lsu2rvv       ),
     .uop_lsu_ready_rvv2lsu    (lsu_if.uop_lsu_ready_rvv2lsu ),
 
+`ifdef ZVT_ON
+    // Zvt (VME) side: tile store data out, tile load data in, retire information
+    .uop_vme2lsu_vld          (vme_if.uop_vme2lsu_vld       ),
+    .uop_vme2lsu              (vme_if.uop_vme2lsu           ),
+    .uop_vme2lsu_rdy          (vme_if.uop_vme2lsu_rdy       ),
+
+    .uop_lsu2vme_vld          (vme_if.uop_lsu2vme_vld       ),
+    .uop_lsu2vme              (vme_if.uop_lsu2vme           ),
+    .uop_lsu2vme_rdy          (vme_if.uop_lsu2vme_rdy       ),
+    .vme_lsuflush_vld         (vme_if.vme_lsuflush_vld      ),
+    .vme_lsuflush_rdy         (vme_if.vme_lsuflush_rdy      ),
+
+    .vmeRtVld                 (vme_if.vmeRtVld              ),
+    .vmeRt                    (vme_if.vmeRt                 ),
+    .vmeRtRdy                 (vme_if.vmeRtRdy              ),
+`endif
+
     
     .trap_valid_rvs2rvv       (lsu_if.trap_valid_rvs2rvv    ),
     .trap_ready_rvv2rvs       (lsu_if.trap_ready_rvv2rvs    ), 
@@ -77,6 +102,21 @@ module rvv_backend_top();
     .wr_vxsat_valid           (), // use internal signal   
     .wr_vxsat                 (), // use internal signal   
     .wr_vxsat_ready           (rvs_if.wr_vxsat_ready),
+
+`ifdef ZVE32F_ON
+    .async_frd_valid          (rvs_if.async_frd_valid       ),
+  `ifdef TB_SUPPORT
+    .async_frd_pc             (                             ),
+  `endif
+    .async_frd_rob_tag        (                             ),
+    .async_frd_addr           (rvs_if.async_frd_addr        ),
+    .async_frd_data           (rvs_if.async_frd_data        ),
+    .async_frd_ready          (rvs_if.async_frd_ready       ),
+
+    .rt2fcsr_write_valid      (rvs_if.rt2fcsr_write_valid   ),
+    .rt2fcsr_write_data       (rvs_if.rt2fcsr_write_data    ),
+    .fcsr2rt_write_ready      (rvs_if.fcsr2rt_write_ready   ),
+`endif
 
     .vcsr_valid               (rvs_if.vcsr_valid            ),
     .vector_csr               (rvs_if.vector_csr            ),
@@ -143,6 +183,16 @@ module rvv_backend_top();
   assign rvs_if.wr_vxsat[1] = `RT_VXSAT_PATH.w_vxsat[1];
   assign rvs_if.wr_vxsat[2] = `RT_VXSAT_PATH.w_vxsat[2];
   assign rvs_if.wr_vxsat[3] = `RT_VXSAT_PATH.w_vxsat[3];
+    
+`ifdef ZVE32F_ON
+  // fflags of each retiring uop: only the active elements contribute (retire masks the others)
+  always_comb begin
+    for(int i=0; i<`NUM_RT_UOP; i++) begin
+      rvs_if.rt_fflags_valid[i] = `RT_VXSAT_PATH.w_valid_chkTrap[i] & `RT_VXSAT_PATH.w_fpexp_vld[i];
+      rvs_if.rt_fflags[i]       = `RT_VXSAT_PATH.w_fpexp[i];
+    end
+  end
+`endif
     
 // lsu interface -----------------------------------------------------
   // trap pc tracer

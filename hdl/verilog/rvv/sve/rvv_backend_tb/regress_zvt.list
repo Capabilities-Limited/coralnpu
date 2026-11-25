@@ -1,0 +1,7 @@
+# Zvt (matrix extension) tests. Only valid on a build with ZVT=1.
+zvt_basic_test
+zvt_fp_test
+zvt_fp_sweep_test
+zvt_int_sweep_test
+zvt_fp_pattern_test
+zvt_ldst_test

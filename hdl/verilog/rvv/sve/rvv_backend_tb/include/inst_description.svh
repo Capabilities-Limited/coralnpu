@@ -3,6 +3,10 @@
 
 `include "rvv_backend_define.svh"
 `include "rvv_backend.svh"
+`include "rvv_softfloat.svh"
+`ifdef ZVT_ON
+`include "rvv_zvt_model.svh"
+`endif
 
 // TB status description ------------------------------------
 package vrf_mon_pkg;
@@ -296,6 +300,57 @@ typedef enum logic [7:0] {
 
   VWXUNARY0       =   8'b01_010_000,     // it could be vcpop.m, vfirst.m and vmv. They can be distinguished by vs1 field(inst_encoding[19:15]).
 
+  // OPF. alu_inst[7:6] == 2'b10 marks the floating point class (Zve32f). Only SEW=32 is legal for
+  // most of them; see the vfunary0 / vfunary1 / vwfunary0 sub-function parameters below.
+  VFADD           =   8'b10_000_000,
+  VFSUB           =   8'b10_000_010,
+  VFRSUB          =   8'b10_100_111,
+  VFMUL           =   8'b10_100_100,
+  VFDIV           =   8'b10_100_000,
+  VFRDIV          =   8'b10_100_001,
+  VFMACC          =   8'b10_101_100,
+  VFNMACC         =   8'b10_101_101,
+  VFMSAC          =   8'b10_101_110,
+  VFNMSAC         =   8'b10_101_111,
+  VFMADD          =   8'b10_101_000,
+  VFNMADD         =   8'b10_101_001,
+  VFMSUB          =   8'b10_101_010,
+  VFNMSUB         =   8'b10_101_011,
+  VFMIN           =   8'b10_000_100,
+  VFMAX           =   8'b10_000_110,
+  VFSGNJ          =   8'b10_001_000,
+  VFSGNJN         =   8'b10_001_001,
+  VFSGNJX         =   8'b10_001_010,
+  VMFEQ           =   8'b10_011_000,
+  VMFLE           =   8'b10_011_001,
+  VMFLT           =   8'b10_011_011,
+  VMFNE           =   8'b10_011_100,
+  VMFGT           =   8'b10_011_101,
+  VMFGE           =   8'b10_011_111,
+  VFMERGE_VFMV    =   8'b10_010_111,  // vm=0: vfmerge.vfm; vm=1: vfmv.v.f
+  VFUNARY0        =   8'b10_010_010,  // vfcvt / vfwcvt / vfncvt, distinguished by vs1
+  VFUNARY1        =   8'b10_010_011,  // vfsqrt, vfrsqrt7, vfrec7, vfclass, distinguished by vs1
+  VFREDUSUM       =   8'b10_000_001,
+  VFREDOSUM       =   8'b10_000_011,
+  VFREDMIN        =   8'b10_000_101,
+  VFREDMAX        =   8'b10_000_111,
+  VWFUNARY0       =   8'b10_010_000,  // OPFVV: vfmv.f.s;  OPFVF: vfmv.s.f
+  VFSLIDE1UP      =   8'b10_001_110,
+  VFSLIDE1DOWN    =   8'b10_001_111,
+
+`ifdef ZVT_ON
+  // Zvt (Vector Matrix Extension). alu_inst[7:6] == 2'b11 marks the matrix class. The real encodings
+  // are built by rvs_transaction::zvt_tr2bin (see rvs_agent_rvs_transaction_zvt.sv).
+  VTMMU           =   8'b11_000_000,  // int8 matmul, vs2 unsigned
+  VTMMS           =   8'b11_000_001,  // int8 matmul, vs2 signed
+  VTFMM           =   8'b11_000_010,  // FP matmul (altfmt in vtype)
+  VTMV_V_T        =   8'b11_000_011,  // tile subset -> vector register group
+  VTMV_T_V        =   8'b11_000_100,  // vector register group -> tile subset
+  VTZERO          =   8'b11_000_101,
+  VTLE            =   8'b11_000_110,  // tile subset load
+  VTSE            =   8'b11_000_111,  // tile subset store
+`endif
+
   ALU_UNUSE_INST  =   8'b11_111_111
 } alu_inst_e;
 
@@ -316,6 +371,28 @@ typedef enum logic [4:0] {
   VWXUNARY0_NONE  =   5'b11111
 } vwxunary0_e;
 parameter logic [4:0] VMV_S_X = 5'b00000;
+
+// vfunary0 (vs1): conversions. The rtz variants truncate whatever frm says.
+parameter logic [4:0] VFCVT_XU_F      = 5'b00000;
+parameter logic [4:0] VFCVT_X_F       = 5'b00001;
+parameter logic [4:0] VFCVT_F_XU      = 5'b00010;
+parameter logic [4:0] VFCVT_F_X       = 5'b00011;
+parameter logic [4:0] VFCVT_RTZ_XU_F  = 5'b00110;
+parameter logic [4:0] VFCVT_RTZ_X_F   = 5'b00111;
+parameter logic [4:0] VFWCVT_F_XU     = 5'b01010;  // SEW=16 integer -> binary32
+parameter logic [4:0] VFWCVT_F_X      = 5'b01011;
+parameter logic [4:0] VFNCVT_XU_F     = 5'b10000;  // binary32 -> SEW=16 integer
+parameter logic [4:0] VFNCVT_X_F      = 5'b10001;
+parameter logic [4:0] VFNCVT_RTZ_XU_F = 5'b10110;
+parameter logic [4:0] VFNCVT_RTZ_X_F  = 5'b10111;
+// vfunary1 (vs1)
+parameter logic [4:0] VFSQRT          = 5'b00000;
+parameter logic [4:0] VFRSQRT7        = 5'b00100;
+parameter logic [4:0] VFREC7          = 5'b00101;
+parameter logic [4:0] VFCLASS         = 5'b10000;
+// vwfunary0 (vs1, vfmv.f.s) and vrfunary0 (vs2, vfmv.s.f)
+parameter logic [4:0] VFMV_F_S        = 5'b00000;
+parameter logic [4:0] VFMV_S_F        = 5'b00000;
 
 // vmunary0, the uop could be vmsbf, vmsof, vmsif, viota, vid. They can be distinguished by vs1 field(inst_encoding[19:15]).
 typedef enum logic [4:0] {
@@ -391,7 +468,7 @@ typedef enum int {
 } lsu_inst_e;
 
 typedef enum {
-  XRF, VRF, IMM, UIMM, FUNC, SCALAR, UNUSE
+  XRF, VRF, IMM, UIMM, FUNC, SCALAR, UNUSE, FRF
 } operand_type_e;
 
 // Test description -----------------------------------------

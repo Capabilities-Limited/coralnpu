@@ -36,6 +36,7 @@ module zvt_pe_block#(
   fpexpVld,
   fpexp,
   fpexpRdy,
+  stall,
   blkRtVld,
 `ifdef RVVI_ON
   blkRtInfo,
@@ -70,6 +71,7 @@ module zvt_pe_block#(
   output logic                                                          fpexpVld;
   output RVFEXP_t                                                       fpexp;
   input  logic                                                          fpexpRdy;
+  input  logic                                                          stall;
   // retiring informaiton
   output logic                                                          blkRtVld;
 `ifdef RVVI_ON
@@ -88,6 +90,7 @@ module zvt_pe_block#(
   logic                                                                       mulbulkResVld;
   MULBULKRES_t                                                                mulbulkRes;
   logic                                                                       mulbulkResRdy;
+  logic                                                                       mulbulkShiftRdy;
   MULBULKTAG_t [MULBULKPIPENUM:1]                                             mulbulkTagPipe;
   fpnew_pkg::status_t [`TE(VLEN)/2*`COMPRATIO(VLEN)-1:0][`TE(VLEN)/2-1:0]     mulbulkResStatus;
   // mul+bulk status                                        
@@ -96,7 +99,8 @@ module zvt_pe_block#(
 `ifdef TB_SUPPORT
   assign mulbulkTagIn.uop_pc     = blkCmd.vaInfo.uop_pc;
 `endif    
-  assign mulbulkTagIn.rndMode    = blkCmd.vaInfo.rndMode;
+  assign mulbulkTagIn.rndMode    = (blkCmd.vaInfo.op==FPMUL)&&(blkCmd.vaInfo.fsrcFmt!=fpnew_pkg::FP32) ? fpnew_pkg::ROD 
+                                                                                                       : blkCmd.vaInfo.rndMode;
   assign mulbulkTagIn.op         = blkCmd.vaInfo.op;
   assign mulbulkTagIn.fdstFmt    = blkCmd.vaInfo.fdstFmt;
   assign mulbulkTagIn.idstFmt    = blkCmd.vaInfo.idstFmt;
@@ -124,7 +128,8 @@ module zvt_pe_block#(
           .NUM_PIPE_REGS    (MULBULKPIPENUM),
           .PIPE_CONFIG      (fpnew_pkg::DISTRIBUTED),
           .TAG_TYPE         (MULBULKTAG_t),
-          .REMV_PIPE_BUBBLE (1)
+          .REMV_PIPE_BUBBLE (0),
+          .LOCKSTEP         (1)
         ) peMulBulk (
           .clk            (clk),
           .rst_n          (rst_n),
@@ -150,7 +155,7 @@ module zvt_pe_block#(
           .out_tag        (mulbulkTagPipe),
           // Output handshak
           .out_valid      (mulbulkOutVld[i][j]),
-          .out_ready      (mulbulkResRdy),
+          .out_ready      (mulbulkShiftRdy),
           // Indication of valid data in flight
           .busy           (mulbulkBusy)
         );
@@ -168,7 +173,8 @@ module zvt_pe_block#(
         `endif
           .NUM_PIPE_REGS    (MULBULKPIPENUM),
           .PIPE_CONFIG      (fpnew_pkg::DISTRIBUTED),
-          .REMV_PIPE_BUBBLE (1)
+          .REMV_PIPE_BUBBLE (0),
+          .LOCKSTEP         (1)
         ) peMulBulk (
           .clk            (clk),
           .rst_n          (rst_n),
@@ -193,7 +199,7 @@ module zvt_pe_block#(
           .out_tag        (),
           // Output handshak
           .out_valid      (mulbulkOutVld[i][j]),
-          .out_ready      (mulbulkResRdy),
+          .out_ready      (mulbulkShiftRdy),
           // Indication of valid data in flight
           .busy           ()
         );
@@ -205,6 +211,7 @@ module zvt_pe_block#(
 
   assign mulbulkRes.tag = mulbulkTagPipe[MULBULKPIPENUM];
   assign mulbulkResVld  = mulbulkOutVld[0][0][MULBULKPIPENUM];   
+  assign mulbulkShiftRdy = !stall;
 
   // fp status
   always_comb begin
@@ -234,7 +241,7 @@ module zvt_pe_block#(
     .T        (MULBULKRES_t)
   ) mulbulkPipe (
     .indata   (mulbulkRes),
-    .invalid  (mulbulkResVld),
+    .invalid  (mulbulkResVld && !stall),
     .inready  (mulbulkResRdy),
     .outdata  (mulbulkCmd),
     .outvalid (mulbulkCmdVld),
@@ -250,6 +257,7 @@ module zvt_pe_block#(
   logic [`TE(VLEN)/2*`COMPRATIO(VLEN)-1:0][`TE(VLEN)/2-1:0][ADDERPIPENUM:1]  adderOutVld;
   logic [`TE(VLEN)/2*`COMPRATIO(VLEN)-1:0][`TE(VLEN)/2-1:0]                  adderResVld;  
   logic                                                                      adderResRdy;
+  logic                                                                      adderShiftRdy;
   logic [`TE(VLEN)/2*`COMPRATIO(VLEN)-1:0][`TE(VLEN)/2-1:0][`WORD_WIDTH-1:0] adderRes;
   fpnew_pkg::status_t [`TE(VLEN)/2*`COMPRATIO(VLEN)-1:0][`TE(VLEN)/2-1:0]    adderStatus;
   ADDERTAG_t [ADDERPIPENUM:1]                                                adderTagOut;
@@ -311,7 +319,8 @@ module zvt_pe_block#(
           .NUM_PIPE_REGS    (ADDERPIPENUM),
           .PIPE_CONFIG      (fpnew_pkg::DISTRIBUTED),  
           .TAG_TYPE         (ADDERTAG_t),
-          .REMV_PIPE_BUBBLE (1)
+          .REMV_PIPE_BUBBLE (0),
+          .LOCKSTEP         (1)
         ) peAdder (
           .clk              (clk),
           .rst_n            (rst_n),
@@ -327,14 +336,15 @@ module zvt_pe_block#(
           .status           (adderStatus[i][j]),     
           .out_tag          (adderTagOut),        
           .out_valid        (adderOutVld[i][j]),
-          .out_ready        (adderResRdy),
+          .out_ready        (adderShiftRdy),
           .busy             (adderBusy)
         );
       end else begin
         zvt_pe_adder #(
           .NUM_PIPE_REGS    (ADDERPIPENUM),
           .PIPE_CONFIG      (fpnew_pkg::DISTRIBUTED),
-          .REMV_PIPE_BUBBLE (1)
+          .REMV_PIPE_BUBBLE (0),
+          .LOCKSTEP         (1)
         ) peAdder (
           .clk              (clk),
           .rst_n            (rst_n),
@@ -350,7 +360,7 @@ module zvt_pe_block#(
           .status           (adderStatus[i][j]),      
           .out_tag          (),        
           .out_valid        (adderOutVld[i][j]),
-          .out_ready        (adderResRdy),
+          .out_ready        (adderShiftRdy),
           .busy             ()
         ); 
       end
@@ -368,11 +378,13 @@ module zvt_pe_block#(
 
   assign adderResTag = adderTagOut[ADDERPIPENUM];
 
+  assign adderShiftRdy = !stall;
+
   // fp status
   always_comb begin
     fpexp    = 'b0;
-    fpexp.of = adderResTag.status.OF;
-    fpexp.nv = adderResTag.status.NV;
+    fpexp.of = adderResVld[0][0] & adderResTag.status.OF;
+    fpexp.nv = adderResVld[0][0] & adderResTag.status.NV;
     for(int i=0; i<`TE(VLEN)/2*`COMPRATIO(VLEN); i++) begin
       for(int j=0; j<`TE(VLEN)/2; j++) begin
         fpexp.of = fpexp.of | adderResVld[i][j] & adderStatus[i][j].OF;
@@ -382,7 +394,7 @@ module zvt_pe_block#(
   end
 
   assign fpexpVld    = |fpexp;
-  assign adderResRdy = !fpexpVld || fpexpRdy; 
+  assign adderResRdy = !stall;
 
 // write Mt
   always_comb begin
@@ -410,11 +422,11 @@ module zvt_pe_block#(
   end
 
   // retire
-  assign blkRtVld         = adderResVld[0][0] && adderResTag.lastUopVld;
+  assign blkRtVld         = adderResVld[0][0] && adderResRdy && adderResTag.lastUopVld;
 `ifdef RVVI_ON
   assign blkRtInfo.uop_pc = adderResVld[0][0] ? adderResTag.uop_pc : 'b0;
   assign blkRtInfo.mtIdx  = adderResVld[0][0] ? adderResTag.writeMtIdx : 'b0;
-  assign blkRtInfo.status = adderResVld[0][0] ? fpexp : 'b0;
+  assign blkRtInfo.status = (adderResVld[0][0] && adderResRdy) ? fpexp : 'b0;
 `endif
 
   // busy

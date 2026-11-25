@@ -34,6 +34,22 @@ interface rvs_interface (input bit clk, input bit rst_n);
   logic   [`NUM_RT_UOP-1:0] [`VCSR_VXSAT_WIDTH-1:0] wr_vxsat;       // for each uops
   logic                                             wr_vxsat_ready; // for all uops
 
+`ifdef ZVE32F_ON
+// write back to FRF (vfmv.f.s). RVS arbitrates write ports of FRF by itself.
+  logic [`NUM_RT_UOP-1:0]                          async_frd_valid;
+  logic [`NUM_RT_UOP-1:0] [`REGIDX_WIDTH-1:0]      async_frd_addr;
+  logic [`NUM_RT_UOP-1:0] [`XLEN-1:0]              async_frd_data;
+  logic [`NUM_RT_UOP-1:0]                          async_frd_ready;
+
+// RT to FCSR.fflags: per retiring uop (before the retire stage ORs them together)...
+  logic [`NUM_RT_UOP-1:0]                          rt_fflags_valid;
+  logic [`NUM_RT_UOP-1:0] [4:0]                    rt_fflags;       // {NV,DZ,OF,UF,NX}
+// ...and the merged pulse the backend sends out.
+  logic                                            rt2fcsr_write_valid;
+  logic [4:0]                                      rt2fcsr_write_data;
+  logic                                            fcsr2rt_write_ready; // for all uops
+`endif
+
 // exception handler
   // the vcsr of last retired uop in last cycle
   logic                           vcsr_valid;

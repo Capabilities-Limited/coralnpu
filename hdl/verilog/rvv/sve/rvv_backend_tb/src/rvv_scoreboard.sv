@@ -28,10 +28,17 @@ class rvv_scoreboard extends uvm_scoreboard;
 
   rvs_transaction rt_queue_rvs[$];
   rvs_transaction rt_queue_mdl[$];
+`ifdef ZVT_ON
+  // model fflags of every Zvt instruction that retires through vmeRt, by pc (see final_phase)
+  logic [4:0]     zvt_mdl_flags [int unsigned];
+`endif
   vrf_transaction vrf_queue_rvs[$];
   vrf_transaction vrf_queue_mdl[$];
   mem_transaction mem_queue_lsu[$];
   mem_transaction mem_queue_mdl[$];
+  // cycles the oldest model memory access has waited for its LSU counterpart (see mem_access_checker)
+  localparam int unsigned MEM_LSU_LAG_MAX = 1000;
+  int unsigned    mem_lsu_lag;
 
   rvs_transaction ctrl_tr;
 
@@ -163,6 +170,8 @@ task rvv_scoreboard::rt_checker();
   int        rt_xrf_num;
   reg_idx_t  rvs_rt_xrf_index, mdl_rt_xrf_index;
   xrf_t      rvs_rt_xrf_data , mdl_rt_xrf_data ;
+  reg_idx_t  rvs_rt_frf_index, mdl_rt_frf_index;
+  xrf_t      rvs_rt_frf_data , mdl_rt_frf_data ;
   forever begin
     @(negedge rvs_if.clk);
     if(rt_queue_mdl.size() != rt_queue_rvs.size()) begin
@@ -294,6 +303,110 @@ task rvv_scoreboard::rt_checker();
         end
       end
 
+      // FRF check (vfmv.f.s)
+      if(rvs_tr.rt_frf_index.size() != mdl_tr.rt_frf_index.size()) begin
+        `uvm_error("RT_CHECKER", $sformatf("Retire FRF quantity mismatch:\nDUT retired %0d fregs,\nMDL retired %0d fregs.",
+                                            rvs_tr.rt_frf_index.size(),
+                                            mdl_tr.rt_frf_index.size()))
+      end else begin
+        while(rvs_tr.rt_frf_index.size() > 0) begin
+          rvs_rt_frf_index  = rvs_tr.rt_frf_index.pop_front();
+          rvs_rt_frf_data   = rvs_tr.rt_frf_data.pop_front();
+          mdl_rt_frf_index  = mdl_tr.rt_frf_index.pop_front();
+          mdl_rt_frf_data   = mdl_tr.rt_frf_data.pop_front();
+          if(rvs_rt_frf_index !== mdl_rt_frf_index) begin
+            `uvm_error("RT_CHECKER", $sformatf("Retire FRF index mismatch:\nDUT retired frf[%0d],\nMDL retired frf[%0d].",
+                                                rvs_rt_frf_index, mdl_rt_frf_index));
+          end else if(rvs_rt_frf_data !== mdl_rt_frf_data) begin
+            `uvm_error("RT_CHECKER", $sformatf("Retire FRF mismatch:\nDUT retired frf[%0d] = 0x%8x,\nMDL retired frf[%0d] = 0x%8x.",
+                                                rvs_rt_frf_index, rvs_rt_frf_data,
+                                                mdl_rt_frf_index, mdl_rt_frf_data));
+          end else begin
+            `uvm_info("RT_CHECKER", $sformatf("Retire frf[%0d] check pass.",rvs_rt_frf_index), UVM_LOW)
+          end
+        end
+      end
+
+      // FFLAGS check: the DUT reports the flags per retiring uop, so the instruction's flags are the OR.
+      if(rvs_tr.fflags !== mdl_tr.fflags) begin
+        `uvm_error("RT_CHECKER", $sformatf("Retire fflags mismatch {NV,DZ,OF,UF,NX}:\nDUT fflags = 5'b%05b\nMDL fflags = 5'b%05b",
+                                            rvs_tr.fflags, mdl_tr.fflags));
+      end else if(mdl_tr.fflags !== 5'b0) begin
+        `uvm_info("RT_CHECKER", $sformatf("Retire fflags check pass (5'b%05b).", mdl_tr.fflags), UVM_LOW)
+      end
+
+`ifdef ZVT_ON
+      // Zvt tile check, against the model's destination tile (zvt_processor::snapshot): the bytes the
+      // instruction wrote (body, and tail under the all-ones policy) must be in the byte-tiles the DUT
+      // retires (vmeRt.mtIdxVld) and hold the model's value; every other byte of the destination tile
+      // that the DUT retires must be unchanged (prestart, the rest of the tile around a row / column,
+      // and the tail under the undisturbed policy).
+      if(mdl_tr.is_zvt_vme) begin
+        zvt_mdl_flags[mdl_tr.pc] = mdl_tr.fflags;
+        if(!rvs_tr.rt_mt_valid) begin
+          `uvm_error("RT_CHECKER", "Zvt instruction retired without vmeRt information.")
+        end else begin
+          int unsigned tile_bytes, nwritten, nbad_w, nbad_u, nmask, nchecked, nreported;
+          int unsigned tew, ew_b, tl;
+          tile_bytes = rvv_zvt_pkg::TILE_BYTES;
+          nwritten = 0; nbad_w = 0; nbad_u = 0; nmask = 0; nchecked = 0; nreported = 0;
+          if(mdl_tr.alu_inst inside {VTLE, VTSE})              tew = mdl_tr.zt_ew;   // TEW = EEW
+          else if(mdl_tr.alu_inst inside {VTMV_T_V, VTMV_V_T}) tew = 8 << mdl_tr.vsew;
+          else                                                 tew = (8 << mdl_tr.vsew) * (1 << (mdl_tr.mtwiden - 1));
+          tl   = mdl_tr.exp_mt_ptile;
+          ew_b = tew / 8;
+          for(int unsigned b = 0; b < mdl_tr.exp_mt_val.size(); b += ew_b) begin
+            // one element (ew_b bytes, never straddling a byte-tile) at a time
+            int unsigned ptile, slot, off;
+            bit in_rec, req, bad;
+            ptile  = mdl_tr.exp_mt_ptile + b / tile_bytes;
+            slot   = ptile - rvs_tr.rt_mt_idx;
+            off    = ptile * tile_bytes + b % tile_bytes;
+            in_rec = (ptile >= rvs_tr.rt_mt_idx) && (slot < 4) && rvs_tr.rt_mt_idxvld[slot];
+            req    = 0;
+            bad    = 0;
+            for(int unsigned bi = 0; bi < ew_b; bi++) req |= mdl_tr.exp_mt_req[b + bi];
+            if(req) nwritten += ew_b;
+            if(!in_rec) begin
+              if(req && nmask++ < 3)
+                `uvm_info("RT_CHECKER", $sformatf("byte-tile %0d written by the model is not in the DUT retire mask %b (mtIdx=%0d).", ptile, rvs_tr.rt_mt_idxvld, rvs_tr.rt_mt_idx), UVM_NONE)
+              continue;
+            end
+            nchecked += ew_b;
+            for(int unsigned bi = 0; bi < ew_b; bi++) begin
+              if(rvs_tr.rt_mt_val[slot * tile_bytes + b % tile_bytes + bi] !== mdl_tr.exp_mt_val[b + bi]) begin
+                bad = 1;
+                if(mdl_tr.exp_mt_req[b + bi]) nbad_w++; else nbad_u++;
+              end
+            end
+            if(bad && nreported < 20) begin
+              logic [63:0] dw, mw;
+              int unsigned rr, cc;
+              dw = 0; mw = 0;
+              for(int unsigned bi = 0; bi < ew_b; bi++) begin
+                dw[bi*8 +: 8] = rvs_tr.rt_mt_val[slot * tile_bytes + b % tile_bytes + bi];
+                mw[bi*8 +: 8] = mdl_tr.exp_mt_val[b + bi];
+              end
+              if(rvv_zvt_pkg::zvt_locate(tl, tew, off, rr, cc))
+                `uvm_info("RT_CHECKER", $sformatf("tile element mismatch (%s): C[%0d][%0d] (tew=%0d, byte-tile %0d offset 0x%03x): DUT %0h MDL %0h",
+                                                  req ? "written" : "unchanged", rr, cc, tew, ptile, b % tile_bytes, dw, mw), UVM_NONE)
+              nreported++;
+            end
+          end
+          if(nbad_w != 0 || nbad_u != 0 || nmask != 0) begin
+            `uvm_error("RT_CHECKER", $sformatf("Zvt tile mismatch (%s): %0d bytes written by the model differ, %0d bytes it left unchanged differ, %0d written outside the retire mask (%0d written, %0d checked).",
+                                                 mdl_tr.asm_string, nbad_w, nbad_u, nmask, nwritten, nchecked))
+          end else begin
+            `uvm_info("RT_CHECKER", $sformatf("Zvt tile check pass (%0d bytes written, %0d checked).", nwritten, nchecked), UVM_LOW)
+          end
+        end
+        // only needed for this check; drop them in case anything keeps the transactions
+        rvs_tr.rt_mt_val.delete();
+        mdl_tr.exp_mt_val.delete();
+        mdl_tr.exp_mt_req.delete();
+      end
+`endif
+
       // VXSAT check
       if(rvs_tr.vxsat_valid !== mdl_tr.vxsat_valid) begin
         `uvm_error("RT_CHECKER","RVV vxsat_valid mismatch with reference model.");
@@ -385,6 +498,7 @@ task rvv_scoreboard::mem_access_checker();
     if(~rvs_if.rst_n) begin
       mem_queue_lsu.delete();
       mem_queue_mdl.delete();
+      mem_lsu_lag = 0;
       err=0;
     end else begin
     err = 0;
@@ -416,10 +530,19 @@ task rvv_scoreboard::mem_access_checker();
           `uvm_info("MEM_CHCKER", $sformatf("Memory access data: lsu = 0x%2x, mdl = 0x%2x", lsu_tr.data, mdl_tr.data), UVM_HIGH)
         end
         `uvm_info("MEM_RECORDER", $sformatf("\nMEM check done.  ====================================================================================================\n"),UVM_HIGH)
+        mem_lsu_lag = 0;
       end else begin
-        // Model will execute instruction only if DUT retires this inst.
-        // If we changed how model work, please update while condition.
-        `uvm_error("MEM_CHCKER", "MDL has accessed memory but LSU hasn't.")
+        // The model executes an instruction when the DUT retires it, which is normally after the LSU
+        // has done the accesses. Zvt tile stores are the exception: their data drains through the
+        // vmelsu FIFO after vmeRt, so the LSU side may lag. Wait for it (this loop must consume time,
+        // or it spins forever in one time step), but only for a bounded number of cycles.
+        if(++mem_lsu_lag > MEM_LSU_LAG_MAX) begin
+          mdl_tr = mem_queue_mdl.pop_front();
+          `uvm_error("MEM_CHCKER", $sformatf("MDL has accessed memory but LSU hasn't within %0d cycles (pc=0x%08x %s addr=0x%08x data=0x%02x).",
+                                             MEM_LSU_LAG_MAX, mdl_tr.pc, mdl_tr.kind.name(), mdl_tr.addr, mdl_tr.data))
+          mem_lsu_lag = 0;
+        end
+        break;
       end
     end
     end
@@ -431,6 +554,30 @@ endtask: mem_access_checker
 
 function void rvv_scoreboard::final_phase(uvm_phase phase);
   super.final_phase(phase);
+
+`ifdef ZVT_ON
+  // Zvt: the architectural FP flags (what reaches fcsr.fflags), attributed per instruction by time
+  // window in the monitor, against the model. Only meaningful with every instruction fenced.
+  if($test$plusargs("zvt_fence_all") && zvt_mdl_flags.size() > 0) begin
+    int unsigned npass, nfail;
+    npass = 0; nfail = 0;
+    foreach(zvt_mdl_flags[pc]) begin
+      logic [4:0] arch;
+      arch = rvs_transaction::zvt_arch_flags.exists(pc) ? rvs_transaction::zvt_arch_flags[pc] : 5'b0;
+      // only NV and OF are defined for the matrix instructions; DZ/UF/NX must not be set
+      if(arch !== zvt_mdl_flags[pc]) begin
+        nfail++;
+        if(nfail <= 20)
+          `uvm_error("ZVT_ARCH_FFLAGS", $sformatf("pc=0x%08x: fflags reaching fcsr {NV,DZ,OF,UF,NX} = 5'b%05b, model 5'b%05b",
+                                                   pc, arch, zvt_mdl_flags[pc]))
+      end else begin
+        npass++;
+      end
+    end
+    `uvm_info("ZVT_ARCH_FFLAGS", $sformatf("architectural fflags of %0d Zvt instructions: %0d match the model, %0d do not.",
+                                           npass + nfail, npass, nfail), UVM_NONE)
+  end
+`endif
 
   if(!uvm_config_db#(int)::get(uvm_root::get(), "", "rvv_total_inst", this.rvv_total_inst)) begin
     `uvm_fatal(get_type_name(), "Fail to get rvv_total_inst!")
@@ -477,6 +624,10 @@ function void rvv_scoreboard::final_phase(uvm_phase phase);
     foreach(vrf_queue_mdl[idx]) begin
       `uvm_error("FINAL_CHECK",vrf_queue_mdl[idx].sprint())
     end
+  end
+  if(mem_queue_mdl.size()>0) begin
+    `uvm_error("FINAL_CHECK", $sformatf("%0d model memory accesses were never matched by the LSU; oldest pc=0x%08x %s addr=0x%08x.",
+                                        mem_queue_mdl.size(), mem_queue_mdl[0].pc, mem_queue_mdl[0].kind.name(), mem_queue_mdl[0].addr))
   end
 
   // Executed inst num check
